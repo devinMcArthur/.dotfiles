@@ -16,3 +16,9 @@ sudo install lazygit /usr/local/bin
 For nvim word search
 
 `sudo apt-get install ripgrep`
+
+## Clipboard
+
+If on WSL2, if you want your neovim clipboard to use your system clipboard:
+
+`sudo apt install wl-clipboard`
