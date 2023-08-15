@@ -1,5 +1,8 @@
 local M = {}
 
+local filter = require("lsp.utils.filter").filter
+local filterReactDTS = require("lsp.utils.filterReactDTS").filterReactDTS
+
 local on_attach = function(client, bufnr)
 	-- Modifying a server's capabilities is not recommended and is no longer
 	-- necessary thanks to the `vim.lsp.buf.format` API introduced in Neovim

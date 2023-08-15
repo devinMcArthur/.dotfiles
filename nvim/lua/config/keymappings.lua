@@ -1,6 +1,6 @@
 local keymap = vim.keymap.set
 
-keymap("n", "<leader>pv", vim.cmd.Ex)
+keymap("n", "<leader>pv", "<cmd>Oil<CR>")
 
 keymap("n", "J", "mzJ`z")
 keymap("n", "<C-d>", "<C-d>zz")
