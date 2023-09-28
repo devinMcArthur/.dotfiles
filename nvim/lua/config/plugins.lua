@@ -69,13 +69,13 @@ return {
           require("plugins.cmp-npm")
         end,
       },
-      {
-        "zbirenbaum/copilot-cmp",
-        cond = Devim.plugins.ai.copilot.enabled,
-        config = function()
-          require("copilot_cmp").setup()
-        end,
-      },
+      -- {
+      --   "zbirenbaum/copilot-cmp",
+      --   cond = Devim.plugins.ai.copilot.enabled,
+      --   config = function()
+      --     require("copilot_cmp").setup()
+      --   end,
+      -- },
     },
   },
   -- LSP Addons
@@ -122,10 +122,19 @@ return {
   },
   -- Rust
   {
-    "Canop/nvim-bacon",
+    url = "https://github.com/devinMcArthur/nvim-bacon-dir",
+    name = "bacon",
     lazy = false,
     config = function()
       require("plugins.bacon")
+    end,
+  },
+  -- AI
+  {
+    "github/copilot.vim",
+    lazy = false,
+    config = function()
+      require("plugins.copilot")
     end,
   },
   -- General

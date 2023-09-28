@@ -26,7 +26,6 @@ end
 
 vim.api.nvim_create_user_command("LspToggleAutoFormat", 'lua require("lsp.functions").toggle_format_on_save()', {})
 
--- Toggle "format on save" once, to start with the formatting on
 M.toggle_format_on_save()
 
 return M

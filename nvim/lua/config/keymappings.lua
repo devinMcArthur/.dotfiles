@@ -20,6 +20,10 @@ keymap({ "n", "v" }, "<leader>d", [["_d]])
 -- This is going to get me cancelled
 keymap("i", "<C-c>", "<Esc>")
 
+-- Keep selection after indent
+keymap("v", "<", "<gv", { noremap = true, silent = true })
+keymap("v", ">", ">gv", { noremap = true, silent = true })
+
 keymap("n", "Q", "<nop>")
 keymap("n", "<C-f>", "<cmd>silent !tmux neww tmux-sessionizer<CR>")
 keymap("n", "<leader>fo", vim.lsp.buf.format)
