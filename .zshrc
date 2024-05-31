@@ -54,3 +54,4 @@ export PATH=$PATH:$ANDROID_HOME/tools/bin
 
 # NVIM
 export PATH="/opt/nvim-linux64/bin:$PATH"
+export NVIM_TUI_ENABLE_TRUE_COLOR=1
