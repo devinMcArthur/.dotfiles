@@ -14,8 +14,7 @@ local handlers = {
     { virtual_text = Devim.lsp.virtual_text }
   ),
   ["textDocument/definition"] = function(err, result, method, ...)
-    P(result)
-    if vim.tbl_islist(result) and #result > 1 then
+    if vim.tbl_islist(result) and #result > 2 then
       local filtered_result = filter(result, filterReactDTS)
       return baseDefinitionHandler(err, filtered_result, method, ...)
     end
@@ -41,4 +40,3 @@ require("typescript-tools").setup({
     },
   },
 })
-

@@ -86,7 +86,15 @@ return {
     end,
   },
   {
-    "jose-elias-alvarez/null-ls.nvim"
+    "jose-elias-alvarez/null-ls.nvim",
+  },
+  {
+    "luckasRanarison/tailwind-tools.nvim",
+    dependencies = { "nvim-treesitter/nvim-treesitter" },
+    lazy = false,
+    opts = {
+      custom_filetypes = { "rs" },
+    }
   },
   -- Navigation
   {
@@ -136,12 +144,29 @@ return {
   },
   -- General
   {
+    "voldikss/vim-floaterm",
+    lazy = false,
+    config = function()
+      require("plugins.floaterm")
+    end,
+  },
+  {
     "numToStr/Comment.nvim",
     lazy = false,
     opts = function()
       local commentstring_avail, commentstring = pcall(require, "ts_context_commentstring.integrations.comment_nvim")
       return commentstring_avail and commentstring and { pre_hook = commentstring.create_pre_hook() } or {}
     end,
+  },
+  {
+    "iamcco/markdown-preview.nvim",
+    cmd = { "MarkdownPreviewToggle", "MarkdownPreview", "MarkdownPreviewStop" },
+    lazy = false,
+    build = "cd app && yarn install",
+    init = function()
+      vim.g.mkdp_filetypes = { "markdown" }
+    end,
+    ft = { "markdown" },
   },
   {
     'stevearc/oil.nvim',

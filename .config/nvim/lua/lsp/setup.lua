@@ -25,6 +25,7 @@ mason_lsp.setup({
     "lua_ls",
     "prismals",
     "tailwindcss",
+    "gopls"
   },
   -- Whether servers that are set up (via lspconfig) should be automatically installed if they're not already installed.
   -- This setting has no relation with the `ensure_installed` setting.
@@ -37,6 +38,8 @@ mason_lsp.setup({
 })
 
 local lspconfig = require("lspconfig")
+
+local util = require("lspconfig/util")
 
 local handlers = {
   ["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
@@ -111,6 +114,24 @@ lspconfig.rust_analyzer.setup({
   capabilities = capabilities,
   on_attach = require("lsp.servers.rust_analyzer").on_attach,
   handlers = handlers,
+})
+
+lspconfig.gopls.setup({
+  capabilities = capabilities,
+  on_attach,
+  handlers = handlers,
+  cmd = { "gopls" },
+  filetypes = { "go", "gomod", "gowork", "gotmpl" },
+  root_dir = util.root_pattern("go.mod", "go.work", ".git"),
+  settings = {
+    gopls = {
+      completeUnimported = true,
+      usePlaceholders = true,
+      analyses = {
+        unusedparams = true,
+      },
+    },
+  },
 })
 
 for _, server in ipairs({ "bashls", "emmet_ls", "graphql", "html", "prismals", "rust_analyzer", "glint" }) do

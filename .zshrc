@@ -54,3 +54,6 @@ export PATH=$PATH:$ANDROID_HOME/tools/bin
 
 # NVIM
 export PATH="/opt/nvim-linux64/bin:$PATH"
+
+# Go
+export PATH=$PATH:/usr/local/go/bin
