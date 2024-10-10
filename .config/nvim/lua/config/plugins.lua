@@ -111,12 +111,13 @@ return {
   {
     "nvim-telescope/telescope.nvim",
     lazy = false,
-    tag = "0.1.2",
+    tag = "0.1.8",
     dependencies = { "nvim-lua/plenary.nvim" },
     config = function()
       require("plugins.telescope")
     end,
   },
+  { 'nvim-telescope/telescope-fzf-native.nvim', build = 'make' },
   -- Git
   {
     "kdheepak/lazygit.nvim",
@@ -142,7 +143,38 @@ return {
       require("plugins.copilot")
     end,
   },
+  {
+    "jackMort/ChatGPT.nvim",
+    event = "VeryLazy",
+    config = function()
+      require("plugins.chatgpt")
+    end,
+    dependencies = {
+      "MunifTanjim/nui.nvim",
+      "nvim-lua/plenary.nvim",
+      "folke/trouble.nvim",
+      "nvim-telescope/telescope.nvim"
+    }
+  },
   -- General
+  {
+    "folke/which-key.nvim",
+    event = "VeryLazy",
+    opts = {
+      -- your configuration comes here
+      -- or leave it empty to use the default settings
+      -- refer to the configuration section below
+    },
+    keys = {
+      {
+        "<leader>?",
+        function()
+          require("which-key").show({ global = false })
+        end,
+        desc = "Buffer Local Keymaps (which-key)",
+      },
+    },
+  },
   {
     "voldikss/vim-floaterm",
     lazy = false,

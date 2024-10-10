@@ -66,14 +66,14 @@ capabilities.textDocument.foldingRange = {
 
 -- Order matters
 
-lspconfig.tailwindcss.setup({
-  capabilities = require("lsp.servers.tailwindcss").capabilities,
-  filetypes = require("lsp.servers.tailwindcss").filetypes,
-  handlers = handlers,
-  init_options = require("lsp.servers.tailwindcss").init_options,
-  on_attach = require("lsp.servers.tailwindcss").on_attach,
-  settings = require("lsp.servers.tailwindcss").settings,
-})
+-- lspconfig.tailwindcss.setup({
+--   capabilities = require("lsp.servers.tailwindcss").capabilities,
+--   filetypes = require("lsp.servers.tailwindcss").filetypes,
+--   handlers = handlers,
+--   init_options = require("lsp.servers.tailwindcss").init_options,
+--   on_attach = require("lsp.servers.tailwindcss").on_attach,
+--   settings = require("lsp.servers.tailwindcss").settings,
+-- })
 
 lspconfig.cssls.setup({
   capabilities = capabilities,
@@ -103,12 +103,13 @@ lspconfig.lua_ls.setup({
   settings = require("lsp.servers.lua_ls").settings,
 })
 
-lspconfig.tsserver.setup({
-  capabilities = capabilities,
-  handlers = require("lsp.servers.tsserver").handlers,
-  on_attach = require("lsp.servers.tsserver").on_attach,
-  settings = require("lsp.servers.tsserver").settings,
-})
+-- lspconfig.tsserver.setup({
+--   capabilities = capabilities,
+--   handlers = require("lsp.servers.tsserver").handlers,
+--   on_attach = require("lsp.servers.tsserver").on_attach,
+--   settings = require("lsp.servers.tsserver").settings,
+-- })
+lspconfig.ts_ls.setup({})
 
 lspconfig.rust_analyzer.setup({
   capabilities = capabilities,
