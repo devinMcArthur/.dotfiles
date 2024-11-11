@@ -6,7 +6,7 @@ require("chatgpt").setup({
   },
   chat = {
     keymaps = {
-      close = "q"
+      close = "<C-q>"
     }
   }
 })

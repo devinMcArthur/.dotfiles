@@ -113,7 +113,8 @@ lspconfig.ts_ls.setup({})
 
 lspconfig.rust_analyzer.setup({
   capabilities = capabilities,
-  on_attach = require("lsp.servers.rust_analyzer").on_attach,
+  on_attach = on_attach,
+  settings = require("lsp.servers.rust_analyzer").settings,
   handlers = handlers,
 })
 
@@ -135,7 +136,7 @@ lspconfig.gopls.setup({
   },
 })
 
-for _, server in ipairs({ "bashls", "emmet_ls", "graphql", "html", "prismals", "rust_analyzer", "glint" }) do
+for _, server in ipairs({ "bashls", "emmet_ls", "graphql", "html", "prismals", "glint" }) do
   lspconfig[server].setup({
     on_attach = on_attach,
     capabilities = capabilities,
