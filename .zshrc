@@ -6,6 +6,8 @@ plugins=(git minikube npm nvm rust skaffold gh aws kubectl helm)
 
 source $ZSH/oh-my-zsh.sh
 
+source ~/.private_env
+
 # User configuration
 
 source ~/antigen.zsh

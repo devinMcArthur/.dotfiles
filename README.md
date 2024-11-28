@@ -40,3 +40,13 @@ For nvim word search
 If on WSL2, if you want your neovim clipboard to use your system clipboard:
 
 `sudo apt install wl-clipboard`
+
+# Neovim
+
+## AI Avante Setup
+
+Add a `.private.env` file to the root of this directory, which is sourced from .zshrc.
+
+```
+export ANTHROPIC_API_KEY=your-api-key
+```
