@@ -13,6 +13,11 @@ M.settings = {
     rustfmt = {
       overrideCommand = { "leptosfmt", "--stdin", "--rustfmt" },
     },
+    -- checkOnSave = {
+    --   command = "clippy",
+    --   allFeatures = true,
+    --   extraArgs = { "--all-targets", "--all-features" },
+    -- },
     inlayHints = {
       typeHints = { enable = true }, -- or false to test toggling
       parameterHints = { enable = true },

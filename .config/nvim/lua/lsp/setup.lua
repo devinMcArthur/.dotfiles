@@ -25,7 +25,8 @@ mason_lsp.setup({
     "lua_ls",
     "prismals",
     "tailwindcss",
-    "gopls"
+    "gopls",
+    "terraformls"
   },
   -- Whether servers that are set up (via lspconfig) should be automatically installed if they're not already installed.
   -- This setting has no relation with the `ensure_installed` setting.
@@ -36,8 +37,6 @@ mason_lsp.setup({
   --       Example: automatic_installation = { exclude = { "rust_analyzer", "solargraph" } }
   automatic_installation = true,
 })
-
-local lspconfig = require("lspconfig")
 
 local util = require("lspconfig/util")
 
@@ -75,33 +74,37 @@ capabilities.textDocument.foldingRange = {
 --   settings = require("lsp.servers.tailwindcss").settings,
 -- })
 
-lspconfig.cssls.setup({
+vim.lsp.config('cssls', {
   capabilities = capabilities,
   handlers = handlers,
   on_attach = require("lsp.servers.cssls").on_attach,
   settings = require("lsp.servers.cssls").settings,
 })
+vim.lsp.enable('cssls')
 
-lspconfig.eslint.setup({
+vim.lsp.config('eslint', {
   capabilities = capabilities,
   handlers = handlers,
   on_attach = require("lsp.servers.eslint").on_attach,
   settings = require("lsp.servers.eslint").settings,
 })
+vim.lsp.enable('eslint')
 
-lspconfig.jsonls.setup({
+vim.lsp.config('jsonls', {
   capabilities = capabilities,
   handlers = handlers,
   on_attach = on_attach,
   settings = require("lsp.servers.jsonls").settings,
 })
+vim.lsp.enable('jsonls')
 
-lspconfig.lua_ls.setup({
+vim.lsp.config('lua_ls', {
   capabilities = capabilities,
   handlers = handlers,
   on_attach = on_attach,
   settings = require("lsp.servers.lua_ls").settings,
 })
+vim.lsp.enable('lua_ls')
 
 -- lspconfig.tsserver.setup({
 --   capabilities = capabilities,
@@ -109,16 +112,19 @@ lspconfig.lua_ls.setup({
 --   on_attach = require("lsp.servers.tsserver").on_attach,
 --   settings = require("lsp.servers.tsserver").settings,
 -- })
-lspconfig.ts_ls.setup({})
 
-lspconfig.rust_analyzer.setup({
+vim.lsp.config['rust_analyzer'] = {
   capabilities = capabilities,
   on_attach = on_attach,
   settings = require("lsp.servers.rust_analyzer").settings,
   handlers = handlers,
-})
+  diagnostic = {
+    refreshSupport = false,
+  }
+}
+vim.lsp.enable('rust_analyzer')
 
-lspconfig.gopls.setup({
+vim.lsp.config('gopls', {
   capabilities = capabilities,
   on_attach,
   handlers = handlers,
@@ -135,14 +141,28 @@ lspconfig.gopls.setup({
     },
   },
 })
+vim.lsp.enable('gopls')
 
-for _, server in ipairs({ "bashls", "emmet_ls", "graphql", "html", "prismals", "glint" }) do
-  lspconfig[server].setup({
+for _, server in ipairs({
+  "bashls",
+  "emmet_ls",
+  "graphql",
+  "html",
+  "prismals",
+  "glint",
+  "terraformls",
+  "ts_ls",
+  "tailwindcss",
+}) do
+  vim.lsp.config(server, {
     on_attach = on_attach,
     capabilities = capabilities,
     handlers = handlers,
   })
+  vim.lsp.enable(server)
 end
+
+vim.lsp.enable('terraformls')
 
 -- Global mappings.
 -- See `:help vim.diagnostic.*` for documentation on any of the below functions
@@ -164,6 +184,7 @@ vim.api.nvim_create_autocmd('LspAttach', {
     local opts = { buffer = ev.buf }
     vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
     vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
+    vim.keymap.set('n', 'gt', vim.lsp.buf.type_definition, opts)
     vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
     vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, opts)
     vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, opts)
@@ -172,7 +193,6 @@ vim.api.nvim_create_autocmd('LspAttach', {
     vim.keymap.set('n', '<space>wl', function()
       print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
     end, opts)
-    vim.keymap.set('n', '<space>D', vim.lsp.buf.type_definition, opts)
     vim.keymap.set('n', '<space>rn', vim.lsp.buf.rename, opts)
     vim.keymap.set({ 'n', 'v' }, '<space>ca', vim.lsp.buf.code_action, opts)
     vim.keymap.set('n', 'gr', vim.lsp.buf.references, opts)

@@ -11,7 +11,7 @@ if not vim.loop.fs_stat(lazypath) then
 end
 vim.opt.runtimepath:prepend(lazypath)
 
-require("lazy").setup("config.plugins", {
+require("lazy").setup("plugins", {
   defaults = { lazy = true },
   install = { colorscheme = { "tokyonight" } },
   checker = { enabled = true },
@@ -29,6 +29,3 @@ require("lazy").setup("config.plugins", {
   },
   debug = false,
 })
-
-vim.keymap.set("n", "<leader>la", "<cmd>:Lazy<cr>")
-
