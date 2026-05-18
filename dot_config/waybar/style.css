@@ -31,8 +31,8 @@ tooltip {
 }
 
 #workspaces button.focused {
-    color: #a6adc8;
-    background: #eba0ac;
+    color: #1e1e2e;
+    background: #fab387;        /* peach — matches hyprland active border */
     border-radius: 10px;
 }
 

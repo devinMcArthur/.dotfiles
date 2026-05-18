@@ -1,0 +1,8 @@
+# ~/.config/bat/config — chezmoi-managed.
+# https://github.com/sharkdp/bat
+
+--theme="Catppuccin Mocha"
+--style="numbers,changes,header"
+--paging=auto
+--map-syntax="*.jsonc:JSON"
+--map-syntax=".ignore:Git Ignore"

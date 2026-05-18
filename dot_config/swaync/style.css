@@ -1,0 +1,126 @@
+/* ~/.config/swaync/style.css — chezmoi-managed.
+ * Catppuccin Mocha. Minimal: dark surface, mauve accent, rounded.
+ */
+
+* {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 13px;
+}
+
+/* --- Notification (toast) --- */
+.notification-row {
+  outline: none;
+  margin: 6px;
+  padding: 0;
+  background: transparent;
+}
+
+.notification {
+  background: #1e1e2e;
+  border: 1px solid #45475a;
+  border-radius: 12px;
+  margin: 0;
+  padding: 0;
+}
+
+.notification-content {
+  padding: 10px;
+  margin: 0;
+  border-radius: 12px;
+  color: #cdd6f4;
+}
+
+.notification.critical {
+  border-color: #f38ba8;
+}
+
+.summary {
+  color: #fab387;
+  font-weight: bold;
+  text-shadow: none;
+}
+
+.body {
+  color: #cdd6f4;
+}
+
+.close-button {
+  background: transparent;
+  color: #6c7086;
+  border-radius: 8px;
+  padding: 4px 6px;
+  margin: 4px;
+  border: none;
+}
+
+.close-button:hover {
+  background: #45475a;
+  color: #f38ba8;
+}
+
+/* --- Control center (right-side panel) --- */
+.control-center {
+  background: rgba(30, 30, 46, 0.97);
+  border: 1px solid #45475a;
+  border-radius: 14px;
+  margin: 10px;
+  padding: 10px;
+  color: #cdd6f4;
+}
+
+.control-center-list {
+  background: transparent;
+}
+
+.widget-title {
+  color: #cba6f7;
+  font-weight: bold;
+  margin: 6px 4px;
+}
+
+.widget-title > button {
+  background: transparent;
+  color: #cdd6f4;
+  border: 1px solid #45475a;
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+
+.widget-title > button:hover {
+  background: #45475a;
+}
+
+/* DND toggle */
+.widget-dnd {
+  margin: 6px 4px;
+  color: #cdd6f4;
+}
+
+.widget-dnd > switch {
+  background: #45475a;
+  border-radius: 12px;
+  border: none;
+}
+
+.widget-dnd > switch:checked {
+  background: #cba6f7;
+}
+
+.widget-dnd > switch slider {
+  background: #cdd6f4;
+  border-radius: 10px;
+}
+
+/* Buttons grid (mpris, etc.) */
+.widget-buttons-grid > flowbox > flowboxchild > button {
+  background: #313244;
+  color: #cdd6f4;
+  border-radius: 8px;
+  border: none;
+  margin: 2px;
+}
+
+.widget-buttons-grid > flowbox > flowboxchild > button:hover {
+  background: #45475a;
+  color: #fab387;
+}
