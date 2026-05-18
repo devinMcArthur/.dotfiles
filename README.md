@@ -83,10 +83,10 @@ chezmoi.toml.example                        # per-host template (not used yet)
 run_onchange_before_install-packages.sh.tmpl  # bootstrap packages
 
 dot_zshrc.tmpl                              # → ~/.zshrc      (templated)
+dot_zsh_plugins.txt                         # → ~/.zsh_plugins.txt   (antidote)
 dot_gitconfig                               # → ~/.gitconfig
 dot_tmux.conf                               # → ~/.tmux.conf
 dot_tmux.conf.local                         # → ~/.tmux.conf.local
-dot_antigenrc                               # → ~/.antigenrc
 dot_zshenv                                  # → ~/.zshenv
 dot_bashrc                                  # → ~/.bashrc
 
@@ -132,6 +132,10 @@ dot_config/
   the path.
 - **`Super+I` opens nmtui via ghostty** (was previously kitty); kitty has been
   removed from the package list.
-- **Antigen + oh-my-zsh** are still in use (via `~/antigen.zsh`, not in repo).
-  Migration to a leaner plugin manager (zinit, zcomet, or built-in) is a
-  candidate future improvement.
+- **Shell stack**: zsh + [antidote](https://getantidote.github.io/) (plugin
+  manager, AUR `zsh-antidote`) + [starship](https://starship.rs/) prompt.
+  Plugins are listed in `dot_zsh_plugins.txt`. Cold startup is ~90ms.
+- **Lazy loaders** for `nvm`, `node`, `npm`, `npx`, `yarn` are defined in
+  `.zshrc`; the real `nvm.sh` is only sourced when first invoked (saves ~250ms
+  per shell). Tool completions (kubectl, helm, minikube, skaffold) are cached
+  weekly under `~/.cache/zsh/`.
