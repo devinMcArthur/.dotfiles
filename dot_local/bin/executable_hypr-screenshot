@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# hypr-screenshot — capture a screenshot via grim/slurp and open in swappy.
+# Usage:
+#   hypr-screenshot region   # interactive region (slurp)
+#   hypr-screenshot window   # currently focused window
+#   hypr-screenshot output   # entire focused monitor
+#
+# Bound from hyprland.conf. Saves a copy to ~/Pictures/Screenshots and pipes
+# to swappy for annotation; swappy can re-save or copy to clipboard.
+
+set -euo pipefail
+
+mode="${1:-region}"
+ts="$(date +%Y%m%d-%H%M%S)"
+dir="$HOME/Pictures/Screenshots"
+mkdir -p "$dir"
+file="$dir/screenshot-$ts.png"
+
+case "$mode" in
+  region)
+    geom="$(slurp -d 2>/dev/null)" || exit 0   # cancelled
+    grim -g "$geom" "$file"
+    ;;
+  window)
+    geom="$(hyprctl activewindow -j | jq -r '"\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"')"
+    grim -g "$geom" "$file"
+    ;;
+  output)
+    monitor="$(hyprctl monitors -j | jq -r '.[] | select(.focused==true) | .name')"
+    grim -o "$monitor" "$file"
+    ;;
+  *)
+    echo "usage: $0 {region|window|output}" >&2
+    exit 2
+    ;;
+esac
+
+# Open in swappy. It already knows where to save via ~/.config/swappy/config
+# but we also leave the original at $file in case the user dismisses swappy.
+swappy -f "$file"

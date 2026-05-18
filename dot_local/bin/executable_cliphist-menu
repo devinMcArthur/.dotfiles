@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# cliphist-menu — show cliphist entries in wofi.
+#
+# Text entries: shown verbatim.
+# Image entries (cliphist marks them as `[[ binary data N KiB png 100x100 ]]`):
+#   rewritten to a friendlier label like `🖼  png 100x100 (14 KiB)`.
+#
+# Real inline thumbnails would require fuzzel or rofi; wofi's `img:` dmenu
+# protocol is fragile. Plain-text labels work everywhere.
+#
+# Bound to Super+V in hyprland.conf.
+
+set -euo pipefail
+
+choice="$(
+  cliphist list |
+    sed -E 's/\[\[ binary data ([0-9]+) ([KMG]iB) ([a-z]+) ([0-9]+x[0-9]+) \]\]/🖼  \3 \4 (\1 \2)/' |
+    wofi --dmenu --prompt "Clipboard" --width 700 --height 500 \
+         --insensitive --cache-file /dev/null
+)" || exit 0
+
+# Selection comes back as our rewritten label; turn it back into the cliphist
+# decode-compatible form by sending just the leading id-tab.
+id="${choice%%$'\t'*}"
+printf '%s\t\n' "$id" | cliphist decode | wl-copy

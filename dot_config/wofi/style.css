@@ -1,76 +1,95 @@
+/* ~/.config/wofi/style.css — chezmoi-managed.
+ * Catppuccin Mocha palette. Soft, rounded, blurred-feel even without
+ * compositor blur (Hyprland does its own blur on the layer).
+ */
+
+* {
+  font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+  font-size: 13px;
+}
+
 window {
-    margin: 0px;
-    border: 5px solid #1e1e2e;
-    background-color: #cdd6f4;
-    border-radius: 15px;
-}
-
-#input {
-    padding: 4px;
-    margin: 4px;
-    padding-left: 20px;
-    border: none;
-    color: #cdd6f4;
-    font-weight: bold;
-    background-color: #1e1e2e;
-    background: ;
-   	outline: none;
-    border-radius: 15px;
-    margin: 10px;
-    margin-bottom: 2px;
-}
-#input:focus {
-    border: 0px solid #1e1e2e;
-    margin-bottom: 0px;
-}
-
-#inner-box {
-    margin: 4px;
-    border: 10px solid #1e1e2e;
-    color: #cdd6f4;
-    font-weight: bold;
-    background-color: #1e1e2e;
-    border-radius: 15px;
+  margin: 0;
+  padding: 0;
+  background-color: rgba(30, 30, 46, 0.96);    /* base, near-opaque */
+  border: 2px solid #585b70;                   /* surface2 */
+  border-radius: 14px;
+  color: #cdd6f4;                              /* text */
 }
 
 #outer-box {
-    margin: 0px;
-    border: none;
-    border-radius: 15px;
-    background-color: #1e1e2e;
+  margin: 0;
+  padding: 12px;
+  border: none;
+  background-color: transparent;
+  border-radius: 14px;
+}
+
+#input {
+  margin: 0 0 10px 0;
+  padding: 10px 14px;
+  border: 1px solid #45475a;                   /* surface1 */
+  border-radius: 10px;
+  background-color: #181825;                   /* mantle */
+  color: #cdd6f4;
+  caret-color: #f9e2af;                        /* yellow */
+}
+
+#input:focus {
+  border-color: #fab387;                       /* peach */
+  outline: none;
+}
+
+#input image {
+  color: #a6adc8;                              /* subtext0 */
+  margin-right: 8px;
+}
+
+#inner-box {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
 }
 
 #scroll {
-    margin-top: 5px;
-    border: none;
-    border-radius: 15px;
-    margin-bottom: 5px;
-    /* background: rgb(255,255,255); */
-}
-
-#img:selected {
-    background-color: #89b4fa;
-    border-radius: 15px;
-}
-
-#text:selected {
-    color: #cdd6f4;
-    margin: 0px 0px;
-    border: none;
-    border-radius: 15px;
-    background-color: #89b4fa;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
 }
 
 #entry {
-    margin: 0px 0px;
-    border: none;
-    border-radius: 15px;
-    background-color: transparent;
+  margin: 1px 0;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: #cdd6f4;
+}
+
+#entry:hover {
+  background-color: #313244;                   /* surface0 */
 }
 
 #entry:selected {
-    margin: 0px 0px;
-    border: none;
-    border-radius: 15px;
-    background-color: #89b4fa;
+  background-color: #45475a;                   /* surface1 */
+  color: #f9e2af;                              /* yellow */
+}
+
+#entry:selected #text {
+  color: #f9e2af;
+}
+
+#text {
+  color: #cdd6f4;
+  margin-left: 6px;
+}
+
+#img {
+  margin-right: 8px;
+}
+
+#img:selected {
+  background-color: transparent;
 }
