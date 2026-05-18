@@ -6,7 +6,7 @@
     "npm:pi-web-access",
     "npm:pi-mcp-adapter",
     "npm:@plannotator/pi-extension",
-    "npm:@samfp/pi-memory"
+    "npm:pi-total-recall"
   ],
   "memory": {
     "consolidationModel": "anthropic/claude-haiku-4-5-20251001"
