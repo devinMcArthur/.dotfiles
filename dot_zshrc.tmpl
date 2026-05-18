@@ -13,9 +13,6 @@ autoload -Uz compinit && compinit
 source /usr/share/zsh-antidote/antidote.zsh
 antidote load
 
-# Tmux color configuration
-export TERM=xterm-256color
-
 # --- ls replacement: eza ----------------------------------------------------
 if command -v eza >/dev/null 2>&1; then
   alias ls='eza --group-directories-first --icons=auto'
