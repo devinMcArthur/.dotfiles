@@ -1,0 +1,14 @@
+{
+  "lastChangelogVersion": "0.75.1",
+  "packages": [
+    "npm:context-mode",
+    "npm:pi-subagents",
+    "npm:pi-web-access",
+    "npm:pi-mcp-adapter",
+    "npm:@plannotator/pi-extension",
+    "npm:@samfp/pi-memory"
+  ],
+  "memory": {
+    "consolidationModel": "anthropic/claude-haiku-4-5-20251001"
+  }
+}
