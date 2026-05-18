@@ -1,0 +1,15 @@
+# Plugins for zsh, loaded by antidote.
+# https://getantidote.github.io/
+# Format: <github-user>/<repo> [path:<subdir>] [kind:<zsh|fpath|defer>]
+
+# --- ssh-agent + git aliases (cherry-picked from oh-my-zsh, no framework) ---
+ohmyzsh/ohmyzsh path:plugins/ssh-agent
+ohmyzsh/ohmyzsh path:plugins/git
+
+# --- quality of life ---
+zsh-users/zsh-completions                     kind:fpath
+zsh-users/zsh-history-substring-search
+
+# --- must come LAST among interactive plugins ---
+zsh-users/zsh-autosuggestions
+zsh-users/zsh-syntax-highlighting
