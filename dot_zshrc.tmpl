@@ -1,8 +1,15 @@
 # Prompt: starship (see ~/.config/starship.toml).
 eval "$(starship init zsh)"
 
-# Secrets sourced from 1Password at `chezmoi apply` time (see chezmoi.toml).
-export ANTHROPIC_API_KEY={{ onepasswordRead "op://Dev Secrets/anthropic_api_key/credential" | quote }}
+# Secrets live in 1Password (see ~/.config/op-dev.env).
+# We deliberately do NOT export them at apply-time anymore — that triggered
+# a 1Password Allow/Deny prompt on every `chezmoi apply`.
+#
+# To run a command with the dev secrets loaded into its environment:
+#   op run --env-file=~/.config/op-dev.env -- <cmd>
+#
+# Convenience wrapper:
+with-secrets() { op run --env-file="$HOME/.config/op-dev.env" -- "$@"; }
 
 # Initialize completion system. Required before antidote loads plugins that
 # register completions via `compdef` (e.g. omz git plugin).
