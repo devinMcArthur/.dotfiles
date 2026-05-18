@@ -20,6 +20,7 @@ import { dirname, join, resolve } from "node:path";
 
 const GLOBAL_AGENTS = join(homedir(), ".pi/agent/AGENTS.md");
 const SECTION_HEADER = "## Lessons learned";
+const SECTION_HEADER_RE = /^## Lessons learned\s*$/m;
 
 /** Walk up from `start` looking for a `.git` directory; return that dir. */
 function findGitRoot(start: string): string | null {
@@ -52,7 +53,9 @@ function appendLesson(file: string, text: string): void {
 
   if (content && !content.endsWith("\n")) content += "\n";
 
-  const idx = content.indexOf(SECTION_HEADER);
+  // Match the header as a full line — not as a substring inside prose.
+  const m0 = SECTION_HEADER_RE.exec(content);
+  const idx = m0 ? m0.index : -1;
   if (idx === -1) {
     if (content === "") {
       content =

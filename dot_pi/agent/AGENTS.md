@@ -110,6 +110,11 @@ preferences for the current task.
 - Phase-by-phase pace on big changes; commit at each checkpoint.
 - Rotate any credential that's been logged anywhere visible (chat,
   terminal scrollback, git history).
+- When you need library/framework docs (Hyprland, chezmoi, nvim plugins,
+  framework APIs, etc.), reach for **Context7** via the `mcp` proxy
+  first (`mcp({ search: "..." })` then `mcp({ tool: "context7_..." })`).
+  Fall back to web search only when Context7 has no entry for that
+  project.
 
 ## Tools I actively use
 
