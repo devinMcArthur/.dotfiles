@@ -51,7 +51,9 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
+  // Compact status indicator: shield-check glyph (Nerd Font nf-md-shield_check).
+  // Requires a Nerd Font in your terminal (we install ttf-jetbrains-mono-nerd).
   pi.on("session_start", async (_event, ctx) => {
-    ctx.ui.setStatus("sudo-gate", "sudo-gate active");
+    ctx.ui.setStatus("sudo-gate", "󰕥");
   });
 }
