@@ -60,3 +60,10 @@ export PATH="/opt/nvim-linux64/bin:$PATH"
 
 # Go
 export PATH=$PATH:/usr/local/go/bin
+
+# Hermes model aliases (added 2026-04-24)
+# Default is claude-sonnet-4-5; escalate to Opus for design/review/planning work.
+alias hermes-opus='hermes --model claude-opus-4-7'
+alias hermes-design='hermes --model claude-opus-4-7'
+alias hermes-sonnet='hermes --model claude-sonnet-4-5'
+alias hermes-haiku='hermes --model claude-haiku-4-5'

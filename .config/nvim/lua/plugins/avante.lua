@@ -3,29 +3,20 @@ return {
     "yetone/avante.nvim",
     event = "VeryLazy",
     lazy = false,
-    version = false, -- set this if you want to always pull the latest change
+    version = false,
     opts = {
-      claude = {
-        endpoint = "https://api.anthropic.com",
-        model = "claude-3-7-sonnet-20250219",
-        temperature = 0,
-        max_tokens = 4096,
+      provider = "claude",
+      providers = {
+        claude = {
+          endpoint = "https://api.anthropic.com",
+          model = "claude-sonnet-4-20250514",
+          timeout = 30000, -- Timeout in milliseconds
+          extra_request_body = {
+            temperature = 0.75,
+            max_tokens = 20480,
+          },
+        },
       },
-      -- provider = "openai",
-      -- auto_suggestions_provider = "openai", -- Since auto-suggestions are a high-frequency operation and therefore expensive, it is recommended to specify an inexpensive provider or even a free provider: copilot
-      -- openai = {
-      --   endpoint = "https://api.deepseek.com/v1",
-      --   model = "deepseek-chat",
-      --   timeout = 30000, -- Timeout in milliseconds
-      --   temperature = 0,
-      --   max_tokens = 4096,
-      --   -- api_key_name = "sk-b3bdaa2529ac450e8a2f49ab890e413d"
-      -- },
-      -- endpoint = "https://api.deepseek.com/v1",
-      -- model = "deepseek-chat",
-      -- timeout = 30000, -- Timeout in milliseconds
-      -- temperature = 0,
-      -- max_tokens = 4096,
     },
     -- if you want to build from source then do `make BUILD_FROM_SOURCE=true`
     build = "make",

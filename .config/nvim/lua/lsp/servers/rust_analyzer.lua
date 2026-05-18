@@ -11,7 +11,8 @@ M.on_attach = on_attach;
 M.settings = {
   ["rust-analyzer"] = {
     rustfmt = {
-      overrideCommand = { "leptosfmt", "--stdin", "--rustfmt" },
+      enable = true,
+      -- overrideCommand = { "leptosfmt", "--stdin", "--rustfmt" },
     },
     -- checkOnSave = {
     --   command = "clippy",

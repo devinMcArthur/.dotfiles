@@ -4,7 +4,16 @@ function M.enable_format_on_save()
   local group = vim.api.nvim_create_augroup("format_on_save", { clear = false })
   vim.api.nvim_create_autocmd("BufWritePre", {
     callback = function()
-      vim.lsp.buf.format()
+      -- Filter to only use rust-analyzer for Rust files
+      if vim.bo.filetype == "rust" then
+        vim.lsp.buf.format({
+          filter = function(client)
+            return client.name == "rust_analyzer"
+          end,
+        })
+      else
+        vim.lsp.buf.format()
+      end
     end,
     group = group,
   })
