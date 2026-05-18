@@ -55,3 +55,6 @@
 .private_env
 git_token.txt
 openai_api.txt.gpg
+
+# Repo-only files (kept in source, not deployed to $HOME)
+README.md
