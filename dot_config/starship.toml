@@ -1,136 +1,65 @@
-# ~/.config/starship.toml — chezmoi-managed.
-# Catppuccin Mocha palette, single-line "powerline" with selective segments.
-# Language version modules only render when the relevant project file is detected.
-
 format = """
-[](mauve_bg)\
-$os\
-$username\
-[](fg:mauve bg:blue_bg)\
+[░▒▓](#a3aed2)\
+[  ](bg:#a3aed2 fg:#090c0c)\
+[](bg:#769ff0 fg:#a3aed2)\
 $directory\
-[](fg:blue bg:teal_bg)\
+[](fg:#769ff0 bg:#394260)\
 $git_branch\
 $git_status\
-[](fg:teal bg:surface_bg)\
+[](fg:#394260 bg:#212736)\
 $nodejs\
 $rust\
 $golang\
-$python\
-$package\
-[](fg:overlay bg:none)\
-$cmd_duration\
-$jobs\
-$line_break\
-$character"""
-
-palette = "catppuccin_mocha"
-
-[palettes.catppuccin_mocha]
-rosewater = "#f5e0dc"
-flamingo  = "#f2cdcd"
-pink      = "#f5c2e7"
-mauve     = "#cba6f7"
-red       = "#f38ba8"
-peach     = "#fab387"
-yellow    = "#f9e2af"
-green     = "#a6e3a1"
-teal      = "#94e2d5"
-sky       = "#89dceb"
-sapphire  = "#74c7ec"
-blue      = "#89b4fa"
-lavender  = "#b4befe"
-text      = "#cdd6f4"
-subtext1  = "#bac2de"
-subtext0  = "#a6adc8"
-overlay2  = "#9399b2"
-overlay1  = "#7f849c"
-overlay   = "#6c7086"
-surface2  = "#585b70"
-surface1  = "#45475a"
-surface0  = "#313244"
-base      = "#1e1e2e"
-mantle    = "#181825"
-crust     = "#11111b"
-
-# Powerline segment backgrounds (left → right gradient of darkening)
-mauve_bg   = "bg:#cba6f7 fg:#1e1e2e"
-blue_bg    = "bg:#89b4fa fg:#1e1e2e"
-teal_bg    = "bg:#94e2d5 fg:#1e1e2e"
-surface_bg = "bg:#313244 fg:#cdd6f4"
-
-[os]
-disabled = false
-style = "bg:mauve fg:base"
-format = "[$symbol ]($style)"
-
-[os.symbols]
-Arch = ""
-
-[username]
-show_always = false
-style_user = "bg:mauve fg:base"
-style_root = "bg:mauve fg:red"
-format = "[$user ]($style)"
+$php\
+[](fg:#212736 bg:#1d2230)\
+$time\
+[ ](fg:#1d2230)\
+\n$character"""
 
 [directory]
-style = "bg:blue fg:base"
+style = "fg:#e3e5e5 bg:#769ff0"
 format = "[ $path ]($style)"
 truncation_length = 3
 truncation_symbol = "…/"
-read_only = " "
 
 [directory.substitutions]
-"Documents" = " "
-"Downloads" = " "
-"Music"     = " "
-"Pictures"  = " "
-".config"   = " "
+"Documents" = " "
+"Downloads" = " "
+"Music" = " "
+"Pictures" = " "
 
 [git_branch]
-symbol = ""
-style = "bg:teal fg:base"
-format = "[ $symbol $branch ]($style)"
+symbol = ""
+style = "bg:#394260"
+format = '[[ $symbol $branch ](fg:#769ff0 bg:#394260)]($style)'
 
 [git_status]
-style = "bg:teal fg:base"
-format = "[$all_status$ahead_behind ]($style)"
+style = "bg:#394260"
+format = '[[($all_status$ahead_behind )](fg:#769ff0 bg:#394260)]($style)'
 
 [nodejs]
-symbol = ""
-style = "bg:surface0 fg:green"
-format = "[ $symbol $version ]($style)"
+symbol = ""
+style = "bg:#212736"
+format = '[[ $symbol ($version) ](fg:#769ff0 bg:#212736)]($style)'
 
 [rust]
-symbol = ""
-style = "bg:surface0 fg:peach"
-format = "[ $symbol $version ]($style)"
+symbol = ""
+style = "bg:#212736"
+format = '[[ $symbol ($version) ](fg:#769ff0 bg:#212736)]($style)'
 
 [golang]
-symbol = ""
-style = "bg:surface0 fg:sky"
-format = "[ $symbol $version ]($style)"
+symbol = "ﳑ"
+style = "bg:#212736"
+format = '[[ $symbol ($version) ](fg:#769ff0 bg:#212736)]($style)'
 
-[python]
-symbol = ""
-style = "bg:surface0 fg:yellow"
-format = '[ $symbol ${pyenv_prefix}(${version})(\($virtualenv\)) ]($style)'
+[php]
+symbol = ""
+style = "bg:#212736"
+format = '[[ $symbol ($version) ](fg:#769ff0 bg:#212736)]($style)'
 
-[package]
-symbol = "󰏗"
-style = "bg:surface0 fg:peach"
-format = "[ $symbol $version ]($style)"
+[time]
+disabled = true
+time_format = "%R" # Hour:Minute Format
+style = "bg:#1d2230"
+format = '[[  $time ](fg:#a0a9cb bg:#1d2230)]($style)'
 
-[cmd_duration]
-min_time = 2000
-style = "fg:yellow"
-format = " [$duration]($style)"
-
-[jobs]
-symbol = "✦"
-style = "fg:lavender"
-format = " [$symbol$number]($style)"
-
-[character]
-success_symbol = "[❯](bold green)"
-error_symbol = "[❯](bold red)"
-vimcmd_symbol = "[❮](bold mauve)"
