@@ -7,16 +7,22 @@
  *   • `save_lesson` tool — pi calls this on its own when it detects a
  *     correction or expressed preference (see AGENTS.md for guidance).
  *
- * Lessons are saved **silently** (no confirm prompt). They are appended
- * under a `## Lessons learned` section (created if missing), newest first.
+ * Chezmoi integration: if the target AGENTS.md is chezmoi-managed, the
+ * lesson is appended to the chezmoi SOURCE file, then propagated to the
+ * live TARGET via `chezmoi apply`, then committed to the source repo with
+ * a descriptive message. This eliminates drift and makes lessons portable
+ * to other machines via the dotfiles repo. If the target isn't
+ * chezmoi-managed, falls back to writing the live file directly.
  *
- * Auto-discovered by pi from ~/.pi/agent/extensions/lessons.ts.
+ * Lessons save silently (no confirm). Auto-discovered from
+ * ~/.pi/agent/extensions/lessons.ts.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { homedir } from "node:os";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, relative } from "node:path";
+import { execFileSync } from "node:child_process";
 
 const GLOBAL_AGENTS = join(homedir(), ".pi/agent/AGENTS.md");
 const SECTION_HEADER = "## Lessons learned";
@@ -42,45 +48,129 @@ function todayISO(): string {
 }
 
 /**
- * Append a lesson to the target file under "## Lessons learned".
- * Creates the file (with a minimal header) and the section as needed.
- * New entries go directly under the section header (newest first).
+ * Insert a lesson bullet into existing AGENTS.md content under the
+ * "## Lessons learned" section (creating it if missing), newest first.
  */
-function appendLesson(file: string, text: string): void {
-  mkdirSync(dirname(file), { recursive: true });
-  const bullet = `- ${todayISO()}: ${text.trim()}`;
-  let content = existsSync(file) ? readFileSync(file, "utf8") : "";
+function injectLesson(content: string, bullet: string): string {
+  let out = content;
+  if (out && !out.endsWith("\n")) out += "\n";
 
-  if (content && !content.endsWith("\n")) content += "\n";
-
-  // Match the header as a full line — not as a substring inside prose.
-  const m0 = SECTION_HEADER_RE.exec(content);
+  const m0 = SECTION_HEADER_RE.exec(out);
   const idx = m0 ? m0.index : -1;
+
   if (idx === -1) {
-    if (content === "") {
-      content =
+    if (out === "") {
+      return (
         `# Project notes for pi\n\n` +
         `Auto-loaded by pi when cwd is inside this directory.\n\n` +
-        `${SECTION_HEADER}\n\n<!-- Auto-appended by save_lesson. Newest first. -->\n${bullet}\n`;
-    } else {
-      content += `\n${SECTION_HEADER}\n\n<!-- Auto-appended by save_lesson. Newest first. -->\n${bullet}\n`;
+        `${SECTION_HEADER}\n\n<!-- Auto-appended by save_lesson. Newest first. -->\n${bullet}\n`
+      );
     }
-  } else {
-    // Insert immediately after the section header line (and the optional
-    // existing HTML comment), so the newest lesson is first.
-    const after = idx + SECTION_HEADER.length;
-    // Find end of next line (header) plus an optional comment line.
-    let cursor = content.indexOf("\n", after);
-    if (cursor === -1) cursor = content.length;
-    // Skip one blank line + an optional HTML comment line.
-    const tail = content.slice(cursor);
-    const m = tail.match(/^\n(?:\n<!--[^\n]*-->)?/);
-    const insertAt = cursor + (m ? m[0].length : 0);
-    content =
-      content.slice(0, insertAt) + `\n${bullet}` + content.slice(insertAt);
+    return (
+      out +
+      `\n${SECTION_HEADER}\n\n<!-- Auto-appended by save_lesson. Newest first. -->\n${bullet}\n`
+    );
   }
 
-  writeFileSync(file, content, "utf8");
+  // Insert immediately after the section header line (and the optional
+  // existing HTML comment), so the newest lesson is first.
+  const after = idx + SECTION_HEADER.length;
+  let cursor = out.indexOf("\n", after);
+  if (cursor === -1) cursor = out.length;
+  const tail = out.slice(cursor);
+  const m = tail.match(/^\n(?:\n<!--[^\n]*-->)?/);
+  const insertAt = cursor + (m ? m[0].length : 0);
+  return out.slice(0, insertAt) + `\n${bullet}` + out.slice(insertAt);
+}
+
+/** Return chezmoi's source-path for `target`, or null if not managed. */
+function chezmoiSourcePath(target: string): string | null {
+  try {
+    const out = execFileSync("chezmoi", ["source-path", target], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return out || null;
+  } catch {
+    return null;
+  }
+}
+
+/** First N chars of the lesson, single-line, for commit subject. */
+function commitSubject(text: string, max = 60): string {
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  return oneLine.length <= max ? oneLine : oneLine.slice(0, max - 1) + "…";
+}
+
+function appendLessonViaChezmoi(
+  target: string,
+  sourcePath: string,
+  text: string,
+): void {
+  const bullet = `- ${todayISO()}: ${text.trim()}`;
+
+  // 1) Append to chezmoi SOURCE.
+  const sourceContent = existsSync(sourcePath)
+    ? readFileSync(sourcePath, "utf8")
+    : "";
+  writeFileSync(sourcePath, injectLesson(sourceContent, bullet), "utf8");
+
+  // 2) Propagate to live TARGET. --force so we don't get prompted about the
+  //    target already differing from the previous source (which it does,
+  //    because we just edited source).
+  execFileSync("chezmoi", ["apply", "--force", target], {
+    stdio: ["ignore", "ignore", "ignore"],
+  });
+
+  // 3) Commit just this file in the chezmoi source repo. Don't sweep in
+  //    other in-flight changes. Best-effort — silently skip if anything
+  //    fails (e.g. no git config, repo missing).
+  try {
+    const sourceRoot = execFileSync("chezmoi", ["source-path"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    const rel = relative(sourceRoot, sourcePath);
+    execFileSync("git", ["-C", sourceRoot, "add", rel], {
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    execFileSync(
+      "git",
+      [
+        "-C",
+        sourceRoot,
+        "commit",
+        "-m",
+        `lessons: ${commitSubject(text)}`,
+        "--",
+        rel,
+      ],
+      { stdio: ["ignore", "ignore", "ignore"] },
+    );
+  } catch {
+    // Auto-commit is a convenience, not a correctness requirement.
+  }
+}
+
+function appendLessonDirect(target: string, text: string): void {
+  mkdirSync(dirname(target), { recursive: true });
+  const bullet = `- ${todayISO()}: ${text.trim()}`;
+  const content = existsSync(target) ? readFileSync(target, "utf8") : "";
+  writeFileSync(target, injectLesson(content, bullet), "utf8");
+}
+
+/** Public: persist a lesson to `target`. Prefers chezmoi-source flow when
+ *  the target is chezmoi-managed. */
+function appendLesson(target: string, text: string): {
+  via: "chezmoi" | "direct";
+} {
+  const sourcePath = chezmoiSourcePath(target);
+  if (sourcePath) {
+    appendLessonViaChezmoi(target, sourcePath, text);
+    return { via: "chezmoi" };
+  }
+  appendLessonDirect(target, text);
+  return { via: "direct" };
 }
 
 type Scope = "global" | "project";
@@ -133,11 +223,12 @@ export default function (pi: ExtensionAPI) {
         parsed.scope,
         ctx.cwd,
       );
-      appendLesson(file, parsed.text);
+      const { via } = appendLesson(file, parsed.text);
       const where =
         effectiveScope === "global" ? "global AGENTS.md" : `${file}`;
       ctx.ui.notify(
-        `Saved lesson (${effectiveScope}) → ${where}${note ? ` (${note})` : ""}`,
+        `Saved lesson (${effectiveScope}, via ${via}) → ${where}` +
+          (note ? ` (${note})` : ""),
         "info",
       );
     },
@@ -179,13 +270,13 @@ export default function (pi: ExtensionAPI) {
         params.scope,
         ctx.cwd,
       );
-      appendLesson(file, params.text);
+      const { via } = appendLesson(file, params.text);
       const msg =
-        `Saved (${effectiveScope}) to ${file}` +
+        `Saved (${effectiveScope}, via ${via}) to ${file}` +
         (note ? ` — ${note}` : "");
       return {
         content: [{ type: "text", text: msg }],
-        details: { file, effectiveScope, note },
+        details: { file, effectiveScope, via, note },
       };
     },
   });
