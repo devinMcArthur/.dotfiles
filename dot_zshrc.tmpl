@@ -16,55 +16,56 @@ antidote load
 # Tmux color configuration
 export TERM=xterm-256color
 
-# Setup environment variables
-
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-
-export PATH="$PATH:/home/dev/.local/bin"
-
-
-#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
-export SDKMAN_DIR="$HOME/.sdkman"
-[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
-
-# bun completions
-[ -s "/home/dev/.bun/_bun" ] && source "/home/dev/.bun/_bun"
-
-# bun
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
-
-# Android SDK
+# --- PATH (deduplicated via typeset -U; leftmost wins) -----------------------
+typeset -U PATH path
 export ANDROID_HOME="$HOME/Android/Sdk"
-export PATH=$PATH:$ANDROID_HOME/platform-tools
-export PATH=$PATH:$ANDROID_HOME/emulator
-export PATH=$PATH:$ANDROID_HOME/tools
-export PATH=$PATH:$ANDROID_HOME/tools/bin
-export PATH=$PATH:~/go/bin
+export BUN_INSTALL="$HOME/.bun"
+path=(
+  /opt/nvim-linux64/bin
+  $HOME/.local/bin
+  $BUN_INSTALL/bin
+  $HOME/go/bin
+  /usr/local/go/bin
+  $ANDROID_HOME/platform-tools
+  $ANDROID_HOME/emulator
+  $ANDROID_HOME/tools
+  $ANDROID_HOME/tools/bin
+  $path
+)
+export PATH
 
-# NVIM
-export PATH="/opt/nvim-linux64/bin:$PATH"
+# --- Lazy-load nvm (saves ~250ms per shell startup) --------------------------
+# Shims defer sourcing nvm.sh until any of these commands is first invoked.
+export NVM_DIR="$HOME/.nvm"
+_nvm_load() {
+  unset -f nvm node npm npx yarn _nvm_load
+  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+  [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
+}
+nvm()  { _nvm_load; nvm  "$@"; }
+node() { _nvm_load; node "$@"; }
+npm()  { _nvm_load; npm  "$@"; }
+npx()  { _nvm_load; npx  "$@"; }
+yarn() { _nvm_load; yarn "$@"; }
 
-# Go
-export PATH=$PATH:/usr/local/go/bin
+# --- bun completions ---------------------------------------------------------
+[ -s "$BUN_INSTALL/_bun" ] && source "$BUN_INSTALL/_bun"
 
-# Hermes model aliases (added 2026-04-24)
-# Default is claude-sonnet-4-6; escalate to Opus for design/review/planning work.
-alias hermes-opus='hermes --model anthropic/claude-opus-4-7'
-alias hermes-sonnet='hermes --model anthropic/claude-sonnet-4-6'
-alias hermes-haiku='hermes --model anthropic/claude-haiku-4-5'
+# --- Tool completions (cached weekly under ~/.cache/zsh/) --------------------
+_zsh_cache="${ZSH_CACHE_DIR:-$HOME/.cache/zsh}"
+mkdir -p "$_zsh_cache"
+for _tool in kubectl helm minikube skaffold; do
+  command -v "$_tool" >/dev/null 2>&1 || continue
+  _file="$_zsh_cache/_$_tool.zsh"
+  if [[ ! -f $_file || -n $(find "$_file" -mtime +7 2>/dev/null) ]]; then
+    "$_tool" completion zsh > "$_file" 2>/dev/null
+  fi
+  source "$_file"
+done
+unset _zsh_cache _tool _file
 
-# Gemini / OpenRouter aliases
-alias hermes-gemini='hermes --model google/gemini-2.5-flash'
-alias hermes-gemini-pro='hermes --model google/gemini-2.5-pro'
-alias hermes-gemini-lite='hermes --model google/gemini-2.5-flash-lite'
-alias hermes-deepseek='hermes --model deepseek/deepseek-chat'
-
-# Hermes model aliases (April 2026 — orchestrator=grok-4.1-fast)
-alias hermes-grok='hermes --provider openrouter --model x-ai/grok-4.1-fast'
-alias hermes-smart='hermes --provider openrouter --model anthropic/claude-sonnet-4.6'
-alias hermes-design='hermes --provider openrouter --model anthropic/claude-opus-4.7'
-alias hermes-glm='hermes --provider openrouter --model z-ai/glm-4.7'
-alias hermes-deepseek-v32='hermes --provider openrouter --model deepseek/deepseek-v3.2'
+# --- AWS CLI completion (uses aws_completer, bash-style) ---------------------
+if command -v aws_completer >/dev/null 2>&1; then
+  autoload -Uz bashcompinit && bashcompinit
+  complete -C aws_completer aws
+fi
