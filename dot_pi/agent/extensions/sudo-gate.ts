@@ -8,16 +8,18 @@
  *
  * Without explicit approval, the call is blocked.
  *
+ * Also installs a compact custom footer with a shield glyph on the right
+ * (nf-md-shield_check, requires a Nerd Font) instead of an extra status row.
+ *
  * Auto-discovered by pi from ~/.pi/agent/extensions/sudo-gate.ts.
  */
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { basename, relative } from "node:path";
+import { homedir } from "node:os";
 
-/**
- * Commands that we want to gate. Matches the binary at a word boundary so
- * incidental occurrences in strings (e.g. `echo "no sudo"`) don't trip the
- * gate. `yay` is included because it internally escalates to sudo.
- */
 const PRIVILEGED = [
   { name: "sudo", re: /(^|[\s;&|])sudo(\s|$)/ },
   { name: "yay", re: /(^|[\s;&|])yay(\s|$)/ },
@@ -30,7 +32,15 @@ function detect(command: string): string | null {
   return null;
 }
 
+function tildify(cwd: string): string {
+  const home = homedir();
+  if (cwd === home) return "~";
+  if (cwd.startsWith(home + "/")) return "~/" + relative(home, cwd);
+  return cwd;
+}
+
 export default function (pi: ExtensionAPI) {
+  // --- Gate -----------------------------------------------------------------
   pi.on("tool_call", async (event, ctx) => {
     if (!isToolCallEventType("bash", event)) return;
 
@@ -42,7 +52,6 @@ export default function (pi: ExtensionAPI) {
       `Privileged command (${matched})`,
       `Allow this to run with elevated privileges?\n\n${command}`,
     );
-
     if (!ok) {
       return {
         block: true,
@@ -51,9 +60,57 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  // Compact status indicator: shield-check glyph (Nerd Font nf-md-shield_check).
-  // Requires a Nerd Font in your terminal (we install ttf-jetbrains-mono-nerd).
+  // --- Custom footer --------------------------------------------------------
+  // Mirrors pi's default footer (tokens on left; model + cwd + branch on right)
+  // and adds a single shield glyph at the far right to indicate the gate is
+  // active. Avoids the extra status row produced by `ctx.ui.setStatus`.
   pi.on("session_start", async (_event, ctx) => {
-    ctx.ui.setStatus("sudo-gate", "󰕥");
+    ctx.ui.setFooter((tui, theme, footerData) => {
+      const unsub = footerData.onBranchChange(() => tui.requestRender());
+      return {
+        dispose: unsub,
+        invalidate() {},
+        render(width: number): string[] {
+          // Token usage from session
+          let input = 0,
+            output = 0,
+            cost = 0;
+          for (const e of ctx.sessionManager.getBranch()) {
+            if (e.type === "message" && e.message.role === "assistant") {
+              const m = e.message as AssistantMessage;
+              input += m.usage.input;
+              output += m.usage.output;
+              cost += m.usage.cost.total;
+            }
+          }
+          const fmt = (n: number) =>
+            n < 1000 ? `${n}` : `${(n / 1000).toFixed(1)}k`;
+
+          const left = theme.fg(
+            "dim",
+            `↑${fmt(input)} ↓${fmt(output)} $${cost.toFixed(3)}`,
+          );
+
+          const cwd = tildify(ctx.cwd);
+          const branch = footerData.getGitBranch();
+          const model = ctx.model?.id ?? "no-model";
+          const shield = theme.fg("accent", "\u{F0565}"); // nf-md-shield_check
+
+          const rightParts = [
+            theme.fg("dim", model),
+            theme.fg("dim", cwd),
+            branch ? theme.fg("dim", `(${branch})`) : null,
+            shield,
+          ].filter(Boolean) as string[];
+          const right = rightParts.join(theme.fg("muted", " · "));
+
+          const padLen = Math.max(
+            1,
+            width - visibleWidth(left) - visibleWidth(right),
+          );
+          return [truncateToWidth(left + " ".repeat(padLen) + right, width)];
+        },
+      };
+    });
   });
 }
