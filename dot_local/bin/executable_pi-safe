@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# pi-safe — run pi and auto-restart it on crashes.
+#
+# Why: undici (Node's HTTP client used by pi) has known HTTP/2 bugs that can
+# crash pi with `ERR_HTTP2_INVALID_SESSION`. Pi's session log is durable, so
+# restarting with `pi -c` (continue most recent) loses at most the in-flight
+# turn.
+#
+# Behaviour:
+#   - First run uses your original arguments.
+#   - On non-zero exit, restarts with `pi -c` (resume most recent session)
+#     and forwards all of your other arguments.
+#   - Backs off briefly between restarts.
+#   - Bails out if pi crashes more than $MAX_BURST times in $BURST_WINDOW
+#     seconds (default: 5 crashes / 60s) — that means something other than
+#     a transient bug is wrong.
+#
+# Bound to /home/dev/.local/bin/pi-safe by chezmoi.
+# Optional shell alias:  alias pi='pi-safe'   (in your .zshrc)
+
+set -u
+
+MAX_BURST="${PI_SAFE_MAX_BURST:-5}"
+BURST_WINDOW="${PI_SAFE_BURST_WINDOW:-60}"
+BACKOFF_SECONDS="${PI_SAFE_BACKOFF:-1}"
+
+PI_BIN="${PI_SAFE_BIN:-pi}"
+
+# Trap Ctrl+C so we exit cleanly instead of getting auto-restarted.
+exiting=0
+trap 'exiting=1' INT TERM
+
+declare -a crash_times=()
+first_run=1
+
+while true; do
+  if [ "$first_run" = "1" ]; then
+    "$PI_BIN" "$@"
+    rc=$?
+    first_run=0
+  else
+    # Resume the most recent session; preserve other flags.
+    "$PI_BIN" -c "$@"
+    rc=$?
+  fi
+
+  if [ "$rc" = "0" ] || [ "$exiting" = "1" ]; then
+    exit "$rc"
+  fi
+
+  # Record this crash; drop ones older than the burst window.
+  now="$(date +%s)"
+  crash_times+=("$now")
+  new_times=()
+  for t in "${crash_times[@]}"; do
+    if (( now - t < BURST_WINDOW )); then
+      new_times+=("$t")
+    fi
+  done
+  crash_times=("${new_times[@]}")
+
+  if (( ${#crash_times[@]} >= MAX_BURST )); then
+    echo "" >&2
+    echo "pi-safe: ${#crash_times[@]} crashes in ${BURST_WINDOW}s — bailing out." >&2
+    echo "pi-safe: not a transient HTTP/2 hiccup; investigate." >&2
+    exit "$rc"
+  fi
+
+  echo "" >&2
+  echo "pi-safe: pi exited $rc — restarting with -c in ${BACKOFF_SECONDS}s (crash ${#crash_times[@]}/${MAX_BURST} this window)..." >&2
+  sleep "$BACKOFF_SECONDS"
+done
