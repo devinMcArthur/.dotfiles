@@ -1,0 +1,57 @@
+# chezmoi will not manage anything matching these patterns.
+# Paths are relative to the target ($HOME).
+# See: https://www.chezmoi.io/reference/special-files/chezmoiignore/
+
+# Caches, runtime, and ephemeral state
+.cache
+.local/state
+.local/share/Trash
+
+# App-managed state we never want to track
+.config/chromium
+.config/google-chrome
+.config/google-chrome-for-testing
+.config/discord
+.config/Slack
+.config/Electron
+.config/obsidian
+.config/Google
+.config/pulse
+.config/dconf
+.config/menus
+.config/gtk-3.0
+.config/QtProject.conf
+.config/configstore
+.config/github-copilot
+.config/ibus
+.config/glib-2.0
+.config/libreoffice
+.config/Thunar
+
+# Per-machine package/runtime caches
+.config/yay
+.config/go
+.config/uv
+.config/eas-cli-nodejs
+.config/create-next-app-nodejs
+.config/nextjs-nodejs
+.config/spacetime
+.config/doctl
+.config/gh
+.config/op
+.config/Android Open Source Project
+.config/helm
+
+# Loose home files we never want to track
+.bash_history
+.zsh_history
+.viminfo
+.lesshst
+.python_history
+.node_repl_history
+.wget-hsts
+
+# Secrets and tokens (we'll move these to 1Password, never to git)
+.private_env
+git_token.txt
+openai_api.txt.gpg
