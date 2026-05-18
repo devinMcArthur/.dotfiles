@@ -130,4 +130,5 @@ with native `<tool> completion zsh`, cached weekly under `~/.cache/zsh/`).
 ## Lessons learned
 
 <!-- Auto-appended by `save_lesson`. Newest first. -->
+- 2026-05-18: TEST_LESSON: ignore me; will be removed after verifying the chezmoi-integrated save flow works end-to-end.
 - 2026-05-18: When user asks about a library/framework's API, syntax, or config, query Context7 via mcp({ search: "..." }) then mcp({ tool: "context7_..." }) before falling back to web search or training data. Context7 has indexed docs for Hyprland, chezmoi, neovim, and ~6000 other projects.
