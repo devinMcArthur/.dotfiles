@@ -1,10 +1,15 @@
 export ZSH=$HOME/.oh-my-zsh
 
-ZSH_THEME="agnoster"
+# Prompt is rendered by starship (see ~/.config/starship.toml). Leave OMZ
+# theme empty so it doesn't fight with starship's PROMPT.
+ZSH_THEME=""
 
 plugins=(git minikube npm nvm rust skaffold gh aws kubectl helm)
 
 source $ZSH/oh-my-zsh.sh
+
+# Initialize starship prompt (must come after OMZ to win the PROMPT race).
+eval "$(starship init zsh)"
 
 # Secrets sourced from 1Password at `chezmoi apply` time (see chezmoi.toml).
 export ANTHROPIC_API_KEY={{ onepasswordRead "op://Dev Secrets/anthropic_api_key/credential" | quote }}
