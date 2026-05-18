@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""
+hypr-cheatsheet — wofi-driven searchable cheat sheet of Hyprland keybinds.
+
+Parses ~/.config/hypr/hyprland.conf for `bind`/`binde`/`bindl`/... lines,
+resolves $vars defined in the file, prefers trailing `# comments` as
+descriptions, falls back to the dispatcher + args, and pipes the table
+through `wofi --dmenu`.
+
+Bound to Super+/ in hyprland.conf.
+"""
+from __future__ import annotations
+
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+CONF = Path.home() / ".config/hypr/hyprland.conf"
+
+
+def resolve_vars(text: str) -> tuple[str, dict[str, str]]:
+    """Return (text_unchanged, {varname_with_dollar: value}). Two passes so
+    vars defined in terms of other vars also resolve. Trailing comments on the
+    var declaration line are stripped from the value."""
+    pairs = re.findall(r"^\$(\w+)\s*=\s*(.+?)\s*$", text, re.MULTILINE)
+    vars_: dict[str, str] = {}
+    for name, val in pairs:
+        # Drop trailing comment, e.g. `SUPER # Sets "Windows" key`.
+        val = val.split("#", 1)[0].strip()
+        vars_[f"${name}"] = val
+    # Resolve nested $vars
+    for _ in range(3):
+        for k, v in list(vars_.items()):
+            for k2, v2 in vars_.items():
+                v = v.replace(k2, v2)
+            vars_[k] = v
+    return text, vars_
+
+
+def expand(s: str, vars_: dict[str, str]) -> str:
+    for k, v in vars_.items():
+        s = s.replace(k, v)
+    return s
+
+
+# Pretty modifier ordering: SUPER first, then CTRL, ALT, SHIFT.
+MOD_ORDER = ["SUPER", "CTRL", "CONTROL", "ALT", "MOD1", "SHIFT"]
+
+
+def fmt_modifiers(mod_field: str) -> str:
+    """Normalize `SUPER SHIFT` / `$mainMod SHIFT` into a stable display form."""
+    parts = [p.strip().upper() for p in mod_field.split() if p.strip()]
+    parts = [{"CONTROL": "Ctrl", "MOD1": "Alt"}.get(p, p.capitalize()) for p in parts]
+    # Sort by canonical order
+    order = {m.capitalize(): i for i, m in enumerate(MOD_ORDER)}
+    parts.sort(key=lambda p: order.get(p, 99))
+    return "+".join(parts)
+
+
+def parse_binds(conf_text: str) -> list[tuple[str, str]]:
+    _, vars_ = resolve_vars(conf_text)
+    rows: list[tuple[str, str]] = []
+
+    for raw in conf_text.splitlines():
+        line = raw.strip()
+        m = re.match(r"^(bind[a-z]*)\s*=\s*(.*)$", line)
+        if not m:
+            continue
+        body = m.group(2)
+
+        # Trailing comment becomes the human description.
+        desc = ""
+        if "#" in body:
+            body, _, desc = body.partition("#")
+            desc = desc.strip()
+
+        parts = [p.strip() for p in body.split(",")]
+        if len(parts) < 3:
+            continue
+
+        mod, key, *rest = parts
+        mod = expand(mod, vars_).strip()
+        key = expand(key, vars_).strip()
+        rest = [expand(p, vars_) for p in rest]
+
+        mod_display = fmt_modifiers(mod) if mod else "—"
+        # Some keys are written lower-case, some upper. Capitalize single chars
+        # for prettier display; leave multi-char keys (return, escape, F1...) alone.
+        key_display = key.upper() if len(key) == 1 else key
+
+        chord = f"{mod_display}+{key_display}" if mod_display != "—" else key_display
+
+        if not desc:
+            # Fall back to dispatcher + first arg.
+            dispatcher = rest[0] if rest else ""
+            arg = rest[1] if len(rest) > 1 else ""
+            desc = f"{dispatcher} {arg}".strip()
+
+        rows.append((chord, desc))
+
+    # Stable dedupe, preserve first-seen order
+    seen: set[tuple[str, str]] = set()
+    uniq: list[tuple[str, str]] = []
+    for r in rows:
+        if r not in seen:
+            seen.add(r)
+            uniq.append(r)
+    return uniq
+
+
+def main() -> int:
+    if not CONF.exists():
+        print(f"hypr-cheatsheet: {CONF} not found", file=sys.stderr)
+        return 1
+
+    rows = parse_binds(CONF.read_text())
+    if not rows:
+        print("hypr-cheatsheet: no binds parsed", file=sys.stderr)
+        return 1
+
+    width = max(len(chord) for chord, _ in rows)
+    lines = [f"{chord:<{width}}    {desc}" for chord, desc in rows]
+
+    # --print bypasses wofi (useful for testing / CLI / pipe to less).
+    if "--print" in sys.argv[1:]:
+        print("\n".join(lines))
+        return 0
+
+    # Pipe through wofi --dmenu. Selection isn't actionable here; this is a
+    # viewer. Press Esc to dismiss.
+    try:
+        subprocess.run(
+            [
+                "wofi",
+                "--dmenu",
+                "--prompt",
+                "Hyprland binds",
+                "--width",
+                "900",
+                "--height",
+                "700",
+                "--insensitive",
+                "--cache-file",
+                "/dev/null",
+            ],
+            input="\n".join(lines),
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        print("\n".join(lines))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

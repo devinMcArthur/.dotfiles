@@ -17,8 +17,11 @@ PACMAN_PKGS=(
 
   # Terminal & WM
   ghostty
-  hyprland hypridle hyprlock hyprpaper
-  waybar wofi
+  hyprland hypridle hyprlock hyprpaper hyprpicker hyprshot
+  waybar wofi swaync
+
+  # Wayland clipboard + history + screenshot annotation + media control
+  cliphist wl-clipboard swappy grim slurp playerctl brightnessctl
 
   # CLI utilities
   git github-cli jq fd ripgrep fzf eza wget less man-db unzip openssh
@@ -39,6 +42,9 @@ AUR_PKGS=(
 
   # zsh plugin manager (note: distinct from the unrelated French app 'antidote')
   zsh-antidote
+
+  # Logout menu for Hyprland
+  wlogout
 )
 
 echo "==> Installing pacman packages..."
