@@ -78,3 +78,9 @@ if command -v aws_completer >/dev/null 2>&1; then
   autoload -Uz bashcompinit && bashcompinit
   complete -C aws_completer aws
 fi
+
+# --- Greeting (interactive terminals only, skip inside tmux/zellij/ssh) ------
+if [[ -o interactive && -z "$TMUX" && -z "$ZELLIJ" && -z "$SSH_TTY" ]] && \
+   command -v fastfetch >/dev/null 2>&1; then
+  fastfetch
+fi
