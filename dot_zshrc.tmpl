@@ -1,0 +1,82 @@
+export ZSH=$HOME/.oh-my-zsh
+
+ZSH_THEME="agnoster"
+
+plugins=(git minikube npm nvm rust skaffold gh aws kubectl helm)
+
+source $ZSH/oh-my-zsh.sh
+
+# Secrets sourced from 1Password at `chezmoi apply` time (see chezmoi.toml).
+export ANTHROPIC_API_KEY={{ onepasswordRead "op://Dev Secrets/anthropic_api_key/credential" | quote }}
+
+# User configuration
+
+source ~/antigen.zsh
+# Initialize antigen using the configuration from ~/.antigenrc
+antigen init $HOME/.antigenrc
+
+# Disabling conflicting oh-my-zsh aliases
+unalias ls 2>/dev/null
+unalias la 2>/dev/null
+unalias ll 2>/dev/null
+
+# ls and ll are functions aliased to use exa by the ls plugin
+alias llt='ll --tree'
+alias llti='ll --tree --git-ignore'
+alias lla='ll -a'
+
+# Tmux color configuration
+export TERM=xterm-256color
+
+# Setup environment variables
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+export PATH="$PATH:/home/dev/.local/bin"
+
+
+#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
+export SDKMAN_DIR="$HOME/.sdkman"
+[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+# bun completions
+[ -s "/home/dev/.bun/_bun" ] && source "/home/dev/.bun/_bun"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+# Android SDK
+export ANDROID_HOME="$HOME/Android/Sdk"
+export PATH=$PATH:$ANDROID_HOME/platform-tools
+export PATH=$PATH:$ANDROID_HOME/emulator
+export PATH=$PATH:$ANDROID_HOME/tools
+export PATH=$PATH:$ANDROID_HOME/tools/bin
+export PATH=$PATH:~/go/bin
+
+# NVIM
+export PATH="/opt/nvim-linux64/bin:$PATH"
+
+# Go
+export PATH=$PATH:/usr/local/go/bin
+
+# Hermes model aliases (added 2026-04-24)
+# Default is claude-sonnet-4-6; escalate to Opus for design/review/planning work.
+alias hermes-opus='hermes --model anthropic/claude-opus-4-7'
+alias hermes-sonnet='hermes --model anthropic/claude-sonnet-4-6'
+alias hermes-haiku='hermes --model anthropic/claude-haiku-4-5'
+
+# Gemini / OpenRouter aliases
+alias hermes-gemini='hermes --model google/gemini-2.5-flash'
+alias hermes-gemini-pro='hermes --model google/gemini-2.5-pro'
+alias hermes-gemini-lite='hermes --model google/gemini-2.5-flash-lite'
+alias hermes-deepseek='hermes --model deepseek/deepseek-chat'
+
+# Hermes model aliases (April 2026 — orchestrator=grok-4.1-fast)
+alias hermes-grok='hermes --provider openrouter --model x-ai/grok-4.1-fast'
+alias hermes-smart='hermes --provider openrouter --model anthropic/claude-sonnet-4.6'
+alias hermes-design='hermes --provider openrouter --model anthropic/claude-opus-4.7'
+alias hermes-glm='hermes --provider openrouter --model z-ai/glm-4.7'
+alias hermes-deepseek-v32='hermes --provider openrouter --model deepseek/deepseek-v3.2'
