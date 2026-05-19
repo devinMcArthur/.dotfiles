@@ -174,13 +174,17 @@ function promptPassword(promptText: string): string | undefined {
   return undefined;
 }
 
-/** Rewrite the command so every `sudo` becomes `sudo -A` and SUDO_ASKPASS
- *  is exported up front. */
+/** Rewrite the command so each `sudo` *command position* becomes `sudo -A`
+ *  and SUDO_ASKPASS is exported up front.
+ *
+ *  Carefully avoids replacing `sudo` inside filenames or arguments like
+ *  `/etc/pam.d/sudo`. Only matches when preceded by start-of-string or a
+ *  shell separator (whitespace, `;`, `&&`, `||`, `|`).
+ */
 function rewriteWithAskpass(command: string, askpassPath: string): string {
-  // Add -A to every sudo invocation that doesn't already have it.
   const rewritten = command.replace(
-    /\bsudo\b(?!\s+-A\b)/g,
-    "sudo -A",
+    /(^|[\s;|&])sudo\b(?!\s+-A\b)/g,
+    "$1sudo -A",
   );
   return `SUDO_ASKPASS=${shEscape(askpassPath)} ${rewritten}`;
 }
