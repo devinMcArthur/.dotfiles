@@ -133,33 +133,45 @@ function cleanupAskpass(dir: string | undefined) {
   } catch {}
 }
 
-/** Prompt for a password via wofi -P. Returns undefined on cancel. */
+/**
+ * Prompt for a password. Tries dialog backends in order of UX quality:
+ *   1. zenity --password           (GTK dialog, masked, Wayland-native)
+ *   2. systemd-ask-password        (system PAM agent / TTY fallback)
+ * Returns undefined on cancel / no backend.
+ *
+ * (We don't use wofi here because `wofi --dmenu --password` requires
+ * picking from a list to submit, which fails for free-form input.)
+ */
 function promptPassword(promptText: string): string | undefined {
-  let r: SpawnSyncReturns<string>;
-  try {
-    r = spawnSync(
-      "wofi",
-      [
-        "--dmenu",
+  const backends: Array<{ cmd: string; args: string[] }> = [
+    {
+      cmd: "zenity",
+      args: [
         "--password",
-        "--prompt",
+        "--title",
+        "pi sudo-gate",
+        "--text",
         promptText,
-        "--width",
-        "500",
-        "--lines",
-        "1",
-        "--hide-search",
-        "--cache-file",
-        "/dev/null",
       ],
-      { input: "", encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] },
-    );
-  } catch {
-    return undefined;
+    },
+    { cmd: "systemd-ask-password", args: ["--no-tty", promptText] },
+  ];
+  for (const { cmd, args } of backends) {
+    let r: SpawnSyncReturns<string>;
+    try {
+      r = spawnSync(cmd, args, {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+    } catch {
+      continue; // not installed; try next
+    }
+    if (r.error || r.status === null) continue;
+    if (r.status !== 0) return undefined; // user cancelled
+    const pw = (r.stdout ?? "").replace(/\r?\n$/, "");
+    return pw === "" ? undefined : pw;
   }
-  if (r.status !== 0) return undefined; // Esc / cancel
-  const pw = (r.stdout ?? "").replace(/\r?\n$/, "");
-  return pw === "" ? undefined : pw;
+  return undefined;
 }
 
 /** Rewrite the command so every `sudo` becomes `sudo -A` and SUDO_ASKPASS
