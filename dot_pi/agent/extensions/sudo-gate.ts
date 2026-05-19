@@ -237,6 +237,9 @@ export default function (pi: ExtensionAPI) {
     const matched = detect(command);
     if (!matched) return;
 
+    // Diagnostic so we can see the extension firing while we shake out bugs.
+    ctx.ui.notify(`sudo-gate: ${matched} detected`, "info");
+
     if (!needsPassword(command, matched)) {
       // Tier 1: simple confirm — already NOPASSWD.
       const ok = await ctx.ui.confirm(
@@ -265,6 +268,10 @@ export default function (pi: ExtensionAPI) {
 
     // Mutate the command so sudo reads the password from the askpass script.
     event.input.command = rewriteWithAskpass(command, script);
+    ctx.ui.notify(
+      `sudo-gate: rewrote command with askpass (${script.replace(homedir(), "~")})`,
+      "info",
+    );
   });
 
   // Always clean up the askpass directory after the tool finishes.

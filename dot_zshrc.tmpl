@@ -37,6 +37,18 @@ if command -v eza >/dev/null 2>&1; then
   alias lta='eza --tree --level=2 --icons=auto -a'
 fi
 
+# --- tmux helpers (restored from old oh-my-zsh tmux plugin) -----------------
+# ts [name]  → new session (named if arg given)
+# ta [name]  → attach (to named session if arg given)
+ts() {
+  if [[ -z $1 || ${1:0:1} == '-' ]]; then tmux new-session "$@"
+  else tmux new-session -s "$@"; fi
+}
+ta() {
+  if [[ -z $1 || ${1:0:1} == '-' ]]; then tmux attach "$@"
+  else tmux attach -t "$@"; fi
+}
+
 # --- PATH (deduplicated via typeset -U; leftmost wins) -----------------------
 typeset -U PATH path
 export ANDROID_HOME="$HOME/Android/Sdk"
@@ -55,19 +67,31 @@ path=(
 )
 export PATH
 
-# --- Lazy-load nvm (saves ~250ms per shell startup) --------------------------
-# Shims defer sourcing nvm.sh until any of these commands is first invoked.
+# --- Lazy-load nvm, but eagerly expose the default node's bin ---------------
+# Sourcing nvm.sh is the slow part (~250ms); adding the bin dir to PATH is free.
+# This makes every globally-installed npm CLI (pi, tsc, prettier, …) work
+# immediately, while still deferring nvm.sh until you actually switch versions.
 export NVM_DIR="$HOME/.nvm"
+
+if [ -d "$NVM_DIR/versions/node" ]; then
+  _nvm_v="default"
+  while [ -f "$NVM_DIR/alias/$_nvm_v" ]; do
+    _nvm_v=$(<"$NVM_DIR/alias/$_nvm_v")
+  done
+  if [ ! -d "$NVM_DIR/versions/node/$_nvm_v" ]; then
+    _nvm_v=$(ls "$NVM_DIR/versions/node" | sort -V | tail -1)
+  fi
+  [ -d "$NVM_DIR/versions/node/$_nvm_v/bin" ] && \
+    PATH="$NVM_DIR/versions/node/$_nvm_v/bin:$PATH"
+  unset _nvm_v
+fi
+
 _nvm_load() {
-  unset -f nvm node npm npx yarn _nvm_load
+  unset -f nvm _nvm_load
   [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
   [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
 }
-nvm()  { _nvm_load; nvm  "$@"; }
-node() { _nvm_load; node "$@"; }
-npm()  { _nvm_load; npm  "$@"; }
-npx()  { _nvm_load; npx  "$@"; }
-yarn() { _nvm_load; yarn "$@"; }
+nvm() { _nvm_load; nvm "$@"; }
 
 # --- bun completions ---------------------------------------------------------
 [ -s "$BUN_INSTALL/_bun" ] && source "$BUN_INSTALL/_bun"
