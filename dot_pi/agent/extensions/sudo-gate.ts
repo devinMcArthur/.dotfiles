@@ -145,19 +145,33 @@ function cleanupAskpass(dir: string | undefined) {
  * (We don't use wofi here because `wofi --dmenu --password` requires
  * picking from a list to submit, which fails for free-form input.)
  */
-function promptPassword(promptText: string): string | undefined {
+function summarizeCommand(command: string, max = 240): string {
+  const oneLine = command.replace(/\s+/g, " ").trim();
+  return oneLine.length <= max ? oneLine : oneLine.slice(0, max - 1) + "\u2026";
+}
+
+function promptPassword(
+  matched: string,
+  command: string,
+): string | undefined {
+  const summary = summarizeCommand(command);
+  const title = `pi sudo-gate (${matched})`;
+  const zenityText = `Allow this command as root?\n\n${summary}`;
+  const askPwText = `pi wants to run: ${summary}\nsudo password (${matched}):`;
   const backends: Array<{ cmd: string; args: string[] }> = [
     {
       cmd: "zenity",
       args: [
         "--password",
         "--title",
-        "pi sudo-gate",
+        title,
         "--text",
-        promptText,
+        zenityText,
+        "--width",
+        "600",
       ],
     },
-    { cmd: "systemd-ask-password", args: ["--no-tty", promptText] },
+    { cmd: "systemd-ask-password", args: ["--no-tty", askPwText] },
   ];
   for (const { cmd, args } of backends) {
     let r: SpawnSyncReturns<string>;
@@ -239,7 +253,7 @@ export default function (pi: ExtensionAPI) {
     }
 
     // Tier 2: password required.
-    const password = promptPassword(`sudo password (${matched}):`);
+    const password = promptPassword(matched, command);
     if (!password) {
       return {
         block: true,
