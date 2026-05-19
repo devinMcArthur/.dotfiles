@@ -36,9 +36,12 @@ import { dirname, join, relative } from "node:path";
 // Detection
 // --------------------------------------------------------------------------
 
+// Strict command-position match: the word must be preceded by start-of-string
+// or a shell separator, AND followed by whitespace/separator/end (not by `-`
+// or another word char — so `sudo-gate.ts` or `yayfile` don't match).
 const PRIVILEGED = [
-  { name: "sudo", re: /(^|[\s;&|])sudo(\s|$)/ },
-  { name: "yay", re: /(^|[\s;&|])yay(\s|$)/ },
+  { name: "sudo", re: /(?:^|[\s;&|])sudo(?=\s|[;&|]|$)/ },
+  { name: "yay", re: /(?:^|[\s;&|])yay(?=\s|[;&|]|$)/ },
 ];
 
 function detect(command: string): string | null {
@@ -182,11 +185,18 @@ function promptPassword(promptText: string): string | undefined {
  *  shell separator (whitespace, `;`, `&&`, `||`, `|`).
  */
 function rewriteWithAskpass(command: string, askpassPath: string): string {
-  const rewritten = command.replace(
-    /(^|[\s;|&])sudo\b(?!\s+-A\b)/g,
-    "$1sudo -A",
-  );
-  return `SUDO_ASKPASS=${shEscape(askpassPath)} ${rewritten}`;
+  // Split on shell statement separators (`;`, `&&`, `||`, `|`) and only
+  // rewrite when `sudo` is the *first word* of a statement (after optional
+  // env-var preamble like `FOO=bar`). This avoids matching `sudo` as an
+  // argument (e.g. `echo no sudo here`) or as part of a filename.
+  const parts = command.split(/(\s*(?:&&|\|\||[;|])\s*)/);
+  for (let i = 0; i < parts.length; i += 2) {
+    parts[i] = parts[i].replace(
+      /^(\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*)sudo(?=\s|$)(?!\s+-A\b)/,
+      "$1sudo -A",
+    );
+  }
+  return `SUDO_ASKPASS=${shEscape(askpassPath)} ${parts.join("")}`;
 }
 
 // --------------------------------------------------------------------------
