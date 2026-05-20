@@ -130,6 +130,7 @@ with native `<tool> completion zsh`, cached weekly under `~/.cache/zsh/`).
 ## Lessons learned
 
 <!-- Auto-appended by `save_lesson`. Newest first. -->
+- 2026-05-20: Hyprland's PATH (when launched from display manager/TTY) does NOT include ~/.local/bin — interactive shell rc files aren't sourced. Scripts in ~/.local/bin bound via `exec, my-script` silently fail (sh exits 127, Hyprland swallows it). Fix: use absolute paths in binds OR add `env = PATH,$HOME/.local/bin:$PATH` at top of hyprland.conf (env = only applies on Hyprland start, not hyprctl reload).
 - 2026-05-18: zsh-autosuggestions default highlight is fg=8 (very dark gray), often invisible against modern terminal palettes. Set ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE explicitly to a visible-but-dim color (e.g. Catppuccin overlay0 #6c7086) after antidote loads.
 - 2026-05-18: Don't put `{{ onepasswordRead "..." }}` in chezmoi templates if 1Password's Allow/Deny prompt is annoying — chezmoi apply triggers a prompt every time. Instead, declare secrets in ~/.config/op-dev.env (using op:// URIs) and resolve at runtime via `op run --env-file=... -- <cmd>` or the `with-secrets` zsh helper.
 - 2026-05-18: When user asks about a library/framework's API, syntax, or config, query Context7 via mcp({ search: "..." }) then mcp({ tool: "context7_..." }) before falling back to web search or training data. Context7 has indexed docs for Hyprland, chezmoi, neovim, and ~6000 other projects.
