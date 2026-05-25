@@ -44,6 +44,10 @@ chezmoi repo context.
 - faillock unlock_time 600s → 60s
 - Sudoers expanded: NOPASSWD for systemctl + fw-ectool; passwd_tries=1
 
+### Delta (syntax-highlighted git diffs)
+- `git-delta` in pacman bootstrap
+- `dot_gitconfig`: pager=delta, interactive diffFilter, navigate + line-numbers, zdiff3 conflict style, colorMoved=default
+
 ### Chezmoi hygiene
 - `.pi/agent/settings.json` removed from management (self-modifying state)
 - Lesson saved: never chezmoi-manage app-written state files
@@ -78,7 +82,6 @@ Snapshots don't cover this.
 ### Tier 2 — Real QoL upgrades (pick when interested)
 - **atuin** — encrypted searchable shell history with sync (`Ctrl-R` fuzzy)
 - **direnv** — per-directory `.envrc` auto-load (better than `with-secrets` for repo-scoped)
-- **delta** — syntax-highlighted git diffs (~3 lines of gitconfig)
 - **zoxide verify** — already implied by sesh; confirm `z` is wired
 - **Hibernate** — needs swapfile ≥ RAM (~32GB on btrfs subvolume), one kernel param. Eliminates standby battery drain.
 - **mise** — unified version manager for node/python/go/etc. (replaces nvm + uv with one tool). Maybe-worth-it.

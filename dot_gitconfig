@@ -3,6 +3,16 @@
 	email = assortedgerm@gmail.com
 [core]
 	editor = nvim
+	pager = delta
+[interactive]
+	diffFilter = delta --color-only
+[delta]
+	navigate = true
+	line-numbers = true
+[merge]
+	conflictstyle = zdiff3
+[diff]
+	colorMoved = default
 [credential "https://github.com"]
 	helper = 
 	helper = !/usr/bin/gh auth git-credential
