@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Installs a systemd oneshot that reapplies the Framework laptop battery
+# charge limit at boot. fw-ectool stores the limit in the EC, which
+# normally persists across reboots, but firmware/EC resets can revert it
+# to 100%. The service is cheap and idempotent — set the limit again on
+# every boot for resilience.
+#
+# chezmoi run_onchange_*: re-runs whenever this rendered script changes,
+# so bumping the limit value (or the unit body) triggers a redeploy.
+
+set -euo pipefail
+
+# {{ "Hash trigger:" }} {{- "framework-charge-limit-v1-80pct" }}
+
+# Only attempt on Framework hardware.
+vendor=$(cat /sys/devices/virtual/dmi/id/sys_vendor 2>/dev/null || true)
+if [ "$vendor" != "Framework" ]; then
+  echo "==> framework-charge-limit: not a Framework laptop, skipping"
+  exit 0
+fi
+
+# fw-ectool may not be installed yet on first bootstrap.
+if ! command -v fw-ectool >/dev/null 2>&1; then
+  echo "==> framework-charge-limit: fw-ectool not installed yet, skipping"
+  echo "    (will be picked up on next chezmoi apply once fw-ectool-git is in)"
+  exit 0
+fi
+
+UNIT=/etc/systemd/system/framework-charge-limit.service
+CONTENT='[Unit]
+Description=Framework laptop battery charge limit (80%)
+Documentation=https://github.com/DHowett/framework-ec
+ConditionPathExists=/usr/bin/fw-ectool
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/fw-ectool fwchargelimit 80
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target'
+
+# Only write+reload if content changed (idempotent).
+if [ ! -f "$UNIT" ] || ! diff -q <(printf "%s\n" "$CONTENT") "$UNIT" >/dev/null 2>&1; then
+  echo "==> writing $UNIT"
+  printf "%s\n" "$CONTENT" | sudo tee "$UNIT" >/dev/null
+  sudo systemctl daemon-reload
+fi
+
+if ! systemctl is-enabled framework-charge-limit.service >/dev/null 2>&1; then
+  echo "==> enabling framework-charge-limit.service"
+  sudo systemctl enable framework-charge-limit.service
+fi
+
+# Apply now so we don't wait for next reboot.
+echo "==> applying limit now"
+sudo systemctl start framework-charge-limit.service
+
+# Verify
+current=$(sudo fw-ectool fwchargelimit 2>/dev/null | tail -1)
+echo "==> current charge limit: ${current}%"
