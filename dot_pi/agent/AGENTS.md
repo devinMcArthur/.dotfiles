@@ -227,10 +227,26 @@ some of this — check first, complement, don't duplicate.
 
 The vault is a git repo with origin `git@github.com:devinMcArthur/SecondBrain.git`
 (private). It is the transport layer for Raphael (the cloud agent),
-so lapsed commits = stale cloud side. After ANY vault write, commit
-and push.
+so lapsed commits = stale cloud side, AND missed pulls = stale
+local view of what Raphael wrote.
 
-**When to commit:**
+**Pull at session start.** Before doing ANY vault work in a new
+session, pull:
+
+```bash
+cd ~/personal/SecondBrain && git pull --rebase
+```
+
+`--rebase` avoids merge-commit noise. If the pull surfaces conflicts,
+stop and ask the user how to resolve — don't auto-resolve vault
+conflicts; they're meeting minutes, decisions, observations, not
+code.
+
+**Pull again before writes in long sessions.** If the session has
+been open >1 hour or you suspect Raphael may have pushed, pull
+before the next write to minimize the divergence window.
+
+**Push after every write.** When to commit:
 - One commit per evergreen note write (each is a separate decision)
 - One commit per `About Me/` entry
 - One commit per `People/` entry
@@ -251,11 +267,29 @@ git push
 but welcome for context (the *why*, not just the *what* — same
 texture rule as the notes themselves).
 
-**If push fails** (offline, auth lapse, etc.): say so EXPLICITLY in
-the response to the user. Never silently swallow a failed push —
-that's exactly how lapsed-commit drift starts. Commits accumulate
-locally and push goes through on next try; that's fine, just surface
-the state.
+**If push fails because remote moved** (Raphael got there first):
+`git pull --rebase` then retry the push. This is normal and not an
+error.
+
+**If push fails for other reasons** (offline, auth lapse, etc.):
+say so EXPLICITLY in the response to the user. Never silently
+swallow a failed push — that's exactly how lapsed-commit drift
+starts. Commits accumulate locally and push goes through on next
+try; that's fine, just surface the state.
+
+**Mid-session re-index after pulling.** When new notes arrive via
+`git pull --rebase` mid-session, pi-knowledge-search does NOT
+auto-reindex — it walks the vault only at session startup. To make
+Raphael's just-pulled writes searchable in this session, the user
+must run the `/knowledge-sync` slash command. Surface that prompt:
+
+> Pulled N new notes from Raphael. Run `/knowledge-sync` to make
+> them searchable in this session.
+
+Ollama itself is passive — it only embeds when asked. pi-knowledge-
+search is the driver; it asks Ollama to embed new chunks during
+indexing. The local vector DB lives in `~/.pi/...` (NOT in the
+vault, NOT chezmoi-managed).
 
 **Don't manage `.obsidian/`:** the vault has `.gitignore` rules
 excluding `workspace.json` and other constantly-touched Obsidian
@@ -267,6 +301,7 @@ unproductive and caused the workflow to lapse in the first place.
 ## Lessons learned
 
 <!-- Auto-appended by `save_lesson`. Newest first. -->
+- 2026-05-25: Vault git is BIDIRECTIONAL — Raphael (cloud agent) also pushes. Pull at session start (`git pull --rebase`) before any vault work. For long sessions, pull again before writes if Raphael may have pushed. After pulling new notes mid-session, prompt user to run `/knowledge-sync` because pi-knowledge-search only indexes on session startup. Ollama is passive — it just embeds when asked; pi-knowledge-search is what drives indexing.
 - 2026-05-25: After ANY write to the Obsidian vault at ~/personal/SecondBrain, immediately git add + commit + push to the github.com:devinMcArthur/SecondBrain origin. The vault is now the transport layer for Raphael (the cloud agent) and lapsed commits leave the cloud side stale. Conventions: one commit per evergreen/About Me/People write (separate decisions); batch dailies into one commit at end-of-session-batch-surface. Commit message format: `vault: <what changed in one line>`. If push fails (offline), say so explicitly — don't silently swallow.
 - 2026-05-25: Don't ask permission to update today's daily in the vault — it's a living document by design and asking adds friction. The "batched proposal at session end" rule from the Vault use policy is about *evergreen* notes; dailies are continuous appends.
 - 2026-05-25: Never wrap TUI/interactive commands with `op run --env-file=... -- <cmd>`. `op run` interposes pipes on the child's stdout/stderr to do secret-masking, which makes isatty() return false in the child. Result: TUI apps render half-screen and don't accept input (pi), or refuse to start ("use stdin or --print" — claude). For interactive consumers, instead use a shell-function pattern that runs `op read` per op:// reference inside a subshell, exports the values, and `exec`s into the target — that way the child inherits the env normally AND keeps its real TTY. `op run` is only safe for non-interactive child processes that don't care about TTY (CI tasks, batch scripts).
