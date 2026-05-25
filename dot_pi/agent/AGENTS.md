@@ -230,21 +230,28 @@ The vault is a git repo with origin `git@github.com:devinMcArthur/SecondBrain.gi
 so lapsed commits = stale cloud side, AND missed pulls = stale
 local view of what Raphael wrote.
 
-**Pull at session start.** Before doing ANY vault work in a new
-session, pull:
+**Pull before every batch of vault writes.** No judgment call, no
+"long session" carve-out. Every time a turn produces one or more
+vault writes, the FIRST action of that turn is:
 
 ```bash
 cd ~/personal/SecondBrain && git pull --rebase
 ```
 
-`--rebase` avoids merge-commit noise. If the pull surfaces conflicts,
-stop and ask the user how to resolve — don't auto-resolve vault
-conflicts; they're meeting minutes, decisions, observations, not
-code.
+- **Batch = the writes in a single turn.** Pull once at the top of
+  the turn, then perform all the writes for that turn, then
+  commit + push each (separate commits per the granularity rules
+  below).
+- A turn with zero vault writes does not need a pull. A new turn
+  later with another write needs another pull.
+- `--rebase` avoids merge-commit noise.
+- If the pull surfaces conflicts, STOP and ask the user how to
+  resolve. Don't auto-resolve vault conflicts — they're meeting
+  minutes, decisions, observations, not code.
 
-**Pull again before writes in long sessions.** If the session has
-been open >1 hour or you suspect Raphael may have pushed, pull
-before the next write to minimize the divergence window.
+The ~100–300ms cost of a current-repo pull is trivial; the cost of
+writing on top of stale state (and silently overwriting Raphael's
+just-pushed contribution) is not.
 
 **Push after every write.** When to commit:
 - One commit per evergreen note write (each is a separate decision)
