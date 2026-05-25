@@ -1,0 +1,31 @@
+[book]
+title = "Turing — laptop reference"
+authors = ["Devin McArthur"]
+description = "What this Framework laptop can do, why each piece is there, and how to invoke it. Companion to chezmoi-managed configs in this repo."
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/devinMcArthur/.dotfiles"
+edit-url-template = "https://github.com/devinMcArthur/.dotfiles/edit/master/docs/{path}"
+no-section-label = false
+
+[output.html.search]
+enable = true
+limit-results = 30
+use-boolean-and = true
+boost-title = 2
+boost-hierarchy = 1
+boost-paragraph = 1
+expand = true
+heading-split-level = 3
+
+[output.html.fold]
+enable = true
+level = 1

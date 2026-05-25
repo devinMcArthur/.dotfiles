@@ -58,6 +58,7 @@ openai_api.txt.gpg
 
 # Repo-only files (kept in source, not deployed to $HOME)
 README.md
+docs
 
 # Self-modifying state files (apps write to these; chezmoi must not revert)
 .pi/agent/settings.json
