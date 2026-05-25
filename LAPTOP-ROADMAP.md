@@ -44,6 +44,13 @@ chezmoi repo context.
 - faillock unlock_time 600s → 60s
 - Sudoers expanded: NOPASSWD for systemctl + fw-ectool; passwd_tries=1
 
+### Esc-to-edit extension (Claude Code parity)
+- `dot_pi/agent/extensions/edit-last-message.ts` chezmoi-managed (~120 LOC TypeScript)
+- Registers `/edit-last` slash command (uses `ctx.fork(entryId, { position: "before" })` which forks + auto-restores the prompt into the editor)
+- Registers `alt+e` shortcut that dispatches via `pi.sendUserMessage("/edit-last")` — routes through pi's input pipeline so it hits the command dispatcher with proper ExtensionCommandContext (shortcut handlers themselves only get base ExtensionContext, no fork())
+- Skips the synthetic `/edit-last` trigger when finding the last user message (so the dispatch chain doesn't fork-and-restore its own invocation)
+- Closes the one ergonomic gap vs Claude Code's Esc-to-edit-message UX
+
 ### Laptop reference site (mdBook)
 - `docs/` folder in chezmoi repo, `mdbook serve` renders to localhost:3030
 - `docs/src/SUMMARY.md` lists all categorical pages (shell, tmux, terminal, hyprland, desktop-shell, login-lock, power, framework, snapshots-backups, secrets, pi-agent, obsidian, keybinds)
