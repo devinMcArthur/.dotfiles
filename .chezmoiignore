@@ -61,3 +61,4 @@ README.md
 
 # Self-modifying state files (apps write to these; chezmoi must not revert)
 .pi/agent/settings.json
+LAPTOP-ROADMAP.md
