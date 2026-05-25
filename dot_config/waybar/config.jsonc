@@ -47,11 +47,11 @@
     }
   },
   "custom/power_profile": {
-    //shows the current power profile and switches to next on click
-    "exec": "asusctl profile -p | sed s:'Active profile is'::",
-    "interval": 30,
-    "format": "󰈐{}",
-    "on-click": "asusctl profile -n; pkill -SIGRTMIN+8 waybar",
+    // Power-profiles-daemon current profile; left-click cycles forward.
+    "exec": "~/.config/waybar/scripts/power-profile.sh status",
+    "return-type": "json",
+    "interval": 5,
+    "on-click": "~/.config/waybar/scripts/power-profile.sh next && pkill -SIGRTMIN+8 waybar",
     "signal": 8
   },
   "custom/weather": {
