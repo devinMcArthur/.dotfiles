@@ -1,15 +1,29 @@
 # Prompt: starship (see ~/.config/starship.toml).
 eval "$(starship init zsh)"
 
-# Secrets live in 1Password (see ~/.config/op-dev.env).
-# We deliberately do NOT export them at apply-time anymore — that triggered
-# a 1Password Allow/Deny prompt on every `chezmoi apply`.
+# Secrets live in 1Password (see ~/.config/op-dev.env). We resolve them
+# lazily, on-demand, per-command — NOT at shell startup. Previous attempts
+# to export at login (.zprofile op-read loop) or at apply-time (chezmoi
+# template onepasswordRead) both produced annoying Allow/Deny popups and
+# added 1-5s of latency to every shell or apply. Lazy resolution keeps
+# empty shells free and only pays the op cost when something actually
+# needs the secret.
 #
-# To run a command with the dev secrets loaded into its environment:
+# Manual invocation:
 #   op run --env-file=~/.config/op-dev.env -- <cmd>
 #
 # Convenience wrapper:
 with-secrets() { op run --env-file="$HOME/.config/op-dev.env" -- "$@"; }
+
+# Auto-inject secrets for known consumers. Each alias triggers exactly one
+# `op run` per invocation; empty shells stay free of 1Password IPC.
+# Offline note: works as long as the 1Password desktop app is running and
+# unlocked (vault is cached locally). Failures surface as explicit `op`
+# errors instead of silent empty env vars.
+command -v op >/dev/null 2>&1 && {
+  alias pi='with-secrets pi-safe'
+  alias claude='with-secrets claude'
+}
 
 # Initialize completion system. Required before antidote loads plugins that
 # register completions via `compdef` (e.g. omz git plugin).
