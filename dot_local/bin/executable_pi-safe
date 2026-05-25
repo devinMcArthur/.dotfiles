@@ -26,6 +26,14 @@ BACKOFF_SECONDS="${PI_SAFE_BACKOFF:-1}"
 
 PI_BIN="${PI_SAFE_BIN:-pi}"
 
+# Suppress Node's experimental-feature warning. The pi-knowledge-search
+# worker uses node:sqlite (currently flagged experimental in Node 22+),
+# which prints `ExperimentalWarning: SQLite is an experimental feature...`
+# to stderr at worker startup and shreds pi's TUI layout. The warning is
+# unrelated to anything we can fix at the application layer.
+# --disable-warning=ExperimentalWarning is supported in Node 22+.
+export NODE_OPTIONS="--disable-warning=ExperimentalWarning${NODE_OPTIONS:+ $NODE_OPTIONS}"
+
 # Trap Ctrl+C so we exit cleanly instead of getting auto-restarted.
 exiting=0
 trap 'exiting=1' INT TERM
