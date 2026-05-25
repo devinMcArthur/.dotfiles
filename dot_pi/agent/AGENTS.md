@@ -305,6 +305,96 @@ unproductive and caused the workflow to lapse in the first place.
 
 ---
 
+## Subagent delegation policy
+
+**Core principle:** subagents are *specialists*. Use them when the
+task benefits from a focused, specialized system prompt — not
+primarily as context-savers, not as a way to parallelize for its own
+sake. The unique value is the agent's pre-loaded role.
+
+### Builtin specialists (when each shines)
+
+| Agent | Use when |
+|---|---|
+| **researcher** | Web research with multiple unknowns; comparing options; verifying training-data recall against current sources |
+| **planner** | Designing an implementation from requirements + codebase context; *forked* so it sees what we've discussed |
+| **oracle** | Validating a risky decision against accumulated session state; protects against drift; *forked* |
+| **reviewer** | Reviewing a diff, plan, proposed solution, or PR; second-guessing my own work |
+| **scout** | Fast codebase recon — "where does X live, what calls Y" — returns compressed context, not raw files |
+| **worker** | Implementation work on a well-specified change; *forked* so it inherits decisions |
+| **delegate** | Lightweight pass-through; inherits parent model with no defaults |
+| **context-builder** | Generates a meta-prompt for a downstream agent when the framing itself is part of the work |
+
+### Positive triggers (spawn a subagent when ANY hold)
+
+1. **The task needs a specialized stance.** Reviewing my own work
+   benefits from a reviewer's adversarial framing; planning a refactor
+   benefits from a planner's structured framing. Stance > my
+   default.
+2. **The task is well-defined research with a deliverable shape.**
+   "Compare embedding models on retrieval quality and licensing" is
+   a researcher task. "What's that one library called" is not.
+3. **Decision validation on a risky / load-bearing change.** Fire
+   `oracle` before executing irreversible work — vault schema
+   changes, infra topology shifts, security policy edits.
+4. **Parallel exploration of N independent options.** Steelmanning
+   3 architectures is 3 parallel `researcher`s, then I synthesize.
+   Linear reasoning misses things parallel exploration catches.
+5. **The task would consume >5KB of raw output** I'd otherwise read.
+   `scout` returns the compressed summary; the bytes stay in its
+   session.
+
+### Anti-triggers (do NOT spawn a subagent when)
+
+- The task is one-and-done shell work I'd execute inline anyway
+- The task requires the conversational state of THIS session and
+  context-fork doesn't capture it (rare but happens — e.g.,
+  evolving design decisions over many turns)
+- The task is small enough that subagent overhead (spawn latency,
+  separate token budget, context shipping) dominates the work itself
+- I'm already mid-execution on a sequential plan; switching to a
+  subagent mid-flow breaks the user's mental model
+
+### Custom agents (the real long-term lever)
+
+The builtins are generalists within their specialties. The bigger
+unlock is **defining custom agents** for recurring workflows in
+Devin's specific stack. Propose a custom agent when:
+
+- The same kind of task recurs across sessions with similar shape
+- A specialized prompt + skill set + default tool list would
+  meaningfully outperform a generic builtin
+- The agent has a recognizable identity ("the bow-mark reviewer,"
+  "the chezmoi-config auditor," "the vault curator")
+
+Candidates worth proposing as they come up:
+
+- **bow-mark-reviewer** — knows bow-mark conventions, test
+  protocol, deploy pipeline; reviews diffs against those
+- **chezmoi-auditor** — reviews dotfiles changes for the patterns
+  in this repo (sudo-gate, lessons, secrets layout)
+- **vault-curator** — follows the Vault use policy strictly;
+  used for end-of-session daily distillation, evergreen proposals,
+  About Me synthesis
+- **raphael-architect** — knows raphael's docs/plans/ structure,
+  reviews proposed changes against the Vision doc and existing
+  plans
+
+Don't create speculatively. Wait until I'm about to do the work
+for the second or third time, then propose: "This is the third
+bow-mark review this month — want to spin up a `bow-mark-reviewer`
+so this gets the right stance every time?"
+
+### Visibility
+
+Subagents run as visible child tasks in pi's UI — progress
+indicators, identifiable by agent name. They are NOT stealthy.
+If the user is surprised to see one, that's a signal I'm
+delegating too aggressively or without explaining why; surface
+the intent first when in doubt.
+
+---
+
 ## Lessons learned
 
 <!-- Auto-appended by `save_lesson`. Newest first. -->
