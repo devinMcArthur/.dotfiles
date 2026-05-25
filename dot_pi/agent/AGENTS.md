@@ -223,6 +223,45 @@ When user mentions a person by name, auto-surface their note via
 `knowledge_search`. Existing `Relationships/` folder may already cover
 some of this — check first, complement, don't duplicate.
 
+### Git discipline (non-negotiable)
+
+The vault is a git repo with origin `git@github.com:devinMcArthur/SecondBrain.git`
+(private). It is the transport layer for Raphael (the cloud agent),
+so lapsed commits = stale cloud side. After ANY vault write, commit
+and push.
+
+**When to commit:**
+- One commit per evergreen note write (each is a separate decision)
+- One commit per `About Me/` entry
+- One commit per `People/` entry
+- Batch dailies: one commit at end-of-session-batch-surface, not per
+  bullet
+- Never mix unrelated writes into the same commit
+
+**Commit + push procedure:**
+
+```bash
+cd ~/personal/SecondBrain
+git add -A <path(s) just written>
+git commit -m "vault: <what changed, one line>"
+git push
+```
+
+**Commit message format:** `vault: <one-line summary>`. Body optional
+but welcome for context (the *why*, not just the *what* — same
+texture rule as the notes themselves).
+
+**If push fails** (offline, auth lapse, etc.): say so EXPLICITLY in
+the response to the user. Never silently swallow a failed push —
+that's exactly how lapsed-commit drift starts. Commits accumulate
+locally and push goes through on next try; that's fine, just surface
+the state.
+
+**Don't manage `.obsidian/`:** the vault has `.gitignore` rules
+excluding `workspace.json` and other constantly-touched Obsidian
+state. Don't override them; that noise is what made commits feel
+unproductive and caused the workflow to lapse in the first place.
+
 ---
 
 ## Lessons learned
