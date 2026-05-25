@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-05-25T16:28:31-06:00_
+_Generated 2026-05-25T16:35:07-06:00_
 
 ## Hyprland — window manager
 
@@ -38,7 +38,6 @@ _Generated 2026-05-25T16:28:31-06:00_
 | `SUPER + CTRL + slash` | `movecurrentworkspacetomonitor` | eDP-1 |
 | `SUPER + E` | `exec` | $fileManager # Show the graphical file browser |
 | `SUPER + escape` | `exec` | $lock                                           # lock the screen |
-| `SUPER + F1` | `exec` | $HOME/.local/bin/laptop-docs # open laptop reference site (mdBook) |
 | `SUPER + F` | `fullscreen` | — |
 | `SUPER + grave` | `togglespecialworkspace` | scratch |
 | `SUPER + h` | `movefocus` | l |
@@ -74,7 +73,7 @@ _Generated 2026-05-25T16:28:31-06:00_
 | `SUPER + SHIFT + L` | `movewindow` | r |
 | `SUPER + SHIFT + period` | `movewindow` | mon:desc:Acer Technologies KA272 0x13800FAE |
 | `SUPER + SHIFT + S` | `exec` | $HOME/.local/bin/hypr-screenshot window      # screenshot window → annotate |
-| `SUPER + SHIFT + slash` | `movewindow` | mon:eDP-1 |
+| `SUPER + SHIFT + slash` | `exec` | $HOME/.local/bin/laptop-docs # Super+? → open laptop reference site (mdBook). Displaced the previous `movewindow mon:eDP-1` bind below — restore it if you want the comma/period/slash monitor-movement symmetry back. |
 | `SUPER + SHIFT + V` | `exec` | cliphist wipe                                  # wipe clipboard history |
 | `SUPER + slash` | `focusmonitor` | eDP-1 |
 | `SUPER + SPACE` | `exec` | wofi # Show the graphicall app launcher |
@@ -125,6 +124,7 @@ Prefix: `C-a`. Bindings shown below assume prefix unless otherwise noted.
 |---|---|
 | `claude` | `with-secrets claude` |
 | `la` | `eza -la --group-directories-first --icons=auto --git` |
+| `laptop-docs` | `$HOME/.local/bin/laptop-docs` |
 | `ll` | `eza -l --group-directories-first --icons=auto --git` |
 | `ls` | `eza --group-directories-first --icons=auto` |
 | `lta` | `eza --tree --level=2 --icons=auto -a` |

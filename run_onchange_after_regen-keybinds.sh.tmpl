@@ -1,0 +1,41 @@
+{{- if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# Auto-regenerate docs/src/keybinds.md when any source-of-truth changes.
+#
+# Change detection: the three sha256sum lines below cause this script's
+# rendered content to change whenever any of the input files change.
+# chezmoi's run_onchange_* semantics then re-run the script. Idempotent
+# — re-running with no input changes regenerates an identical keybinds.md.
+#
+# Tracked inputs (hash lines below pin this script's rendered content
+# to the contents of the source files):
+{{ $src := .chezmoi.sourceDir -}}
+# {{ output "sha256sum" (printf "%s/dot_config/hypr/hyprland.conf" $src) }}
+# {{ output "sha256sum" (printf "%s/dot_tmux.conf" $src) }}
+# {{ output "sha256sum" (printf "%s/dot_zshrc.tmpl" $src) }}
+#
+# Output is committed in the chezmoi source tree (docs/src/keybinds.md)
+# and lives ONLY there — docs/ is repo-only via .chezmoiignore.
+
+set -euo pipefail
+
+CHEZMOI_REPO="${HOME}/.local/share/chezmoi"
+REGEN="$CHEZMOI_REPO/docs/regen-keybinds.sh"
+
+if [[ ! -x "$REGEN" ]]; then
+  echo "regen-keybinds.sh not found or not executable: $REGEN" >&2
+  exit 0  # don't break chezmoi apply over this
+fi
+
+echo "==> regen-keybinds: input config changed; regenerating keybinds.md"
+"$REGEN" >/dev/null
+
+# Surface whether the regen produced a diff (so the user knows to commit).
+cd "$CHEZMOI_REPO"
+if git diff --quiet docs/src/keybinds.md 2>/dev/null; then
+  echo "    keybinds.md unchanged after regen"
+else
+  echo "    keybinds.md updated. Review + commit:"
+  echo "      cd $CHEZMOI_REPO && git add docs/src/keybinds.md && git commit"
+fi
+{{ end -}}

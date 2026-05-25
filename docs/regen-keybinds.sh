@@ -140,24 +140,22 @@ echo "|---|---|"
 # Match: alias name='...' or alias name="..."
 # Skip lines inside conditional blocks for now — list them all; user can read
 # the source for context.
-awk "
+awk '
   /^[[:space:]]*alias[[:space:]]+[a-zA-Z_][a-zA-Z0-9_-]*=/ {
-    line = \$0
-    sub(/^[[:space:]]*alias[[:space:]]+/, \"\", line)
-    # Split on first =
-    idx = index(line, \"=\")
+    line = $0
+    sub(/^[[:space:]]*alias[[:space:]]+/, "", line)
+    idx = index(line, "=")
     if (idx == 0) next
     name = substr(line, 1, idx-1)
     rest = substr(line, idx+1)
     # Strip surrounding single or double quotes
-    gsub(/^[\"\\047]/, \"\", rest)
-    gsub(/[\"\\047][[:space:]]*\$/, \"\", rest)
-    # Skip noise (template artifacts)
+    gsub(/^["\047]/, "", rest)
+    gsub(/["\047][[:space:]]*$/, "", rest)
     if (name ~ /^(#|template)/) next
-    gsub(/\\|/, \"\\\\|\", rest)
-    printf \"| \`%s\` | \`%s\` |\n\", name, rest
+    gsub(/\|/, "\\|", rest)
+    printf "| `%s` | `%s` |\n", name, rest
   }
-" "$ZSHRC" | sort -u
+' "$ZSHRC" | sort -u
 
 echo ""
 echo "## Zsh key bindings (bindkey)"
@@ -165,19 +163,18 @@ echo ""
 echo "| Keys | Widget |"
 echo "|---|---|"
 
-awk "
-  /^[[:space:]]*bindkey[[:space:]]+'/ || /^[[:space:]]*bindkey[[:space:]]+\"/ {
-    line = \$0
-    sub(/^[[:space:]]*bindkey[[:space:]]+/, \"\", line)
-    # Try to extract first quoted token (the key) and rest (the widget)
-    if (match(line, /^['\\\"][^'\\\"]+['\\\"]/)) {
+awk '
+  /^[[:space:]]*bindkey[[:space:]]+["\047]/ {
+    line = $0
+    sub(/^[[:space:]]*bindkey[[:space:]]+/, "", line)
+    if (match(line, /^["\047][^"\047]+["\047]/)) {
       key = substr(line, RSTART+1, RLENGTH-2)
       rest = substr(line, RSTART+RLENGTH)
-      sub(/^[[:space:]]+/, \"\", rest)
-      printf \"| \`%s\` | %s |\n\", key, rest
+      sub(/^[[:space:]]+/, "", rest)
+      printf "| `%s` | %s |\n", key, rest
     }
   }
-" "$ZSHRC" | sort -u
+' "$ZSHRC" | sort -u
 
 echo ""
 echo "## How to add a new binding"
