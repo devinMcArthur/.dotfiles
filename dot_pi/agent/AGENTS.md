@@ -127,6 +127,104 @@ with native `<tool> completion zsh`, cached weekly under `~/.cache/zsh/`).
 
 ---
 
+## Vault use policy
+
+Obsidian vault at `~/personal/SecondBrain`, indexed by pi-knowledge-search
+via Ollama (`nomic-embed-text`, 768-dim, local on `127.0.0.1:11434`).
+Config: `~/.pi/knowledge-search.json` (chezmoi-managed).
+
+The vault is reserved for things that are about Devin — ideas,
+projects, positions, relationships, observed patterns. It is NOT for
+laptop configuration docs (those live in `~/.local/share/chezmoi/docs/`,
+future work), ephemeral session scratch (use pi-memory / `ctx_search`),
+behavioral corrections (use `save_lesson` → this file), or per-repo
+project state (use that repo's `ROADMAP.md`).
+
+### Three behaviors that distinguish "indexed notes" from "knows me"
+
+**1. Re-surface before being asked.** When the user mentions a topic
+that may have prior context in the vault — projects, people, ideas,
+decisions, places, recurring themes — call `knowledge_search` FIRST,
+then answer. Local Ollama makes this ~50ms; treat it as cheap and run
+it speculatively.
+
+When referencing a vault fact, ALWAYS cite the source note in wikilink
+form: "Per [[Okotoks Property Search]], you said..." Never assert
+vault-derived facts without citation. This makes them verifiable,
+correctable, and strengthens the link graph.
+
+**2. Capture with texture, not facts.** When writing a daily entry or
+an evergreen note, capture the *why* and the *connections*, not just
+the *what*. Bad: "Considering Okotoks." Good: "Chewing on Okotoks since
+2026-04. Pull: land cost, family proximity. Push: distance from work
+hub. Open question: partner alignment." The texture is what makes
+future recall feel like memory, not retrieval.
+
+Use `[[wikilinks]]` liberally inside captures — link to people, places,
+projects, prior concepts. The graph is the brain; search is the
+fallback.
+
+**3. Synthesize, don't just accumulate.** Dailies grow forever and
+nobody re-reads them. The unlock is rolling distillation: when
+`knowledge_search` for a topic returns 3+ daily-note hits spanning 2+
+weeks, propose an evergreen note that absorbs the fragments and links
+back. Dailies become citations; evergreens become the readable layer.
+
+### Capture rules
+
+**Daily journals — `Dailies/YYYY-MM-DD.md`**
+
+At first substantive turn of a session, ensure today's daily exists
+(create with `# YYYY-MM-DD` header if not). Accumulate proposed entries
+internally — when a notable thing happens (decision made, problem
+solved, plan formed, idea articulated, project milestone), draft a
+2–3 line bullet under a `## HH:MM — <topic>` header.
+
+Friction model: **BATCHED**, not per-bullet. Surface accumulated
+bullets at:
+- End of session
+- After major-event triggers (multi-phase work completes, user makes a
+  significant decision, session crosses ~30min mark)
+
+User approves/edits the batch; pi writes after approval.
+
+**Evergreen personal notes — `Ideas/`, `Development/<project>/`,
+top-level concept notes, `People/`**
+
+Always propose-then-write (vs. dailies which can be batched). These
+are claims about who the user is — higher stakes than a timestamped
+bullet.
+
+Before proposing a new note, `knowledge_search` for related existing
+notes. Prefer updating an existing note (linked from the daily) over
+creating a new one. Only create new when the topic is genuinely
+distinct.
+
+**Meta-layer — `About Me/`**
+
+Pi maintains a small set of evergreen observations about the user's
+patterns, recurring themes, and current focus. Examples:
+- `About Me/Current focus.md` — what user is actively working on
+- `About Me/Work patterns.md` — observed habits across sessions
+- `About Me/Recurring ideas.md` — patterns noticed across sessions
+
+Strict norms for `About Me/` entries:
+- ALWAYS date the entry
+- ALWAYS cite the daily/session that prompted the observation
+- NEVER state certainty you don't have — use "noticed across N sessions"
+  not "Devin is X"
+- ALWAYS propose; NEVER auto-write
+
+**People — `People/`**
+
+Note per person who matters in user's life. Capture: how they're
+connected, last meaningful context, recurring themes when mentioned.
+When user mentions a person by name, auto-surface their note via
+`knowledge_search`. Existing `Relationships/` folder may already cover
+some of this — check first, complement, don't duplicate.
+
+---
+
 ## Lessons learned
 
 <!-- Auto-appended by `save_lesson`. Newest first. -->
