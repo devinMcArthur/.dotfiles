@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-05-25T16:26:29-06:00_
+_Generated 2026-05-25T16:28:31-06:00_
 
 ## Hyprland — window manager
 
@@ -38,6 +38,7 @@ _Generated 2026-05-25T16:26:29-06:00_
 | `SUPER + CTRL + slash` | `movecurrentworkspacetomonitor` | eDP-1 |
 | `SUPER + E` | `exec` | $fileManager # Show the graphical file browser |
 | `SUPER + escape` | `exec` | $lock                                           # lock the screen |
+| `SUPER + F1` | `exec` | $HOME/.local/bin/laptop-docs # open laptop reference site (mdBook) |
 | `SUPER + F` | `fullscreen` | — |
 | `SUPER + grave` | `togglespecialworkspace` | scratch |
 | `SUPER + h` | `movefocus` | l |

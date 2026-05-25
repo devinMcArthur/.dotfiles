@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Launch the laptop reference site (mdBook).
+#
+# Behavior:
+#   - If mdbook is not running, start it on port 3030 (background) and
+#     open the browser.
+#   - If already running (port 3030 listening), just open the browser.
+#
+# Triggered by:
+#   - Hyprland keybind: SUPER + slash (see dot_config/hypr/hyprland.conf)
+#   - Manual: `laptop-docs` from any shell
+
+set -euo pipefail
+
+DOCS_DIR="$HOME/.local/share/chezmoi/docs"
+PORT=3030
+URL="http://localhost:$PORT/"
+
+if [[ ! -d "$DOCS_DIR" ]]; then
+  notify-send "laptop-docs" "Docs dir not found: $DOCS_DIR" 2>/dev/null || \
+    echo "Docs dir not found: $DOCS_DIR" >&2
+  exit 1
+fi
+
+# Already serving?
+if ss -tlnp 2>/dev/null | grep -q ":$PORT[[:space:]]"; then
+  xdg-open "$URL" >/dev/null 2>&1 &
+  exit 0
+fi
+
+# Start mdbook serve as a detached background process. nohup + setsid
+# so it survives the parent shell exiting (this script may be exec'd
+# from a one-shot Hyprland binding).
+cd "$DOCS_DIR"
+nohup setsid mdbook serve --port "$PORT" >/tmp/laptop-docs.log 2>&1 < /dev/null &
+disown
+
+# Give mdbook ~0.5s to bind the port before opening the browser.
+for _ in 1 2 3 4 5; do
+  sleep 0.1
+  if ss -tlnp 2>/dev/null | grep -q ":$PORT[[:space:]]"; then
+    break
+  fi
+done
+
+xdg-open "$URL" >/dev/null 2>&1 &

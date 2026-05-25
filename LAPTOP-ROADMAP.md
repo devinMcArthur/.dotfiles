@@ -44,6 +44,15 @@ chezmoi repo context.
 - faillock unlock_time 600s → 60s
 - Sudoers expanded: NOPASSWD for systemctl + fw-ectool; passwd_tries=1
 
+### Laptop reference site (mdBook)
+- `docs/` folder in chezmoi repo, `mdbook serve` renders to localhost:3030
+- `docs/src/SUMMARY.md` lists all categorical pages (shell, tmux, terminal, hyprland, desktop-shell, login-lock, power, framework, snapshots-backups, secrets, pi-agent, obsidian, keybinds)
+- Populated: `shell.md`, `tmux.md`, `secrets.md`, `obsidian.md`, `snapshots-backups.md`, plus `README.md` explaining scope (NOT roadmap, NOT vault content)
+- Stubs for everything else (visible in sidebar, marked for backfill)
+- **`docs/regen-keybinds.sh`** parses hyprland.conf + tmux.conf + zshrc to auto-generate `keybinds.md` (source-of-truth = the configs, can't drift)
+- Launcher: `~/.local/bin/laptop-docs` (chezmoi-managed) starts the server + opens browser. Bound to **`Super + F1`** in Hyprland. Also a `laptop-docs` zsh alias.
+- Complements existing `hypr-cheatsheet` (Super+semicolon): cheatsheet = quick keybind search; mdBook = categorical browsing of capabilities
+
 ### Obsidian + pi knowledge-search integration (Phase A)
 - Triaged ~/personal/SecondBrain: removed stale nested vault (zero unique content; 62/63 identical, 1 conflict preserved as `.INNER.md` for manual merge)
 - Repointed `~/.config/obsidian/obsidian.json` at the outer vault

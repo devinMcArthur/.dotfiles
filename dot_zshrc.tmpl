@@ -65,6 +65,11 @@ if command -v eza >/dev/null 2>&1; then
   alias lta='eza --tree --level=2 --icons=auto -a'
 fi
 
+# --- Laptop reference site (mdBook) -----------------------------------------
+# Opens http://localhost:3030 in a browser, starting `mdbook serve` if needed.
+# Same script the Hyprland Super+F1 binding calls.
+alias laptop-docs='$HOME/.local/bin/laptop-docs'
+
 # --- zoxide: smarter cd (`z <partial>` jumps to frecent dirs, `zi` fuzzy) ---
 # Sesh already uses zoxide's db for session matching; this exposes `z`/`zi`
 # directly in the shell. Run last so it can override compinit-registered cd.
