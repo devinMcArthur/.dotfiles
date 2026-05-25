@@ -17,14 +17,18 @@ PACMAN_PKGS=(
 
   # Terminal & WM
   ghostty
-  hyprland hypridle hyprlock hyprpaper hyprpicker hyprshot
+  hyprland hypridle hyprlock hyprpaper hyprpicker hyprshot hyprpolkitagent
+
+  # XDG desktop portals (screen-sharing, file pickers, etc. for sandboxed apps)
+  xdg-desktop-portal xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
   waybar wofi swaync
 
   # Wayland clipboard + history + screenshot annotation + media control
   cliphist wl-clipboard swappy grim slurp playerctl brightnessctl
 
-  # Login / display manager
-  greetd greetd-tuigreet
+  # Login / display manager (regreet = GTK4 greeter, cage = embedded
+  # Wayland kiosk compositor that hosts it; tuigreet kept as fallback)
+  greetd greetd-regreet cage greetd-tuigreet
 
   # Fingerprint reader
   fprintd libfprint
