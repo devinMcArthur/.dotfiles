@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# Configure snapper for btrfs root snapshots + grub-btrfs boot integration.
+#
+# Assumes the canonical Arch-installer-with-snapper btrfs subvolume layout:
+#   @            -> /
+#   @home        -> /home              (NOT snapshotted by this config)
+#   @log         -> /var/log           (excluded from rollback)
+#   @pkg         -> /var/cache/pacman  (excluded from rollback)
+#   @.snapshots  -> /.snapshots        (where snapper stores snapshots)
+#
+# Idempotent: re-running is safe; we only write files if their content
+# differs from what's on disk.
+#
+# chezmoi run_onchange_*: re-runs whenever this rendered script changes,
+# so editing the retention policy or unlock_time triggers a redeploy.
+
+set -euo pipefail
+
+# {{ "Hash trigger:" }} {{- "snapper-setup-v1" }}
+
+# -------- preconditions --------------------------------------------------
+fstype="$(findmnt -no FSTYPE / 2>/dev/null || true)"
+if [ "$fstype" != "btrfs" ]; then
+  echo "==> snapper-setup: root is not btrfs ($fstype), skipping"
+  exit 0
+fi
+
+if ! mountpoint -q /.snapshots; then
+  echo "==> snapper-setup: /.snapshots is not a mountpoint."
+  echo "    Expected canonical layout (@.snapshots subvolume). Skipping."
+  exit 0
+fi
+
+for bin in snapper grub-btrfsd grub-mkconfig; do
+  if ! command -v "$bin" >/dev/null 2>&1; then
+    echo "==> snapper-setup: $bin not installed yet, skipping"
+    echo "    (will be picked up on next chezmoi apply once packages are in)"
+    exit 0
+  fi
+done
+
+# -------- desired state --------------------------------------------------
+ROOT_CONFIG=/etc/snapper/configs/root
+CONF_D=/etc/conf.d/snapper
+FAILLOCK_CONF=/etc/security/faillock.conf
+
+# Desired snapper retention: hourly 10, daily 7, weekly 4, monthly 6.
+desired_settings=(
+  's|^SUBVOLUME=.*|SUBVOLUME="/"|'
+  's|^TIMELINE_LIMIT_HOURLY=.*|TIMELINE_LIMIT_HOURLY="10"|'
+  's|^TIMELINE_LIMIT_DAILY=.*|TIMELINE_LIMIT_DAILY="7"|'
+  's|^TIMELINE_LIMIT_WEEKLY=.*|TIMELINE_LIMIT_WEEKLY="4"|'
+  's|^TIMELINE_LIMIT_MONTHLY=.*|TIMELINE_LIMIT_MONTHLY="6"|'
+  's|^TIMELINE_LIMIT_YEARLY=.*|TIMELINE_LIMIT_YEARLY="0"|'
+  's|^NUMBER_LIMIT=.*|NUMBER_LIMIT="50"|'
+  's|^NUMBER_LIMIT_IMPORTANT=.*|NUMBER_LIMIT_IMPORTANT="20"|'
+)
+
+needs_setup=0
+[ -f "$ROOT_CONFIG" ] || needs_setup=1
+grep -q '^SNAPPER_CONFIGS="root"' "$CONF_D" 2>/dev/null || needs_setup=1
+grep -qE '^[[:space:]]*unlock_time[[:space:]]*=[[:space:]]*60' "$FAILLOCK_CONF" 2>/dev/null || needs_setup=1
+
+if [ "$needs_setup" = "0" ]; then
+  echo "==> snapper-setup: already configured; nothing to do"
+  exit 0
+fi
+
+# -------- do the setup ---------------------------------------------------
+sudo sh -c '
+  set -e
+
+  # faillock: cap lockout at 60s (default 600s is brutal for typos)
+  touch /etc/security/faillock.conf
+  if grep -qE "^[[:space:]]*unlock_time" /etc/security/faillock.conf; then
+    sed -i "s|^[[:space:]]*unlock_time.*|unlock_time = 60|" /etc/security/faillock.conf
+  else
+    printf "\nunlock_time = 60\n" >> /etc/security/faillock.conf
+  fi
+
+  # snapper root config from template
+  if [ ! -f /etc/snapper/configs/root ]; then
+    install -m 0640 -o root -g root /usr/share/snapper/config-templates/default /etc/snapper/configs/root
+  fi
+  sed -i \
+    -e "s|^SUBVOLUME=.*|SUBVOLUME=\"/\"|" \
+    -e "s|^TIMELINE_LIMIT_HOURLY=.*|TIMELINE_LIMIT_HOURLY=\"10\"|" \
+    -e "s|^TIMELINE_LIMIT_DAILY=.*|TIMELINE_LIMIT_DAILY=\"7\"|" \
+    -e "s|^TIMELINE_LIMIT_WEEKLY=.*|TIMELINE_LIMIT_WEEKLY=\"4\"|" \
+    -e "s|^TIMELINE_LIMIT_MONTHLY=.*|TIMELINE_LIMIT_MONTHLY=\"6\"|" \
+    -e "s|^TIMELINE_LIMIT_YEARLY=.*|TIMELINE_LIMIT_YEARLY=\"0\"|" \
+    -e "s|^NUMBER_LIMIT=.*|NUMBER_LIMIT=\"50\"|" \
+    -e "s|^NUMBER_LIMIT_IMPORTANT=.*|NUMBER_LIMIT_IMPORTANT=\"20\"|" \
+    /etc/snapper/configs/root
+
+  # register the config so timeline/cleanup pick it up
+  printf "SNAPPER_CONFIGS=\"root\"\n" > /etc/conf.d/snapper
+  chmod 0644 /etc/conf.d/snapper
+
+  # tighten /.snapshots ownership (snapper expects 750 root:root)
+  chown root:root /.snapshots
+  chmod 750 /.snapshots
+
+  # enable timers + grub-btrfs daemon
+  systemctl enable --now snapper-timeline.timer snapper-cleanup.timer
+  systemctl enable --now grub-btrfsd.service
+
+  # regenerate grub.cfg so the snapshot submenu is wired in
+  grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+
+  echo "==> snapper-setup: complete"
+'

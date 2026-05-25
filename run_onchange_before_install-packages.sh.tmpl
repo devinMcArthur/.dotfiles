@@ -36,6 +36,9 @@ PACMAN_PKGS=(
   # Power management (Framework laptop battery life)
   power-profiles-daemon
 
+  # Btrfs snapshots + auto pre/post around pacman + grub boot-into-snapshot
+  snapper snap-pac grub-btrfs inotify-tools
+
   # CLI utilities
   git github-cli jq fd ripgrep fzf eza wget less man-db unzip openssh
   wl-clipboard
