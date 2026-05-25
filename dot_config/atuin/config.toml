@@ -1,0 +1,36 @@
+# Atuin — magical shell history.
+# Offline-only setup: no sync, no telemetry, no remote registration.
+# History DB lives at ~/.local/share/atuin/history.db (NOT chezmoi-managed —
+# self-modifying app state; same rule as .pi/agent/settings.json).
+
+# --- Sync / network ----------------------------------------------------------
+# We have not registered with a server. Disable any background sync attempt
+# and the periodic "new version?" ping.
+auto_sync = false
+update_check = false
+
+# --- Search UI ---------------------------------------------------------------
+# Compact inline TUI instead of a full-screen takeover.
+style = "compact"
+# 20 lines of search results above the prompt.
+inline_height = 20
+# Default to fuzzy matching across all hosts/sessions.
+search_mode = "fuzzy"
+filter_mode = "global"
+# When inside a known shell session, default to that session's history;
+# Ctrl-R cycles through filter modes (session → host → global → directory).
+filter_mode_shell_up_key_binding = "session"
+
+# Enter inserts the selected command into the prompt instead of running it
+# immediately — gives a chance to edit. Tab still accepts-and-runs.
+enter_accept = false
+
+# Show command preview (full text, not truncated) at the bottom of the picker.
+show_preview = true
+
+# --- History capture ---------------------------------------------------------
+# Don't record commands prefixed with a space (POSIX HISTCONTROL=ignorespace
+# convention). Useful for one-off secrets-ish commands.
+history_filter = [
+  "^ ",
+]

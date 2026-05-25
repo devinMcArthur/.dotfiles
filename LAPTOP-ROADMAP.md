@@ -44,6 +44,13 @@ chezmoi repo context.
 - faillock unlock_time 600s → 60s
 - Sudoers expanded: NOPASSWD for systemctl + fw-ectool; passwd_tries=1
 
+### Atuin (encrypted searchable history)
+- `atuin` in pacman bootstrap
+- `dot_config/atuin/config.toml`: offline-only (auto_sync=false, update_check=false), compact inline UI, fuzzy search, enter_accept=false (insert-not-run), ignore-leading-space filter
+- `eval "$(atuin init zsh --disable-up-arrow)"` in zshrc — Ctrl-R hijacked, Up-arrow kept as traditional-history fallback
+- One-time `atuin import zsh`: 6931 commands imported
+- History DB at `~/.local/share/atuin/history.db` deliberately NOT chezmoi-managed (app-written state)
+
 ### Zoxide (smart cd)
 - `zoxide` added explicitly to pacman bootstrap (was transitive via sesh)
 - `eval "$(zoxide init zsh)"` in dot_zshrc.tmpl exposes `z <partial>` + `zi` fuzzy picker
@@ -85,7 +92,6 @@ Snapshots don't cover this.
 ---
 
 ### Tier 2 — Real QoL upgrades (pick when interested)
-- **atuin** — encrypted searchable shell history with sync (`Ctrl-R` fuzzy)
 - **direnv** — per-directory `.envrc` auto-load (better than `with-secrets` for repo-scoped)
 - **Hibernate** — needs swapfile ≥ RAM (~32GB on btrfs subvolume), one kernel param. Eliminates standby battery drain.
 - **mise** — unified version manager for node/python/go/etc. (replaces nvm + uv with one tool). Maybe-worth-it.

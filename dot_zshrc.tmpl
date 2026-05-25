@@ -70,6 +70,12 @@ fi
 # directly in the shell. Run last so it can override compinit-registered cd.
 command -v zoxide >/dev/null 2>&1 && eval "$(zoxide init zsh)"
 
+# --- atuin: encrypted searchable history, replaces Ctrl-R -------------------
+# Config: ~/.config/atuin/config.toml (offline-only, no sync).
+# --disable-up-arrow leaves Up bound to traditional zsh history as a fallback;
+# Ctrl-R opens atuin's fuzzy picker over the full DB.
+command -v atuin >/dev/null 2>&1 && eval "$(atuin init zsh --disable-up-arrow)"
+
 # --- tmux helpers (restored from old oh-my-zsh tmux plugin) -----------------
 # ts [name]  → new session (named if arg given)
 # ta [name]  → attach (to named session if arg given)
