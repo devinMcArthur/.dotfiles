@@ -47,6 +47,11 @@ PACMAN_PKGS=(
 
   # CLI utilities
   git git-delta github-cli jq fd ripgrep fzf eza zoxide atuin wget less man-db unzip openssh
+
+  # Local LLM runner — hosts embedding model for pi-knowledge-search
+  # (nomic-embed-text). Model lives in /usr/share/ollama/.ollama after
+  # first `ollama pull`. Daemon listens on 127.0.0.1:11434.
+  ollama
   wl-clipboard
 
   # TUIs & shell goodies

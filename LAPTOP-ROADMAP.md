@@ -44,6 +44,14 @@ chezmoi repo context.
 - faillock unlock_time 600s → 60s
 - Sudoers expanded: NOPASSWD for systemctl + fw-ectool; passwd_tries=1
 
+### Obsidian + pi knowledge-search integration (Phase A)
+- Triaged ~/personal/SecondBrain: removed stale nested vault (zero unique content; 62/63 identical, 1 conflict preserved as `.INNER.md` for manual merge)
+- Repointed `~/.config/obsidian/obsidian.json` at the outer vault
+- `ollama` in pacman bootstrap; system service enabled
+- Pulled `nomic-embed-text` (274MB, 768-dim) for local embeddings
+- `dot_pi/knowledge-search.json` chezmoi-managed: indexes ~/personal/SecondBrain, excludes PDFs + Excalidraw, Ollama provider on 127.0.0.1:11434
+- Activates `knowledge_search` + `kb_read` in pi after `/reload`
+
 ### Atuin (encrypted searchable history)
 - `atuin` in pacman bootstrap
 - `dot_config/atuin/config.toml`: offline-only (auto_sync=false, update_check=false), compact inline UI, fuzzy search, enter_accept=false (insert-not-run), ignore-leading-space filter
