@@ -39,6 +39,14 @@ command -v op >/dev/null 2>&1 && {
   alias claude='with-secrets claude'
 }
 
+# Silence Node's `ExperimentalWarning: SQLite is an experimental feature...`
+# emitted at startup by the pi-knowledge-search worker (uses node:sqlite).
+# Belt + suspenders: pi-safe sets this too, but if pi gets launched some
+# other way (direct invocation, bypassed alias) we still want it silenced.
+# Harmless for other Node apps — only experimental-feature warnings are
+# affected, errors and other warnings still surface.
+export NODE_OPTIONS="--disable-warning=ExperimentalWarning${NODE_OPTIONS:+ $NODE_OPTIONS}"
+
 # Initialize completion system. Required before antidote loads plugins that
 # register completions via `compdef` (e.g. omz git plugin).
 autoload -Uz compinit && compinit
