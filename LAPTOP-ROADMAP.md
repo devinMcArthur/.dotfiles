@@ -44,6 +44,11 @@ chezmoi repo context.
 - faillock unlock_time 600s → 60s
 - Sudoers expanded: NOPASSWD for systemctl + fw-ectool; passwd_tries=1
 
+### Zoxide (smart cd)
+- `zoxide` added explicitly to pacman bootstrap (was transitive via sesh)
+- `eval "$(zoxide init zsh)"` in dot_zshrc.tmpl exposes `z <partial>` + `zi` fuzzy picker
+- Sesh continues to share the same frecent-dirs DB
+
 ### Delta (syntax-highlighted git diffs)
 - `git-delta` in pacman bootstrap
 - `dot_gitconfig`: pager=delta, interactive diffFilter, navigate + line-numbers, zdiff3 conflict style, colorMoved=default
@@ -82,7 +87,6 @@ Snapshots don't cover this.
 ### Tier 2 — Real QoL upgrades (pick when interested)
 - **atuin** — encrypted searchable shell history with sync (`Ctrl-R` fuzzy)
 - **direnv** — per-directory `.envrc` auto-load (better than `with-secrets` for repo-scoped)
-- **zoxide verify** — already implied by sesh; confirm `z` is wired
 - **Hibernate** — needs swapfile ≥ RAM (~32GB on btrfs subvolume), one kernel param. Eliminates standby battery drain.
 - **mise** — unified version manager for node/python/go/etc. (replaces nvm + uv with one tool). Maybe-worth-it.
 

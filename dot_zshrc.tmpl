@@ -65,6 +65,11 @@ if command -v eza >/dev/null 2>&1; then
   alias lta='eza --tree --level=2 --icons=auto -a'
 fi
 
+# --- zoxide: smarter cd (`z <partial>` jumps to frecent dirs, `zi` fuzzy) ---
+# Sesh already uses zoxide's db for session matching; this exposes `z`/`zi`
+# directly in the shell. Run last so it can override compinit-registered cd.
+command -v zoxide >/dev/null 2>&1 && eval "$(zoxide init zsh)"
+
 # --- tmux helpers (restored from old oh-my-zsh tmux plugin) -----------------
 # ts [name]  → new session (named if arg given)
 # ta [name]  → attach (to named session if arg given)
