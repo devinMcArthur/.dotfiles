@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Configure reflector to refresh /etc/pacman.d/mirrorlist weekly.
+#
+# Without this, a default Arch install ships with whatever mirrorlist
+# was current at install time. Six months later half those mirrors have
+# moved or been decommissioned, and `pacman -S` starts failing with
+# 404s. reflector.timer fires reflector.service weekly to keep the list
+# fresh.
+#
+# Idempotent: re-running on a configured machine is a no-op.
+
+set -euo pipefail
+
+# {{ "Hash trigger:" }} {{- "reflector-setup-v1" }}
+
+if ! command -v reflector >/dev/null 2>&1; then
+  echo "==> reflector-setup: reflector not installed yet, skipping"
+  exit 0
+fi
+
+CONF=/etc/xdg/reflector/reflector.conf
+DESIRED='# Reflector config (consumed by reflector.service / reflector.timer)
+# Refresh /etc/pacman.d/mirrorlist weekly so we never go stale.
+--country United States,Canada
+--protocol https
+--latest 20
+--sort rate
+--save /etc/pacman.d/mirrorlist'
+
+needs_setup=0
+[ -f "$CONF" ] || needs_setup=1
+diff -q <(printf "%s\n" "$DESIRED") "$CONF" >/dev/null 2>&1 || needs_setup=1
+systemctl is-enabled reflector.timer >/dev/null 2>&1 || needs_setup=1
+
+if [ "$needs_setup" = "0" ]; then
+  echo "==> reflector-setup: already configured; nothing to do"
+  exit 0
+fi
+
+sudo sh -c '
+  set -e
+  mkdir -p /etc/xdg/reflector
+  cat > /etc/xdg/reflector/reflector.conf <<EOF
+# Reflector config (consumed by reflector.service / reflector.timer)
+# Refresh /etc/pacman.d/mirrorlist weekly so we never go stale.
+--country United States,Canada
+--protocol https
+--latest 20
+--sort rate
+--save /etc/pacman.d/mirrorlist
+EOF
+  systemctl enable --now reflector.timer
+  echo "==> reflector-setup: configured; next refresh:"
+  systemctl list-timers reflector.timer --no-pager | head -3 | tail -1
+'

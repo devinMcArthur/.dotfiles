@@ -39,6 +39,12 @@ PACMAN_PKGS=(
   # Btrfs snapshots + auto pre/post around pacman + grub boot-into-snapshot
   snapper snap-pac grub-btrfs inotify-tools
 
+  # LTS kernel as a fallback — boot menu offers it when mainline breaks
+  linux-lts linux-lts-headers
+
+  # Pacman mirror auto-refresh (weekly via reflector.timer)
+  reflector
+
   # CLI utilities
   git github-cli jq fd ripgrep fzf eza wget less man-db unzip openssh
   wl-clipboard
