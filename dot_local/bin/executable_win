@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Smart launcher for the win11 KVM VM.
+#
+# Default invocation (`win` or `win attach`) does whatever is needed to
+# put a Windows display on screen: start the domain if it's shut off,
+# resume it if it's paused, then attach virt-viewer. Idempotent — running
+# `win` again when the viewer is already open just opens another viewer
+# attached to the same SPICE socket.
+#
+# Subcommands:
+#   stop          — graceful ACPI shutdown (Windows sees a power button press)
+#   force         — hard power-off (use only if `stop` hangs)
+#   snap [NAME]   — snapshot with optional name (default: timestamped)
+#   restore NAME  — revert to a named snapshot
+#   snaps         — list snapshots
+#   status        — show domain state
+
+set -euo pipefail
+
+VM=win11
+URI=qemu:///system
+
+state() { virsh -c "$URI" domstate "$VM" 2>/dev/null || echo undefined; }
+
+require_defined() {
+  [[ "$(state)" != "undefined" ]] || { echo "ERROR: domain '$VM' is not defined in libvirt." >&2; exit 1; }
+}
+
+case "${1:-attach}" in
+  attach|"")
+    require_defined
+    case "$(state)" in
+      running) ;;
+      paused)
+        echo "==> Resuming $VM..."
+        virsh -c "$URI" resume "$VM" >/dev/null
+        ;;
+      *)
+        echo "==> Starting $VM..."
+        virsh -c "$URI" start "$VM" >/dev/null
+        ;;
+    esac
+    exec virt-viewer --connect "$URI" --attach --reconnect "$VM"
+    ;;
+
+  stop)
+    require_defined
+    echo "==> Graceful shutdown of $VM..."
+    virsh -c "$URI" shutdown "$VM"
+    ;;
+
+  force)
+    require_defined
+    echo "==> Force-stopping $VM (Windows sees a power-cord yank)..."
+    virsh -c "$URI" destroy "$VM"
+    ;;
+
+  snap)
+    require_defined
+    name="${2:-snap-$(date +%Y%m%d-%H%M%S)}"
+    desc="${3:-Snapshot taken $(date '+%Y-%m-%d %H:%M:%S') from win launcher.}"
+    echo "==> Snapshotting $VM as '$name'..."
+    virsh -c "$URI" snapshot-create-as "$VM" "$name" "$desc"
+    ;;
+
+  restore)
+    require_defined
+    [[ "${2:-}" ]] || { echo "Usage: win restore <snapshot-name>" >&2; exit 2; }
+    echo "==> Reverting $VM to snapshot '$2'..."
+    virsh -c "$URI" snapshot-revert "$VM" "$2"
+    ;;
+
+  snaps)
+    require_defined
+    virsh -c "$URI" snapshot-list "$VM"
+    ;;
+
+  status|s)
+    if [[ "$(state)" == "undefined" ]]; then
+      echo "$VM: undefined (not configured in libvirt)"
+      exit 1
+    fi
+    virsh -c "$URI" list --all | sed -n '1,2p;/'"$VM"'/p'
+    ;;
+
+  -h|--help|help)
+    sed -n '2,/^set -e/{/^set -e/d;p}' "$0" | sed 's/^# \?//'
+    ;;
+
+  *)
+    echo "Unknown subcommand: $1" >&2
+    echo "Usage: $(basename "$0") [attach|stop|force|snap [NAME]|restore NAME|snaps|status]" >&2
+    exit 2
+    ;;
+esac

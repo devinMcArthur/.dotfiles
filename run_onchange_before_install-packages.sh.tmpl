@@ -63,8 +63,10 @@ PACMAN_PKGS=(
   # Virtualization stack — KVM/QEMU + libvirt + virt-manager GUI.
   # edk2-ovmf = UEFI firmware (required by Win11). swtpm = software TPM 2.0
   # (also Win11 requirement). virtiofsd = host↔guest shared folder.
+  # virt-viewer = lightweight SPICE display window (used by the `win` launcher
+  # for hotkey-driven attach without dragging in the full virt-manager UI).
   # dnsmasq is pulled in transitively by libvirt for the default NAT network.
-  qemu-full libvirt virt-manager edk2-ovmf swtpm virtiofsd
+  qemu-full libvirt virt-manager virt-viewer edk2-ovmf swtpm virtiofsd
 
   # Fonts (powerline glyphs in tmux theme & waybar)
   ttf-jetbrains-mono-nerd

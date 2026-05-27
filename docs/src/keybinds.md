@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-05-27T16:29:34-06:00_
+_Generated 2026-05-27T17:20:24-06:00_
 
 ## Hyprland — window manager
 
@@ -80,6 +80,7 @@ _Generated 2026-05-27T16:29:34-06:00_
 | `SUPER + Tab` | `swapactiveworkspaces` | desc:Acer Technologies KA272 0x13800DD9 desc:Acer Technologies KA272 0x13800FAE |
 | `SUPER + T` | `togglefloating` | # toggle window float / tile |
 | `SUPER + V` | `exec` | cliphist-menu                                        # clipboard history |
+| `SUPER + W` | `exec` | $HOME/.local/bin/win # smart launcher for the win11 KVM VM (starts + attaches virt-viewer) |
 | `SUPER + Y` | `layoutmsg` | togglesplit # dwindle |
 | `up` | `resizeactive` | 0 -10 |
 | `XF86AudioLowerVolume` | `exec` | wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- |
