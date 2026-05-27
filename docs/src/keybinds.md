@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-05-27T17:27:50-06:00_
+_Generated 2026-05-27T17:42:56-06:00_
 
 ## Hyprland — window manager
 
@@ -75,6 +75,10 @@ _Generated 2026-05-27T17:27:50-06:00_
 | `SUPER + SHIFT + S` | `exec` | $HOME/.local/bin/hypr-screenshot window      # screenshot window → annotate |
 | `SUPER + SHIFT + slash` | `exec` | $HOME/.local/bin/laptop-docs # Super+? → open laptop reference site (mdBook). Displaced the previous `movewindow mon:eDP-1` bind below — restore it if you want the comma/period/slash monitor-movement symmetry back. |
 | `SUPER + SHIFT + V` | `exec` | cliphist wipe                                  # wipe clipboard history |
+| `SUPER + SHIFT + W` | `exec` | notify-send -t 1500 "✨ VM passthrough off" |
+| `SUPER + SHIFT + W` | `exec` | notify-send -t 2000 "⚡ VM passthrough ON" "Super+Shift+W to exit" |
+| `SUPER + SHIFT + W` | `submap` | passthrough |
+| `SUPER + SHIFT + W` | `submap` | reset |
 | `SUPER + slash` | `focusmonitor` | eDP-1 |
 | `SUPER + SPACE` | `exec` | wofi # Show the graphicall app launcher |
 | `SUPER + Tab` | `swapactiveworkspaces` | desc:Acer Technologies KA272 0x13800DD9 desc:Acer Technologies KA272 0x13800FAE |
