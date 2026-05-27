@@ -60,6 +60,12 @@ PACMAN_PKGS=(
   # Laptop documentation site (rendered from ~/.local/share/chezmoi/docs/)
   mdbook
 
+  # Virtualization stack — KVM/QEMU + libvirt + virt-manager GUI.
+  # edk2-ovmf = UEFI firmware (required by Win11). swtpm = software TPM 2.0
+  # (also Win11 requirement). virtiofsd = host↔guest shared folder.
+  # dnsmasq is pulled in transitively by libvirt for the default NAT network.
+  qemu-full libvirt virt-manager edk2-ovmf swtpm virtiofsd
+
   # Fonts (powerline glyphs in tmux theme & waybar)
   ttf-jetbrains-mono-nerd
 
@@ -81,6 +87,11 @@ AUR_PKGS=(
 
   # Smart tmux session manager (zoxide-aware)
   sesh-bin
+
+  # Windows VM paravirt drivers + guest tools ISO. Mounts inside the Win11
+  # installer to provide virtio storage/net drivers, plus spice-vdagent
+  # for clipboard, dynamic resize, and USB redirection.
+  virtio-win
 )
 
 echo "==> Installing pacman packages..."
@@ -92,6 +103,31 @@ if command -v yay >/dev/null 2>&1; then
 else
   echo "WARN: yay not found; skipping AUR packages: ${AUR_PKGS[*]}"
   echo "      Install yay first, then re-run: chezmoi apply"
+fi
+
+# Virtualization one-time setup: group memberships + libvirtd service +
+# default NAT network autostart. Guarded so the sudo block only fires when
+# state actually needs fixing (faillock lesson: one sudo invocation per
+# bash call, and skip entirely on the common re-run path).
+if ! id -nG "$USER" | grep -qw libvirt \
+   || ! id -nG "$USER" | grep -qw kvm \
+   || ! systemctl is-enabled --quiet libvirtd.service 2>/dev/null \
+   || ! systemctl is-active  --quiet libvirtd.service 2>/dev/null \
+   || ! virsh -c qemu:///system net-info default 2>/dev/null | grep -q '^Autostart:.*yes'; then
+  echo "==> Configuring virtualization (libvirt groups, service, default network)..."
+  sudo sh -c "
+    set -e
+    usermod -aG libvirt,kvm '$USER'
+    systemctl enable --now libvirtd.service
+    # Wait briefly for libvirtd socket to come up before talking to it.
+    for _ in 1 2 3 4 5; do
+      [ -S /var/run/libvirt/libvirt-sock ] && break
+      sleep 1
+    done
+    virsh net-autostart default 2>/dev/null || true
+    virsh net-info default 2>/dev/null | grep -q 'Active:.*yes' || virsh net-start default 2>/dev/null || true
+  "
+  echo "    Note: log out and back into Hyprland to pick up new group membership."
 fi
 
 # Switch login shell to zsh if it isn't already.
