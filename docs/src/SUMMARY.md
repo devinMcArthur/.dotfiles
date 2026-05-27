@@ -23,6 +23,10 @@
 
 - [Snapshots & rollback](./snapshots-backups.md)
 
+# Virtualization
+
+- [Win11 KVM VM](./virtualization.md)
+
 # Tooling
 
 - [Secrets & 1Password](./secrets.md)
