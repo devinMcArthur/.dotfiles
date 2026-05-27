@@ -106,19 +106,41 @@ else
 fi
 
 # Virtualization one-time setup: group memberships + libvirtd service +
-# default NAT network autostart. Guarded so the sudo block only fires when
-# state actually needs fixing (faillock lesson: one sudo invocation per
-# bash call, and skip entirely on the common re-run path).
+# default NAT network autostart + qemu user/group set to current user (so
+# VM disks under \$HOME are readable/writable by the qemu process; the
+# default `root` qemu user creates ownership churn in home-dir image
+# stores). Guarded so the sudo block only fires when state actually needs
+# fixing (faillock lesson: one sudo invocation per bash call, and skip
+# entirely on the common re-run path).
+QEMU_CONF=/etc/libvirt/qemu.conf
 if ! id -nG "$USER" | grep -qw libvirt \
    || ! id -nG "$USER" | grep -qw kvm \
    || ! systemctl is-enabled --quiet libvirtd.service 2>/dev/null \
    || ! systemctl is-active  --quiet libvirtd.service 2>/dev/null \
-   || ! virsh -c qemu:///system net-info default 2>/dev/null | grep -q '^Autostart:.*yes'; then
-  echo "==> Configuring virtualization (libvirt groups, service, default network)..."
+   || ! virsh -c qemu:///system net-info default 2>/dev/null | grep -q '^Autostart:.*yes' \
+   || ! grep -qE "^user\s*=\s*\"$USER\"" "$QEMU_CONF" 2>/dev/null \
+   || ! grep -qE "^group\s*=\s*\"$USER\"" "$QEMU_CONF" 2>/dev/null; then
+  echo "==> Configuring virtualization (groups, libvirtd, default network, qemu.conf user)..."
   sudo sh -c "
     set -e
     usermod -aG libvirt,kvm '$USER'
+
+    # qemu.conf: run qemu as the user (not root) so VM disks under \$HOME
+    # are readable/writable without ownership churn. Idempotent.
+    if ! grep -qE '^user\s*=\s*\"$USER\"' '$QEMU_CONF'; then
+      cp '$QEMU_CONF' '$QEMU_CONF.bak.\$(date +%Y%m%d%H%M%S)'
+      sed -i \
+        -e 's/^#user = \"libvirt-qemu\"/user = \"$USER\"/' \
+        -e 's/^#group = \"libvirt-qemu\"/group = \"$USER\"/' \
+        '$QEMU_CONF'
+      # If the commented sentinel lines aren't there (e.g., already edited
+      # by hand), append a definitive override at end of file.
+      grep -qE '^user\s*=\s*\"$USER\"' '$QEMU_CONF' || \
+        printf '\nuser = \"$USER\"\ngroup = \"$USER\"\n' >> '$QEMU_CONF'
+    fi
+
     systemctl enable --now libvirtd.service
+    systemctl restart libvirtd.service
     # Wait briefly for libvirtd socket to come up before talking to it.
     for _ in 1 2 3 4 5; do
       [ -S /var/run/libvirt/libvirt-sock ] && break
