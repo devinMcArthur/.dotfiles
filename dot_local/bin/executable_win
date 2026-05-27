@@ -29,6 +29,18 @@ require_defined() {
 case "${1:-attach}" in
   attach|"")
     require_defined
+
+    # Idempotency: if a virt-viewer is already attached to this URI,
+    # just focus its window (Hyprland's focuswindow auto-switches to
+    # the workspace containing it). This makes Super+W "take me to
+    # Windows" on every press, never spawning a second viewer.
+    if pgrep -x virt-viewer >/dev/null 2>&1; then
+      if command -v hyprctl >/dev/null 2>&1; then
+        hyprctl dispatch focuswindow class:virt-viewer >/dev/null 2>&1 || true
+      fi
+      exit 0
+    fi
+
     case "$(state)" in
       running) ;;
       paused)
