@@ -55,9 +55,15 @@ case "${1:-attach}" in
     # --full-screen: cover the monitor; guest resolution adjusts to match.
     # Exit fullscreen by hovering the top edge — virt-viewer's toolbar slides
     # in with a fullscreen-toggle button. Set WIN_WINDOWED=1 to skip fullscreen.
+    #
+    # No --reconnect: that flag tells virt-viewer to wait for the SPICE
+    # socket to return after a drop (useful for remote SPICE over flaky
+    # networks). For local qemu:///system, drops only happen on actual
+    # VM shutdown, and we want the viewer to exit cleanly when qemu
+    # does — not linger on workspace 5 as an empty window.
     fs_flag=( --full-screen )
     [[ -n "${WIN_WINDOWED:-}" ]] && fs_flag=()
-    exec virt-viewer --connect "$URI" --attach --reconnect "${fs_flag[@]}" "$VM"
+    exec virt-viewer --connect "$URI" --attach "${fs_flag[@]}" "$VM"
     ;;
 
   stop)
