@@ -40,7 +40,12 @@ case "${1:-attach}" in
         virsh -c "$URI" start "$VM" >/dev/null
         ;;
     esac
-    exec virt-viewer --connect "$URI" --attach --reconnect "$VM"
+    # --full-screen: cover the monitor; guest resolution adjusts to match.
+    # Exit fullscreen by hovering the top edge — virt-viewer's toolbar slides
+    # in with a fullscreen-toggle button. Set WIN_WINDOWED=1 to skip fullscreen.
+    fs_flag=( --full-screen )
+    [[ -n "${WIN_WINDOWED:-}" ]] && fs_flag=()
+    exec virt-viewer --connect "$URI" --attach --reconnect "${fs_flag[@]}" "$VM"
     ;;
 
   stop)
