@@ -1,6 +1,19 @@
 # Prompt: starship (see ~/.config/starship.toml).
 eval "$(starship init zsh)"
 
+# 1Password SSH agent. Replaces the oh-my-zsh ssh-agent plugin (which
+# raced on parallel tmux pane restores post-reboot and prompted for the
+# key passphrase in every pane). The socket is owned by the 1P desktop
+# app and survives reboots; key passphrase lives in the vault. Enable
+# under 1Password → Settings → Developer → "Use the SSH agent".
+#
+# Conditional so the export is a no-op when 1P isn't running (e.g.,
+# initial setup before the toggle is flipped), preventing broken
+# SSH_AUTH_SOCK references that would make ssh-add / git fail.
+if [[ -S "$HOME/.1password/agent.sock" ]]; then
+  export SSH_AUTH_SOCK="$HOME/.1password/agent.sock"
+fi
+
 # Secrets live in 1Password (see ~/.config/op-dev.env). We resolve them
 # lazily, on-demand, per-command — NOT at shell startup.
 #

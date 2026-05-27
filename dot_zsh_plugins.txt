@@ -2,8 +2,12 @@
 # https://getantidote.github.io/
 # Format: <github-user>/<repo> [path:<subdir>] [kind:<zsh|fpath|defer>]
 
-# --- ssh-agent + git aliases (cherry-picked from oh-my-zsh, no framework) ---
-ohmyzsh/ohmyzsh path:plugins/ssh-agent
+# --- git aliases (cherry-picked from oh-my-zsh, no framework) ---
+# Note: ssh-agent plugin removed in favor of 1Password's SSH agent
+# (single stable socket at ~/.1password/agent.sock; SSH_AUTH_SOCK export
+# lives in dot_zshrc.tmpl). The plugin's per-shell spawn-or-attach logic
+# races on parallel tmux pane restores after reboot, prompting for the
+# key passphrase in every pane.
 ohmyzsh/ohmyzsh path:plugins/git
 
 # --- quality of life ---
