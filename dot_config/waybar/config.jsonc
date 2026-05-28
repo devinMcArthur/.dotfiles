@@ -21,6 +21,7 @@
   "modules-right": [
     "network",
     "bluetooth",
+    "custom/sysinfo",
     "temperature",
     "custom/power_profile",
     "battery",
@@ -48,6 +49,16 @@
       "9": [],
       "10": []
     }
+  },
+  "custom/sysinfo": {
+    // CPU% + MEM% in the bar; hover for a rich popup (load, top procs).
+    // Left-click opens btop in a Ghostty window. Interval matches the
+    // 1s sample inside the script (script sleeps 1s for the CPU delta).
+    "exec": "~/.config/waybar/scripts/sysinfo.sh",
+    "return-type": "json",
+    "interval": 2,
+    "tooltip": true,
+    "on-click": "ghostty --class=sysmon -e btop"
   },
   "custom/power_profile": {
     // Power-profiles-daemon current profile; left-click cycles forward.

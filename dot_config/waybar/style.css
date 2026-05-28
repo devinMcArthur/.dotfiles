@@ -49,6 +49,7 @@ tooltip {
 }
 
 #custom-power_profile,
+#custom-sysinfo,
 #custom-weather,
 #window,
 #clock,
@@ -97,6 +98,21 @@ tooltip {
     color: #a6e3a1;
     border-left: 0px;
     border-right: 0px;
+}
+
+#custom-sysinfo {
+    color: #94e2d5;          /* Catppuccin teal — calm baseline */
+    border-left: 0px;
+    border-right: 0px;
+    padding: 0px 12px;
+}
+
+#custom-sysinfo.warning {
+    color: #f9e2af;          /* yellow */
+}
+
+#custom-sysinfo.critical {
+    color: #f38ba8;          /* red */
 }
 
 #window {
