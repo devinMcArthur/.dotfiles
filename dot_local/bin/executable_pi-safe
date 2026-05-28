@@ -26,6 +26,20 @@ BACKOFF_SECONDS="${PI_SAFE_BACKOFF:-1}"
 
 PI_BIN="${PI_SAFE_BIN:-pi}"
 
+# --- Pre-flight: repair empty .mcp.json in CWD --------------------------------
+# pi-mcp-adapter throws `Unexpected end of JSON input` and refuses to start
+# when it finds a 0-byte `.mcp.json` in the project root. Stale 0-byte stubs
+# show up in repos where Claude Code (or similar tooling) scaffolded a batch
+# of placeholder files and never filled them — `bow-mark/.claude/` is the
+# canonical example: agents, commands, settings.json, skills, .mcp.json all
+# created empty at the same minute. They don't regenerate, but every new repo
+# with that history crashes pi on first launch. Auto-repair to a minimal
+# `{"mcpServers": {}}` shell so the adapter loads cleanly.
+if [ -f "./.mcp.json" ] && [ ! -s "./.mcp.json" ]; then
+  printf '{\n  "mcpServers": {}\n}\n' > "./.mcp.json"
+  echo "pi-safe: repaired empty ./.mcp.json -> {\"mcpServers\": {}}" >&2
+fi
+
 # Suppress Node's experimental-feature warning. The pi-knowledge-search
 # worker uses node:sqlite (currently flagged experimental in Node 22+),
 # which prints `ExperimentalWarning: SQLite is an experimental feature...`
