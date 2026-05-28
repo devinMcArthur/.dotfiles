@@ -95,12 +95,6 @@ alias waybar-restart='killall waybar 2>/dev/null; nohup waybar >/dev/null 2>&1 &
 # Same script the Hyprland Super+F1 binding calls.
 alias laptop-docs='$HOME/.local/bin/laptop-docs'
 
-# --- Tilt: dashboard in standalone app window -------------------------------
-# Firefox is the default browser, but Tilt's UI is a dev-dashboard, not a
-# bookmarkable page — open it in a chromeless Chromium --app window via
-# tilt-browser. Tilt's auto-opener honours $BROWSER (Go pkg/browser).
-alias tilt='BROWSER=$HOME/.local/bin/tilt-browser command tilt'
-
 # --- zoxide: smarter cd (`z <partial>` jumps to frecent dirs, `zi` fuzzy) ---
 # Sesh already uses zoxide's db for session matching; this exposes `z`/`zi`
 # directly in the shell. Run last so it can override compinit-registered cd.

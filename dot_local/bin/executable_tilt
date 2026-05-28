@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# tilt — wrapper that routes Tilt's auto-opened dashboard through tilt-browser
+# (chromeless Chromium --app window) instead of the system default browser.
+#
+# Firefox stays the default for xdg-open / link clicks / normal browsing;
+# only `tilt` itself uses this app-mode launcher.
+#
+# Shadows /usr/bin/tilt because $HOME/.local/bin is ahead of /usr/bin in PATH.
+# Tilt uses Go's pkg/browser which honours $BROWSER.
+
+set -euo pipefail
+
+# Resolve the real tilt binary, skipping this wrapper.
+real_tilt="$(PATH="${PATH//$HOME\/.local\/bin:/}" command -v tilt || true)"
+if [[ -z "$real_tilt" ]]; then
+  echo "tilt: real tilt binary not found in PATH (after removing ~/.local/bin)" >&2
+  exit 127
+fi
+
+export BROWSER="$HOME/.local/bin/tilt-browser"
+exec "$real_tilt" "$@"

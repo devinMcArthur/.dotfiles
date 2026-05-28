@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-05-28T14:03:17-06:00_
+_Generated 2026-05-28T14:05:37-06:00_
 
 ## Hyprland — window manager
 
@@ -131,7 +131,6 @@ Prefix: `C-a`. Bindings shown below assume prefix unless otherwise noted.
 | `lta` | `eza --tree --level=2 --icons=auto -a` |
 | `lt` | `eza --tree --level=2 --icons=auto` |
 | `pi` | `with-secrets pi-safe` |
-| `tilt` | `BROWSER=$HOME/.local/bin/tilt-browser command tilt` |
 | `waybar-restart` | `killall waybar 2>/dev/null; nohup waybar >/dev/null 2>&1 & disown` |
 
 ## Zsh key bindings (bindkey)
