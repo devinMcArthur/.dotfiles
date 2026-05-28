@@ -2,7 +2,19 @@ return {
   {
     "nvim-treesitter/nvim-treesitter",
     dependencies = {
-      "JoosepAlviste/nvim-ts-context-commentstring",
+      {
+        "JoosepAlviste/nvim-ts-context-commentstring",
+        init = function()
+          -- Skip the legacy module-init path (suppresses deprecation warning).
+          vim.g.skip_ts_context_commentstring_module = true
+        end,
+        opts = {
+          -- Comment.nvim's pre_hook already calls into this plugin on-demand,
+          -- so the CursorHold autocmd is redundant AND crashes on buffers
+          -- where vim.treesitter.get_parser() returns nil.
+          enable_autocmd = false,
+        },
+      },
     },
     build = ":TSUpdate",
     event = "BufReadPre",
