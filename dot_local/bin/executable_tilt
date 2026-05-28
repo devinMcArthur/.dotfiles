@@ -1,21 +1,46 @@
 #!/usr/bin/env bash
-# tilt — wrapper that routes Tilt's auto-opened dashboard through tilt-browser
-# (chromeless Chromium --app window) instead of the system default browser.
+# tilt — wrapper that opens Tilt's dashboard in a chromeless Chromium --app
+# window when invoked as `tilt up`, so the dev dashboard stays separate from
+# the system default browser (Firefox).
 #
-# Firefox stays the default for xdg-open / link clicks / normal browsing;
-# only `tilt` itself uses this app-mode launcher.
+# Why a wrapper and not $BROWSER:
+#   Tilt uses Go's pkg/browser, which on Linux calls xdg-open directly and
+#   ignores $BROWSER. So we can't intercept Tilt's <Space>-to-open path; we
+#   just open the window ourselves before the TUI takes over.
 #
-# Shadows /usr/bin/tilt because $HOME/.local/bin is ahead of /usr/bin in PATH.
-# Tilt uses Go's pkg/browser which honours $BROWSER.
+# Why not an alias:
+#   Aliases only resolve in interactive zsh and don't survive non-shell
+#   launchers (Hyprland binds, .desktop Exec=, systemd, sudo, env). A wrapper
+#   in ~/.local/bin (ahead of /usr/bin) shadows the system binary universally.
 
 set -euo pipefail
 
-# Resolve the real tilt binary, skipping this wrapper.
+# Resolve the real tilt, skipping this wrapper.
 real_tilt="$(PATH="${PATH//$HOME\/.local\/bin:/}" command -v tilt || true)"
 if [[ -z "$real_tilt" ]]; then
   echo "tilt: real tilt binary not found in PATH (after removing ~/.local/bin)" >&2
   exit 127
 fi
 
-export BROWSER="$HOME/.local/bin/tilt-browser"
+# On `tilt up`, race a background opener: wait for the dashboard port to bind,
+# then launch the app-mode Chromium window. Don't press <Space> in the TUI —
+# that triggers xdg-open (Firefox) and gives you a duplicate tab.
+if [[ "${1:-}" == "up" ]]; then
+  (
+    # Tilt's default port; override via TILT_DASHBOARD_PORT env if needed.
+    port="${TILT_DASHBOARD_PORT:-10350}"
+    url="http://localhost:${port}/"
+
+    # Poll for ~20s for the server to bind. Tilt usually binds in <1s.
+    for _ in $(seq 1 100); do
+      if ss -tln 2>/dev/null | grep -q ":${port}\b"; then
+        "$HOME/.local/bin/tilt-browser" "$url"
+        exit 0
+      fi
+      sleep 0.2
+    done
+    echo "tilt-wrapper: timed out waiting for :${port} to bind" >&2
+  ) &
+fi
+
 exec "$real_tilt" "$@"
