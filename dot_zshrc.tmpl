@@ -86,6 +86,10 @@ if command -v eza >/dev/null 2>&1; then
   alias lta='eza --tree --level=2 --icons=auto -a'
 fi
 
+# --- Waybar respawn --------------------------------------------------------
+# exec-once only fires at Hyprland startup; a crash mid-session leaves no bar.
+alias waybar-restart='killall waybar 2>/dev/null; nohup waybar >/dev/null 2>&1 & disown'
+
 # --- Laptop reference site (mdBook) -----------------------------------------
 # Opens http://localhost:3030 in a browser, starting `mdbook serve` if needed.
 # Same script the Hyprland Super+F1 binding calls.
