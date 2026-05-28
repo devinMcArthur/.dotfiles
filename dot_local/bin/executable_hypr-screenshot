@@ -35,6 +35,20 @@ case "$mode" in
     ;;
 esac
 
-# Open in swappy. It already knows where to save via ~/.config/swappy/config
-# but we also leave the original at $file in case the user dismisses swappy.
+# Open in swappy for annotation. swappy's own Copy button is unreliable
+# (silently no-ops on swappy 1.8.0 in this Wayland session), so we don't
+# trust it. Instead, after swappy exits, pick the newest PNG in save_dir
+# (the annotated save if the user hit Save, else the original capture)
+# and push it onto the Wayland clipboard ourselves. cliphist's image
+# watcher will store it in clipboard history automatically.
 swappy -f "$file"
+
+newest="$(ls -t "$dir"/screenshot-*.png 2>/dev/null | head -1)"
+if [ -n "$newest" ] && command -v wl-copy >/dev/null 2>&1; then
+  wl-copy --type image/png < "$newest"
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send -a "Screenshot" -t 2500 \
+      "Screenshot copied to clipboard" \
+      "$(basename "$newest")"
+  fi
+fi
