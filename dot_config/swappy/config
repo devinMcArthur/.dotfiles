@@ -6,5 +6,9 @@ line_size=4
 text_size=20
 text_font=JetBrainsMono Nerd Font
 paint_mode=brush
-early_exit=false
+# Exit immediately after Save or Copy (Ctrl+S / Ctrl+C / button click) instead
+# of staying open until Escape. Annotation flow becomes: Super+S -> draw ->
+# Ctrl+C -> done, on clipboard. wl-clip-persist keeps the offer alive after
+# swappy exits.
+early_exit=true
 fill_shape=false
