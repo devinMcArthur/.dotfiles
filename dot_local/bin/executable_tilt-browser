@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# tilt-browser — open a URL as a standalone chromeless app window.
+#
+# Used as $BROWSER for `tilt` (see zshrc alias) so `tilt up` + <Space> opens
+# the Tilt dashboard in its own dev-dashboard window, separate from Firefox
+# (which is the system default browser for everything else).
+#
+# Chromium's --app=URL mode strips tabs/bookmarks/URL bar; the window behaves
+# like a native app and uses its own profile dir to stay isolated from any
+# normal Chromium session.
+
+set -euo pipefail
+
+url="${1:-}"
+if [[ -z "$url" ]]; then
+  echo "usage: tilt-browser <url>" >&2
+  exit 1
+fi
+
+# Isolated profile so app windows don't share state with anything else
+# (and so we never see a "restore previous session" prompt).
+profile_dir="${XDG_DATA_HOME:-$HOME/.local/share}/chromium-app-profile"
+mkdir -p "$profile_dir"
+
+exec chromium \
+  --user-data-dir="$profile_dir" \
+  --app="$url" \
+  >/dev/null 2>&1 &
