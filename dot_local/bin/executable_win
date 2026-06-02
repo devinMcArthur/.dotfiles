@@ -63,6 +63,22 @@ case "${1:-attach}" in
     # does — not linger on workspace 5 as an empty window.
     fs_flag=( --full-screen )
     [[ -n "${WIN_WINDOWED:-}" ]] && fs_flag=()
+
+    # Strip virt-viewer's stale per-VM `monitor-mapping`. virt-viewer
+    # persists `monitor-mapping=1:1` on exit, which pins guest display 1
+    # to client-monitor index 1. That index is meaningless across
+    # plug/unplug: unplugged it's eDP-1 (1920x1280 logical), plugged-in
+    # the window lives on the external KA272 (1920x1080). The fixed
+    # mapping sizes the guest framebuffer for the wrong monitor, so when
+    # fullscreened on the external the guest is too tall -> content
+    # shifted down, blank strip at top, Windows taskbar cut off below.
+    # Removing it on every launch lets --full-screen re-derive the
+    # mapping from whichever monitor workspace 5 actually lands on. The
+    # mapping is only read at startup, so the clobber-on-exit is harmless
+    # as long as we re-strip here. (Setting is read at fullscreen setup.)
+    vv_settings="${XDG_CONFIG_HOME:-$HOME/.config}/virt-viewer/settings"
+    [[ -f "$vv_settings" ]] && sed -i '/^monitor-mapping=/d' "$vv_settings"
+
     exec virt-viewer --connect "$URI" --attach "${fs_flag[@]}" "$VM"
     ;;
 
