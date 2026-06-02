@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Re-fix the win11 virt-viewer when the monitor layout changes.
+#
+# virt-viewer's SPICE guest resolution is derived at viewer-launch time
+# from the monitor its (Hyprland-owned) fullscreen window lands on. When
+# you dock/undock WHILE the viewer is open, Hyprland migrates workspace 5
+# to a different monitor and resizes the fullscreen window, but
+# virt-viewer does not reliably re-resize the guest across that live
+# transition (worst landing on the 1.5x-scaled laptop panel) -- the view
+# ends up shifted/clipped until a manual restart.
+#
+# This watcher listens to Hyprland's socket2 event stream and, on any
+# monitor add/remove, relaunches the viewer via `win`, which
+# deterministically re-derives the guest size for the now-current
+# monitor. virt-viewer --attach just reconnects to the already-running
+# VM; the guest OS never sees it. No-op when the viewer isn't open.
+set -uo pipefail
+
+his="${HYPRLAND_INSTANCE_SIGNATURE:-$(ls "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr" 2>/dev/null | head -1)}"
+[[ -n "$his" ]] || { echo "win-monitor-watch: no Hyprland instance" >&2; exit 0; }
+sock="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr/${his}/.socket2.sock"
+[[ -S "$sock" ]] || { echo "win-monitor-watch: no socket2 at $sock" >&2; exit 0; }
+
+refix() {
+  pgrep -x virt-viewer >/dev/null 2>&1 || return 0
+  pkill -x virt-viewer 2>/dev/null || true
+  # wait for the old viewer to actually die so `win` does a fresh launch
+  # (its idempotency check would otherwise just refocus a dying window)
+  for _ in $(seq 1 20); do
+    pgrep -x virt-viewer >/dev/null 2>&1 || break
+    sleep 0.1
+  done
+  setsid "$HOME/.local/bin/win" >/dev/null 2>&1 &
+}
+
+pending=""
+schedule() {
+  # Docking fires several monitor events back-to-back; debounce so we
+  # relaunch the viewer exactly once after the layout settles.
+  [[ -n "$pending" ]] && kill "$pending" 2>/dev/null || true
+  ( sleep 1.0; refix ) &
+  pending=$!
+}
+
+# -u = unidirectional socket->STDOUT. Use the write-only STDOUT address
+# (not `-`), so a /dev/null stdin under exec-once can't EOF socat dead.
+socat -u "UNIX-CONNECT:$sock" STDOUT 2>/dev/null | while IFS= read -r line; do
+  case "$line" in
+    monitoradded*|monitorremoved*) schedule ;;
+  esac
+done
