@@ -52,34 +52,50 @@ case "${1:-attach}" in
         virsh -c "$URI" start "$VM" >/dev/null
         ;;
     esac
-    # --full-screen: cover the monitor; guest resolution adjusts to match.
-    # Exit fullscreen by hovering the top edge — virt-viewer's toolbar slides
-    # in with a fullscreen-toggle button. Set WIN_WINDOWED=1 to skip fullscreen.
+    # Fullscreen is owned by HYPRLAND, not virt-viewer. On Wayland,
+    # virt-viewer's own --full-screen can't tell which monitor it lands
+    # on: the compositor places the window via the `workspace 5 silent`
+    # rule AFTER virt-viewer has already sized the guest, so virt-viewer
+    # uses the PRIMARY monitor's geometry (eDP-1, 1920x1280 logical) for
+    # a window that actually lives on the external KA272 (1920x1080).
+    # Result: guest framebuffer ~200px too tall -> ~100px black bar at
+    # the top, Windows taskbar clipped off the bottom. (Stripping the
+    # persisted monitor-mapping did NOT fix this -- the wrong-monitor
+    # geometry is chosen independently of the mapping.)
+    #
+    # Running virt-viewer WINDOWED and letting Hyprland fullscreen the
+    # window makes virt-viewer's guest auto-resize follow the real window
+    # size on the real monitor -- and Hyprland re-sizes correctly on
+    # every plug/unplug. We can't express this as a static
+    # `windowrule = fullscreen` because Hyprland 0.55's parser rejects
+    # bare action words ("invalid field fullscreen: missing a value"),
+    # so we dispatch fullscreen after the window appears.
+    #
+    # Tradeoff vs. virt-viewer's own fullscreen: virt-viewer no longer
+    # uses the keyboard-shortcuts-inhibit grab, so Super-key combos go to
+    # Hyprland instead of Windows (Alt+Tab and ordinary keys still reach
+    # the guest when focused). WIN_WINDOWED=1 skips the fullscreen kick
+    # and leaves a plain window.
     #
     # No --reconnect: that flag tells virt-viewer to wait for the SPICE
     # socket to return after a drop (useful for remote SPICE over flaky
     # networks). For local qemu:///system, drops only happen on actual
     # VM shutdown, and we want the viewer to exit cleanly when qemu
     # does — not linger on workspace 5 as an empty window.
-    fs_flag=( --full-screen )
-    [[ -n "${WIN_WINDOWED:-}" ]] && fs_flag=()
+    virt-viewer --connect "$URI" --attach "$VM" &
 
-    # Strip virt-viewer's stale per-VM `monitor-mapping`. virt-viewer
-    # persists `monitor-mapping=1:1` on exit, which pins guest display 1
-    # to client-monitor index 1. That index is meaningless across
-    # plug/unplug: unplugged it's eDP-1 (1920x1280 logical), plugged-in
-    # the window lives on the external KA272 (1920x1080). The fixed
-    # mapping sizes the guest framebuffer for the wrong monitor, so when
-    # fullscreened on the external the guest is too tall -> content
-    # shifted down, blank strip at top, Windows taskbar cut off below.
-    # Removing it on every launch lets --full-screen re-derive the
-    # mapping from whichever monitor workspace 5 actually lands on. The
-    # mapping is only read at startup, so the clobber-on-exit is harmless
-    # as long as we re-strip here. (Setting is read at fullscreen setup.)
-    vv_settings="${XDG_CONFIG_HOME:-$HOME/.config}/virt-viewer/settings"
-    [[ -f "$vv_settings" ]] && sed -i '/^monitor-mapping=/d' "$vv_settings"
+    if [[ -z "${WIN_WINDOWED:-}" ]] && command -v hyprctl >/dev/null 2>&1; then
+      # Wait for the viewer window to be mapped, then fullscreen it on
+      # whichever monitor workspace 5 lives on.
+      for _ in $(seq 1 50); do
+        if hyprctl clients -j 2>/dev/null | grep -q virt-viewer; then break; fi
+        sleep 0.1
+      done
+      hyprctl dispatch focuswindow class:virt-viewer >/dev/null 2>&1 || true
+      hyprctl dispatch fullscreen 0 >/dev/null 2>&1 || true
+    fi
 
-    exec virt-viewer --connect "$URI" --attach "${fs_flag[@]}" "$VM"
+    wait
     ;;
 
   stop)
