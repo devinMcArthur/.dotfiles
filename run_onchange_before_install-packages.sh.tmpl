@@ -68,6 +68,14 @@ PACMAN_PKGS=(
   # dnsmasq is pulled in transitively by libvirt for the default NAT network.
   qemu-full libvirt virt-manager virt-viewer edk2-ovmf swtpm virtiofsd
 
+  # Progressive Web App support for Firefox (native connector half of
+  # PWAsForFirefox). Used to install work Outlook (outlook.office.com) as
+  # a standalone app window on the Gecko engine -- reliable native Wayland
+  # on Hyprland, and immune to Microsoft's EWS retirement (it's the full
+  # web app). The Firefox extension half must be added once from AMO:
+  # https://addons.mozilla.org/firefox/addon/pwas-for-firefox
+  firefoxpwa
+
   # Fonts (powerline glyphs in tmux theme & waybar)
   ttf-jetbrains-mono-nerd
 
