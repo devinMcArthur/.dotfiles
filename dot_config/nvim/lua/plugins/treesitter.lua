@@ -119,6 +119,11 @@ return {
           }
         },
       }
+
+      -- Neovim 0.12 dropped legacy single-node query matches; the archived
+      -- nvim-treesitter master branch still assumes them and crashes (see
+      -- lua/config/ts-compat.lua). Patch the affected handlers after setup.
+      require('config.ts-compat').setup()
     end,
   },
 }
