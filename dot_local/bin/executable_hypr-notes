@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Quick-notes scratchpad: dropdown ghostty+nvim on a throwaway scratch file.
+#
+# Behavior:
+#   - If the scratch-notes window already exists, toggle the special:notes
+#     workspace — instant show/hide, editor state (undo, cursor) preserved.
+#   - Otherwise launch ghostty (class scratch-notes) running nvim on the
+#     scratch file. Windowrules in hyprland.conf pin it to special:notes
+#     and float it centered as a dropdown.
+#
+# The scratch file is intentionally throwaway — no sync, no vault. nvim
+# auto-writes it on focus loss so toggling the pad away never drops text.
+#
+# Triggered by:
+#   - Hyprland keybind: SUPER + N (see dot_config/hypr/hyprland.conf)
+#   - Manual: `hypr-notes` from any shell inside the Hyprland session
+
+set -euo pipefail
+
+SCRATCH_FILE="$HOME/.local/state/scratch.md"
+mkdir -p "${SCRATCH_FILE%/*}"
+
+if hyprctl clients -j | grep -qF '"scratch.notes"'; then
+  hyprctl dispatch togglespecialworkspace notes
+else
+  # setsid so ghostty survives this one-shot script exiting.
+  # NOTE: ghostty --class must be a valid GTK app-id (needs a dot) —
+  # bare words like "scratch-notes" are silently ignored.
+  setsid ghostty --class=scratch.notes \
+    -e nvim -c 'autocmd FocusLost * silent! update' "$SCRATCH_FILE" \
+    >/dev/null 2>&1 &
+fi

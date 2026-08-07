@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-05-28T14:19:17-06:00_
+_Generated 2026-08-07T15:57:14-06:00_
 
 ## Hyprland — window manager
 
@@ -48,6 +48,8 @@ _Generated 2026-05-28T14:19:17-06:00_
 | `SUPER + M` | `exec` | wlogout --protocol layer-shell # show the logout window |
 | `SUPER + mouse_down` | `workspace` | e+1 |
 | `SUPER + mouse_up` | `workspace` | e-1 |
+| `SUPER + N` | `exec` | $HOME/.local/bin/hypr-notes # quick notes scratchpad (dropdown nvim) |
+| `SUPER + O` | `exec` | hyprctl clients -j \| grep -q FFPWA-01KT4N89YPWXMQDN8T4TENQ5A6 && hyprctl dispatch focuswindow class:FFPWA-01KT4N89YPWXMQDN8T4TENQ5A6 \|\| firefoxpwa site launch 01KT4N89YPWXMQDN8T4TENQ5A6 # Outlook (work email) — focus or launch |
 | `SUPER + period` | `focusmonitor` | desc:Acer Technologies KA272 0x13800FAE |
 | `SUPER + P` | `pseudo` | # dwindle |
 | `SUPER + Q` | `killactive` | # close the active window |
