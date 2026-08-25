@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# net-snapshot — checkpoint the machine's entire network configuration and
+# service states so net-rollback can restore them OFFLINE, from a TTY, with
+# no network and no AI assistance. Run before ANY change to the network
+# stack (the chezmoi network script does this automatically).
+#
+# Usage:
+#   sudo net-snapshot [label]     # e.g. net-snapshot pre-iwd-tweak
+#
+# Snapshots: /var/lib/net-snapshots/<timestamp>[-label]/
+#   files/       copies of every tracked config path that existed
+#   manifest     present/absent record per tracked path
+#   units.state  enabled+active state per network service
+
+set -euo pipefail
+
+if [ "$(id -u)" -ne 0 ]; then
+  exec sudo "$0" "$@"
+fi
+
+root=/var/lib/net-snapshots
+dest="$root/$(date +%Y%m%d-%H%M%S)${1:+-$1}"
+
+# Everything that defines network behavior on this machine.
+TRACKED=(
+  /etc/iwd
+  /var/lib/iwd
+  /etc/systemd/network
+  /etc/systemd/resolved.conf.d
+  /etc/NetworkManager/conf.d
+  /etc/NetworkManager/system-connections
+  /etc/resolv.conf
+)
+UNITS=(iwd NetworkManager wpa_supplicant systemd-networkd systemd-resolved)
+
+mkdir -p "$dest/files"
+: > "$dest/manifest"
+for p in "${TRACKED[@]}"; do
+  if [ -e "$p" ] || [ -L "$p" ]; then
+    cp -a --parents "$p" "$dest/files/"
+    echo "present $p" >> "$dest/manifest"
+  else
+    echo "absent $p" >> "$dest/manifest"
+  fi
+done
+
+: > "$dest/units.state"
+for u in "${UNITS[@]}"; do
+  enabled="$(systemctl is-enabled "$u.service" 2>/dev/null || true)"
+  active="$(systemctl is-active "$u.service" 2>/dev/null || true)"
+  echo "$u ${enabled:-not-found} ${active:-inactive}" >> "$dest/units.state"
+done
+
+# Keep the 10 most recent snapshots.
+ls -1d "$root"/*/ 2>/dev/null | sort | head -n -10 | xargs -r rm -rf
+
+echo "snapshot: $dest"
+echo "restore:  sudo net-rollback ${dest##*/}    (latest: sudo net-rollback)"

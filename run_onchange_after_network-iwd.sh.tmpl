@@ -1,0 +1,142 @@
+{{- if eq .chezmoi.os "linux" -}}
+{{- if eq .chezmoi.osRelease.id "arch" -}}
+#!/usr/bin/env bash
+# Network stack: standalone iwd (Omarchy 1.x style, single owner of Wi-Fi).
+#   Wi-Fi + DHCP : iwd (EnableNetworkConfiguration=true), impala TUI on Super+I
+#   DNS          : systemd-resolved (iwd pushes per-network DNS into it;
+#                  /etc/resolv.conf is a static Quad9 file resolved reads as
+#                  global upstream — deliberately left untouched here)
+#   Wired (dock) : systemd-networkd, DHCP on en*, RouteMetric=100 so a cable
+#                  beats Wi-Fi (iwd's route metric is ~300)
+#   NetworkManager + wpa_supplicant: installed but disabled — they are the
+#   offline escape hatch, not part of the running stack.
+#
+# History: the first migration attempt (NM with wifi.backend=iwd) broke Wi-Fi
+# — iwd couldn't start because a kernel upgrade without a reboot left no
+# matching modules on disk, and the half-switched stack fought over the
+# interface (2026-08-25). Hence the two safety rails below: a reboot-pending
+# preflight, and a net-snapshot checkpoint before any change.
+#
+# ROLLBACK (works offline, from a TTY):
+#   sudo net-rollback              # restore the pre-change snapshot
+#   sudo net-rollback --classic    # break-glass: stock NetworkManager, no
+#                                  # snapshot needed; connect with nmtui
+
+set -euo pipefail
+
+# Idempotence guard: skip when the full stack is already in place.
+if grep -qs 'EnableNetworkConfiguration=true' /etc/iwd/main.conf \
+   && [ -f /etc/systemd/network/50-wired.network ] \
+   && systemctl is-enabled --quiet iwd.service 2>/dev/null \
+   && systemctl is-enabled --quiet systemd-networkd.service 2>/dev/null \
+   && systemctl is-enabled --quiet systemd-resolved.service 2>/dev/null \
+   && ! systemctl is-enabled --quiet NetworkManager.service 2>/dev/null \
+   && ! systemctl is-enabled --quiet wpa_supplicant.service 2>/dev/null \
+   && [ -L /usr/local/bin/net-snapshot ] && [ -L /usr/local/bin/net-rollback ]; then
+  echo "==> Network stack (standalone iwd) already configured; skipping."
+  exit 0
+fi
+
+# PREFLIGHT: refuse to touch the network stack on a reboot-pending kernel.
+# After a kernel upgrade the running kernel's modules are gone from disk, so
+# daemons needing fresh modules (iwd → crypto algif_skcipher etc.) can't
+# start. This exact condition caused the 2026-08-25 Wi-Fi outage.
+if [ ! -d "/lib/modules/$(uname -r)" ]; then
+  echo "!!> Kernel was upgraded since boot (/lib/modules/$(uname -r) is gone)."
+  echo "!!> Refusing to change the network stack. Reboot, then re-run: chezmoi apply"
+  exit 1
+fi
+
+echo "==> Configuring standalone iwd network stack..."
+
+# Checkpoint everything first so `sudo net-rollback` can undo this offline.
+"$HOME/.local/bin/net-snapshot" pre-iwd-setup
+
+# Single follow-up sudo (credentials cached by the snapshot's sudo just above).
+sudo bash <<'ROOT'
+set -euo pipefail
+
+# --- iwd: own the Wi-Fi interface AND do DHCP; hand DNS to resolved --------
+mkdir -p /etc/iwd
+desired_main_conf='[General]
+EnableNetworkConfiguration=true
+
+[Network]
+NameResolvingService=systemd'
+if [ "$(cat /etc/iwd/main.conf 2>/dev/null)" != "$desired_main_conf" ]; then
+  printf '%s\n' "$desired_main_conf" > /etc/iwd/main.conf
+  # Only restart (brief Wi-Fi blip) when the config actually changed AND
+  # iwd is already running; otherwise the enable --now below handles it.
+  systemctl try-restart iwd.service 2>/dev/null || true
+fi
+
+# --- Pre-seed iwd known networks from old NetworkManager profiles ----------
+# No-op on this machine after the first migration; matters for a fresh
+# install where NM profiles are restored from backup. Only plain stored-PSK
+# networks convert; enterprise/open/agent-owned are skipped.
+mkdir -p /var/lib/iwd
+chmod 700 /var/lib/iwd
+migrated=0
+for f in /etc/NetworkManager/system-connections/*.nmconnection; do
+  [ -e "$f" ] || continue
+  grep -q '^type=wifi' "$f" || continue
+  keymgmt=$(sed -n 's/^key-mgmt=//p' "$f" | head -1)
+  ssid=$(sed -n 's/^ssid=//p' "$f" | head -1)
+  psk=$(sed -n 's/^psk=//p' "$f" | head -1)
+  if [ "$keymgmt" != "wpa-psk" ] || [ -z "$ssid" ] || [ -z "$psk" ] \
+     || [ "${ssid#*;}" != "$ssid" ]; then
+    continue
+  fi
+  if printf '%s' "$ssid" | grep -Eq '^[A-Za-z0-9_-]+$'; then
+    name="$ssid"
+  else
+    name="=$(printf '%s' "$ssid" | od -An -tx1 | tr -d ' \n')"
+  fi
+  target="/var/lib/iwd/$name.psk"
+  [ -e "$target" ] && continue
+  if printf '%s' "$psk" | grep -Eq '^[0-9a-fA-F]{64}$'; then
+    printf '[Security]\nPreSharedKey=%s\n' "$psk" > "$target"
+  else
+    printf '[Security]\nPassphrase=%s\n' "$psk" > "$target"
+  fi
+  chmod 600 "$target"
+  migrated=$((migrated+1))
+done
+[ "$migrated" -gt 0 ] && echo "    pre-seeded $migrated Wi-Fi networks into iwd"
+
+# --- Wired ethernet (USB dock): systemd-networkd, DHCP ---------------------
+# Only en* is matched — docker0/virbr0/br-* bridges stay unmanaged.
+install -Dm644 /dev/stdin /etc/systemd/network/50-wired.network <<'NET'
+[Match]
+Name=en*
+
+[Network]
+DHCP=yes
+
+[DHCP]
+# Beat Wi-Fi (iwd routes land around metric 300): cable wins when plugged in.
+RouteMetric=100
+NET
+
+# --- Services --------------------------------------------------------------
+# Old NM-with-iwd-backend hint is moot and would sabotage a --classic
+# rollback to stock NetworkManager; remove it.
+rm -f /etc/NetworkManager/conf.d/wifi-backend.conf
+
+systemctl unmask iwd.service 2>/dev/null || true
+systemctl disable --now NetworkManager.service wpa_supplicant.service 2>/dev/null || true
+# enable --now does NOT restart an already-active iwd: the live Wi-Fi
+# connection survives this apply untouched.
+systemctl enable --now iwd.service systemd-resolved.service systemd-networkd.service
+ROOT
+
+# sudo's secure_path doesn't include ~/.local/bin, so `sudo net-rollback` at
+# a TTY would be "command not found" — the one place that must never happen.
+# Symlink the rescue tooling somewhere root's PATH reaches.
+sudo ln -sf "$HOME/.local/bin/net-snapshot" /usr/local/bin/net-snapshot
+sudo ln -sf "$HOME/.local/bin/net-rollback" /usr/local/bin/net-rollback
+
+echo "==> Standalone iwd stack configured (Wi-Fi: impala/Super+I, wired: plug in)."
+echo "    Rollback any time: sudo net-rollback   (or: sudo net-rollback --classic)"
+{{ end -}}
+{{ end -}}

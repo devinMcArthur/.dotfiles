@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# net-rollback — restore network config + service states from a net-snapshot
+# checkpoint. Designed to work with NO network and no AI assistance: plain
+# bash, coreutils, and systemctl only. If Wi-Fi ever breaks after a change,
+# this is the way back.
+#
+# Usage:
+#   net-rollback list             # list available snapshots
+#   sudo net-rollback             # restore the most recent snapshot
+#   sudo net-rollback <name>      # restore a specific snapshot
+#   sudo net-rollback --classic   # break-glass, needs NO snapshot: return to
+#                                 # stock NetworkManager + wpa_supplicant
+#                                 # (then connect with nmtui)
+
+set -euo pipefail
+
+root=/var/lib/net-snapshots
+UNITS=(iwd NetworkManager wpa_supplicant systemd-networkd systemd-resolved)
+
+if [ "${1:-}" = "list" ]; then
+  ls -1 "$root" 2>/dev/null || echo "no snapshots yet"
+  exit 0
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+  exec sudo "$0" "$@"
+fi
+
+stop_all() {
+  # resolved stays up — it's harmless under every stack and DNS mid-rollback helps.
+  systemctl stop iwd NetworkManager wpa_supplicant systemd-networkd 2>/dev/null || true
+}
+
+if [ "${1:-}" = "--classic" ]; then
+  echo "==> Break-glass: returning to stock NetworkManager + wpa_supplicant..."
+  # Remove any iwd-backend hint so NM comes back with its default supplicant.
+  rm -f /etc/NetworkManager/conf.d/wifi-backend.conf
+  stop_all
+  systemctl unmask NetworkManager.service wpa_supplicant.service 2>/dev/null || true
+  systemctl disable iwd.service systemd-networkd.service 2>/dev/null || true
+  systemctl enable --now NetworkManager.service
+  echo "==> Done. NetworkManager owns the network; run nmtui to connect."
+  exit 0
+fi
+
+snap="${1:-$(ls -1 "$root" 2>/dev/null | sort | tail -1)}"
+if [ -z "$snap" ]; then
+  echo "no snapshots in $root — try: sudo net-rollback --classic" >&2
+  exit 1
+fi
+dest="$root/$snap"
+if [ ! -d "$dest" ]; then
+  echo "no such snapshot: $snap (see: net-rollback list)" >&2
+  exit 1
+fi
+
+echo "==> Restoring snapshot $snap..."
+stop_all
+
+# Files: paths present at snapshot time are replaced wholesale; paths absent
+# at snapshot time are removed (so a rollback also undoes newly-added files).
+while read -r state p; do
+  case "$state" in
+    present)
+      rm -rf "$p"
+      mkdir -p "$(dirname "$p")"
+      cp -a "$dest/files$p" "$p"
+      ;;
+    absent)
+      rm -rf "$p"
+      ;;
+  esac
+done < "$dest/manifest"
+
+# Services: re-apply recorded enabled states, then start what was active.
+while read -r u enabled _; do
+  systemctl unmask "$u.service" 2>/dev/null || true
+  case "$enabled" in
+    enabled)  systemctl enable  "$u.service" 2>/dev/null || true ;;
+    disabled) systemctl disable "$u.service" 2>/dev/null || true ;;
+    masked)   systemctl mask    "$u.service" 2>/dev/null || true ;;
+  esac
+done < "$dest/units.state"
+while read -r u _ active; do
+  if [ "$active" = "active" ]; then
+    systemctl start "$u.service" 2>/dev/null || true
+  fi
+done < "$dest/units.state"
+
+echo "==> Restored. Verify: ip -br addr && resolvectl status | head -5"
