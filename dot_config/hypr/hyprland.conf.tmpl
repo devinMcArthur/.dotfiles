@@ -15,16 +15,6 @@ env = XDG_CURRENT_DESKTOP,Hyprland
 env = XDG_SESSION_TYPE,wayland
 env = XDG_SESSION_DESKTOP,Hyprland
 
-# Qt Quick theming — hyprpolkitagent (the system-auth dialog 1Password &
-# pkexec pop up) renders via Qt Quick Controls; stock look is light Fusion
-# grey. Material Dark with theme tokens matches the desktop (colors follow
-# the theme at next login — env keywords are startup-only, and the agent
-# service inherits them via the dbus-update-activation-environment below).
-env = QT_QUICK_CONTROLS_STYLE,Material
-env = QT_QUICK_CONTROLS_MATERIAL_THEME,Dark
-env = QT_QUICK_CONTROLS_MATERIAL_ACCENT,#{{ .theme.colors.accent }}
-env = QT_QUICK_CONTROLS_MATERIAL_BACKGROUND,#{{ .theme.colors.base }}
-env = QT_QUICK_CONTROLS_MATERIAL_FOREGROUND,#{{ .theme.colors.text }}
 
 ################
 ### MONITORS ###
@@ -76,11 +66,14 @@ $menu = wofi --show drun
 exec-once = dbus-update-activation-environment --systemd --all
 exec-once = systemctl --user import-environment --all
 
-# Polkit authentication agent (handles GUI password prompts for any app
-# that needs elevated privileges). hyprpolkitagent ships a systemd user
-# service, but its WantedBy=graphical-session.target only triggers under
-# UWSM. Without UWSM we kick it manually here.
-exec-once = systemctl --user start hyprpolkitagent.service
+# Polkit authentication agent (the password dialog 1Password's system-auth
+# and pkexec pop up). Soteria: GTK4/libadwaita — modern dialog with proper
+# spacing that follows the prefer-dark gsettings. (Replaced hyprpolkitagent,
+# whose QML dialog had cramped layout and dark-on-dark text even with Qt
+# Material theming; it stays installed as a fallback.) Like the old agent,
+# its service WantedBy=graphical-session.target only triggers under UWSM,
+# so we kick it manually; Restart=on-failure supervision comes free.
+exec-once = systemctl --user start soteria.service
 
 exec-once = waybar
 exec-once = swaync

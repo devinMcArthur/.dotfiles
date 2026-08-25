@@ -122,19 +122,6 @@ case "${1:-}" in
     # ghostty (>=1.2) reloads config on SIGUSR2 — the ONLY safe signal
     # (anything else crashes it). Re-themes every open terminal in place.
     pkill -USR2 -x ghostty 2>/dev/null || true
-    # Polkit agent (the 1Password/pkexec auth dialog): re-export the Qt
-    # Material colors from the freshly-rendered hyprland.conf and restart
-    # the agent (windowless — invisible) so the dialog matches immediately.
-    if acc="$(grep MATERIAL_ACCENT ~/.config/hypr/hyprland.conf | cut -d, -f2)" && [ -n "$acc" ]; then
-      bg="$(grep MATERIAL_BACKGROUND ~/.config/hypr/hyprland.conf | cut -d, -f2)"
-      fg="$(grep MATERIAL_FOREGROUND ~/.config/hypr/hyprland.conf | cut -d, -f2)"
-      systemctl --user set-environment \
-        QT_QUICK_CONTROLS_STYLE=Material QT_QUICK_CONTROLS_MATERIAL_THEME=Dark \
-        "QT_QUICK_CONTROLS_MATERIAL_ACCENT=$acc" \
-        "QT_QUICK_CONTROLS_MATERIAL_BACKGROUND=$bg" \
-        "QT_QUICK_CONTROLS_MATERIAL_FOREGROUND=$fg" 2>/dev/null \
-        && systemctl --user try-restart hyprpolkitagent.service 2>/dev/null || true
-    fi
 
     echo "==> Theme: $name"
     echo "    Live now: borders, wallpaper, bar, notifications, tmux, next prompt."
