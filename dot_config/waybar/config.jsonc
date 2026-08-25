@@ -165,6 +165,8 @@
   },
   "network": {
     // "interface": "wlp2*", // (Optional) To force the use of this interface
+    // Click opens impala (same floating TUI as Super+I)
+    "on-click": "ghostty --class=tui.wifi -e impala",
     "format-wifi": "  {signalStrength}%",
     "format-ethernet": "{ipaddr}/{cidr}",
     "tooltip-format": "{essid} - {ifname} via {gwaddr}",
@@ -173,6 +175,8 @@
     "format-alt": "{ifname}:{essid} {ipaddr}/{cidr}"
   },
   "bluetooth": {
+    // Click opens bluetui (same floating TUI as Super+Shift+B)
+    "on-click": "ghostty --class=tui.bluetooth -e bluetui",
     "format": " {status}",
     "format-disabled": "", // an empty format will hide the module
     "format-connected": " {num_connections}",

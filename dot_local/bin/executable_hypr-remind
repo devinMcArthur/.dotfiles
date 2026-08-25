@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# hypr-remind — Omarchy-style countdown reminders via transient systemd timers.
+# Usage:
+#   hypr-remind                 # wofi prompt: "<minutes> <message>"
+#   hypr-remind 7 Tea ready     # CLI form
+#   hypr-remind list            # active reminders (systemd user timers)
+#   hypr-remind clear           # cancel all pending reminders
+#
+# Bound from hyprland.conf (Super+Ctrl+R). Timers live in the systemd user
+# session, so they survive Hyprland reloads (but not logout/reboot).
+
+set -euo pipefail
+
+case "${1:-}" in
+  list)
+    exec systemctl --user list-timers 'hypr-remind-*' --no-pager
+    ;;
+  clear)
+    units="$(systemctl --user list-units 'hypr-remind-*.timer' --plain --no-legend | awk '{print $1}')"
+    [ -n "$units" ] || { echo "no active reminders"; exit 0; }
+    # shellcheck disable=SC2086
+    systemctl --user stop $units
+    echo "cleared: $units"
+    exit 0
+    ;;
+esac
+
+if [ $# -eq 0 ]; then
+  # Free-text wofi prompt (no entries → typed text is returned on Enter).
+  input="$(wofi --dmenu --prompt 'remind: <minutes> <message>' --lines 1 </dev/null)" || exit 0
+  [ -n "$input" ] || exit 0
+  # shellcheck disable=SC2086
+  set -- $input
+fi
+
+mins="$1"; shift
+msg="${*:-Reminder}"
+
+if ! printf '%s' "$mins" | grep -Eq '^[0-9]+([.][0-9]+)?$'; then
+  notify-send -u critical -a "Reminder" "Bad reminder" \
+    "First word must be minutes, e.g. \"7 Tea ready\""
+  exit 2
+fi
+
+systemd-run --user --quiet \
+  --unit="hypr-remind-$(date +%s%N)" \
+  --on-active="${mins}m" \
+  --timer-property=AccuracySec=1s \
+  -- notify-send -u critical -a "Reminder" "⏰ ${msg}" "Set ${mins} min ago"
+
+notify-send -a "Reminder" -t 2500 "Reminder set" "\"${msg}\" in ${mins} min"

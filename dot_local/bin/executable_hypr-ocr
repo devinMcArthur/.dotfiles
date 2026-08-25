@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# hypr-ocr — select a screen region, OCR it (tesseract), copy text to clipboard.
+# Bound from hyprland.conf (Super+Shift+T). Omarchy-style "grab text off the
+# screen": addresses in images, codes in screenshots, text in videos, etc.
+
+set -euo pipefail
+
+geom="$(slurp -d 2>/dev/null)" || exit 0   # cancelled
+
+text="$(grim -g "$geom" - | tesseract stdin stdout -l eng 2>/dev/null)" || {
+  notify-send -u critical -a "OCR" "Text extraction failed" \
+    "tesseract exited with an error"
+  exit 1
+}
+
+if [ -z "${text//[[:space:]]/}" ]; then
+  notify-send -a "OCR" -t 2500 "No text found" "Nothing recognizable in that region"
+  exit 0
+fi
+
+printf '%s' "$text" | wl-copy
+
+# Preview the first line-ish of what landed on the clipboard.
+preview="$(printf '%s' "$text" | tr '\n' ' ' | cut -c1-120)"
+notify-send -a "OCR" -t 3500 "Text copied to clipboard" "$preview"

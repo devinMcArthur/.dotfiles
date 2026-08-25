@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-07T15:57:14-06:00_
+_Generated 2026-08-25T08:16:57-06:00_
 
 ## Hyprland — window manager
 
@@ -28,12 +28,16 @@ _Generated 2026-08-07T15:57:14-06:00_
 | `SUPER + 7` | `workspace` | 7 |
 | `SUPER + 8` | `workspace` | 8 |
 | `SUPER + 9` | `workspace` | 9 |
+| `SUPER + ALT + S` | `exec` | $HOME/.local/bin/hypr-record region            # record region (press again to stop) |
+| `SUPER + ALT + SHIFT + S` | `exec` | $HOME/.local/bin/hypr-record output      # record monitor (press again to stop) |
 | `SUPER + B` | `exec` | $browser # open the browser |
 | `SUPER + bracketleft` | `workspace` | m-1 |
 | `SUPER + bracketright` | `workspace` | m+1 |
 | `SUPER + comma` | `focusmonitor` | desc:Acer Technologies KA272 0x13800DD9 |
 | `SUPER + CTRL + comma` | `movecurrentworkspacetomonitor` | desc:Acer Technologies KA272 0x13800DD9 |
+| `SUPER + CTRL + E` | `exec` | wofi-emoji                                    # emoji picker |
 | `SUPER + CTRL + period` | `movecurrentworkspacetomonitor` | desc:Acer Technologies KA272 0x13800FAE |
+| `SUPER + CTRL + R` | `exec` | $HOME/.local/bin/hypr-remind                  # set a reminder |
 | `SUPER + CTRL + S` | `exec` | $HOME/.local/bin/hypr-screenshot output       # screenshot monitor → annotate |
 | `SUPER + CTRL + slash` | `movecurrentworkspacetomonitor` | eDP-1 |
 | `SUPER + E` | `exec` | $fileManager # Show the graphical file browser |
@@ -41,7 +45,7 @@ _Generated 2026-08-07T15:57:14-06:00_
 | `SUPER + F` | `fullscreen` | — |
 | `SUPER + grave` | `togglespecialworkspace` | scratch |
 | `SUPER + h` | `movefocus` | l |
-| `SUPER + I` | `exec` | ghostty --class=nmtui -e nmtui # open the network manager |
+| `SUPER + I` | `exec` | ghostty --class=tui.wifi -e impala # Wi-Fi manager (impala TUI; nmtui still available in a shell) |
 | `SUPER + j` | `movefocus` | d |
 | `SUPER + k` | `movefocus` | u |
 | `SUPER + l` | `movefocus` | r |
@@ -66,6 +70,7 @@ _Generated 2026-08-07T15:57:14-06:00_
 | `SUPER + SHIFT + 7` | `movetoworkspace` | 7 |
 | `SUPER + SHIFT + 8` | `movetoworkspace` | 8 |
 | `SUPER + SHIFT + 9` | `movetoworkspace` | 9 |
+| `SUPER + SHIFT + B` | `exec` | ghostty --class=tui.bluetooth -e bluetui # bluetooth manager (bluetui TUI) |
 | `SUPER + SHIFT + C` | `exec` | hyprpicker -a                                  # pick color under cursor |
 | `SUPER + SHIFT + comma` | `movewindow` | mon:desc:Acer Technologies KA272 0x13800DD9 |
 | `SUPER + SHIFT + grave` | `movetoworkspace` | special:scratch |
@@ -76,6 +81,7 @@ _Generated 2026-08-07T15:57:14-06:00_
 | `SUPER + SHIFT + period` | `movewindow` | mon:desc:Acer Technologies KA272 0x13800FAE |
 | `SUPER + SHIFT + S` | `exec` | $HOME/.local/bin/hypr-screenshot window      # screenshot window → annotate |
 | `SUPER + SHIFT + slash` | `exec` | $HOME/.local/bin/laptop-docs # Super+? → open laptop reference site (mdBook). Displaced the previous `movewindow mon:eDP-1` bind below — restore it if you want the comma/period/slash monitor-movement symmetry back. |
+| `SUPER + SHIFT + T` | `exec` | $HOME/.local/bin/hypr-ocr                    # grab text from screen → clipboard |
 | `SUPER + SHIFT + V` | `exec` | cliphist wipe                                  # wipe clipboard history |
 | `SUPER + slash` | `focusmonitor` | eDP-1 |
 | `SUPER + SPACE` | `exec` | wofi # Show the graphicall app launcher |
@@ -85,16 +91,16 @@ _Generated 2026-08-07T15:57:14-06:00_
 | `SUPER + W` | `exec` | $HOME/.local/bin/win # smart launcher for the win11 KVM VM (starts + attaches virt-viewer) |
 | `SUPER + Y` | `layoutmsg` | togglesplit # dwindle |
 | `up` | `resizeactive` | 0 -10 |
-| `XF86AudioLowerVolume` | `exec` | wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- |
-| `XF86AudioMicMute` | `exec` | wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle  # mic mute |
-| `XF86AudioMute` | `exec` | wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle |
+| `XF86AudioLowerVolume` | `exec` | swayosd-client --output-volume lower |
+| `XF86AudioMicMute` | `exec` | swayosd-client --input-volume mute-toggle  # mic mute |
+| `XF86AudioMute` | `exec` | swayosd-client --output-volume mute-toggle |
 | `XF86AudioNext` | `exec` | playerctl next |
 | `XF86AudioPause` | `exec` | playerctl play-pause |
 | `XF86AudioPlay` | `exec` | playerctl play-pause |
 | `XF86AudioPrev` | `exec` | playerctl previous |
-| `XF86AudioRaiseVolume` | `exec` | wpctl set-volume -l 1.5 @DEFAULT_AUDIO_SINK@ 5%+ |
-| `XF86MonBrightnessDown` | `exec` | brightnessctl s 10%- |
-| `XF86MonBrightnessUp` | `exec` | brightnessctl s +10% |
+| `XF86AudioRaiseVolume` | `exec` | swayosd-client --output-volume raise --max-volume 150 |
+| `XF86MonBrightnessDown` | `exec` | swayosd-client --brightness -10 |
+| `XF86MonBrightnessUp` | `exec` | swayosd-client --brightness +10 |
 
 ## tmux
 
@@ -126,6 +132,7 @@ Prefix: `C-a`. Bindings shown below assume prefix unless otherwise noted.
 | Alias | Expands to |
 |---|---|
 | `claude` | `with-secrets claude` |
+| `decompress` | `tar -xzvf` |
 | `la` | `eza -la --group-directories-first --icons=auto --git` |
 | `laptop-docs` | `$HOME/.local/bin/laptop-docs` |
 | `ll` | `eza -l --group-directories-first --icons=auto --git` |

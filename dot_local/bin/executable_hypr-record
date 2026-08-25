@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# hypr-record — toggle screen recording via gpu-screen-recorder.
+# Usage:
+#   hypr-record region   # interactive region (slurp)
+#   hypr-record output   # entire focused monitor
+#
+# Bound from hyprland.conf (Super+Alt+S / Super+Alt+Shift+S). Any invocation
+# while a recording is running stops it (SIGINT → gpu-screen-recorder
+# finalizes the file). Saves MP4 to ~/Videos, hardware-encoded (VAAPI).
+
+set -euo pipefail
+
+state="${XDG_RUNTIME_DIR:-/tmp}/hypr-record.path"
+
+# Toggle: a running recorder means "stop and save", regardless of mode arg.
+if pgrep -x gpu-screen-recorder >/dev/null 2>&1; then
+  pkill -INT -x gpu-screen-recorder
+  # Give it a moment to flush the container before announcing the file.
+  for _ in $(seq 1 50); do
+    pgrep -x gpu-screen-recorder >/dev/null 2>&1 || break
+    sleep 0.1
+  done
+  file="$(cat "$state" 2>/dev/null || true)"
+  rm -f "$state"
+  notify-send -a "Screen record" -t 4000 "Recording saved" "${file:-$HOME/Videos}"
+  exit 0
+fi
+
+mode="${1:-region}"
+dir="$HOME/Videos"
+mkdir -p "$dir"
+file="$dir/recording-$(date +%Y%m%d-%H%M%S).mp4"
+
+case "$mode" in
+  region)
+    geom="$(slurp -d 2>/dev/null)" || exit 0   # cancelled
+    # slurp prints "X,Y WxH"; gpu-screen-recorder wants "WxH+X+Y".
+    x="${geom%%,*}"; rest="${geom#*,}"; y="${rest%% *}"
+    size="${geom#* }"; w="${size%x*}"; h="${size#*x}"
+    args=(-w region -region "${w}x${h}+${x}+${y}")
+    ;;
+  output)
+    monitor="$(hyprctl monitors -j | jq -r '.[] | select(.focused==true) | .name')"
+    args=(-w "$monitor")
+    ;;
+  *)
+    echo "usage: $0 {region|output}" >&2
+    exit 2
+    ;;
+esac
+
+printf '%s' "$file" > "$state"
+notify-send -a "Screen record" -t 2500 "Recording started ($mode)" \
+  "Press the record bind again to stop"
+
+# Desktop audio only; add "|default_input" to also mix the mic.
+if ! gpu-screen-recorder "${args[@]}" -f 60 -a default_output -o "$file"; then
+  # Startup failure (stop-path exits 0): surface it instead of dying silently.
+  if [ -f "$state" ]; then
+    rm -f "$state"
+    notify-send -u critical -a "Screen record" "Recording failed" \
+      "gpu-screen-recorder exited with an error — run it in a terminal to see why"
+  fi
+fi
