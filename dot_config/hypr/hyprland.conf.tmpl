@@ -48,7 +48,7 @@ workspace = 10, monitor:eDP-1
 $terminal = ghostty
 $browser = firefox
 $fileManager = thunar
-$lock = hyprlock
+$lock = $HOME/.local/bin/hypr-lock
 $menu = wofi --show drun
 
 #################
@@ -89,6 +89,11 @@ exec-once = wl-clip-persist --clipboard regular
 # guest re-sizes to the now-current monitor (virt-viewer doesn't do this
 # reliably across a live monitor change; see ~/.local/bin/win-monitor-watch).
 exec-once = $HOME/.local/bin/win-monitor-watch
+
+# Surprise theme every boot (hypr-lock does the same after every unlock).
+# The sleep lets waybar/hyprpaper/swaync come up first so the switch's
+# kill-and-relaunch lands on running daemons. Disable: theme random off
+exec-once = sleep 3 && $HOME/.local/bin/theme random
 
 #####################
 ### LOOK AND FEEL ###

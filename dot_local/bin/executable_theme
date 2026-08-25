@@ -5,7 +5,9 @@
 #   theme current        # the active theme
 #   theme set <name>     # switch: copy palette -> .chezmoidata/theme.yaml,
 #                        # chezmoi apply, reload the running desktop
-#   theme menu           # wofi picker (bound to Super+Ctrl+Shift+Space)
+#   theme menu           # carousel picker (bound to Super+Ctrl+Shift+Space)
+#   theme random         # random theme != current (unlock/boot hook)
+#   theme random on|off  # enable/disable the unlock/boot surprises
 #
 # What reloads live: Hyprland borders/gaps, wallpaper, waybar, wofi (next
 # open), swaync, tmux statusline (all sessions), starship (next prompt),
@@ -17,8 +19,14 @@ set -euo pipefail
 
 SRC="$HOME/.local/share/chezmoi"
 ACTIVE="$SRC/.chezmoidata/theme.yaml"
+# Switches land in a GITIGNORED override that chezmoi merges over the
+# tracked default (zz- sorts last; last file wins per key) — so daily theme
+# churn (especially `theme random` on every unlock) never dirties git.
+# Fresh machines fall back to the committed theme.yaml until first switch.
+OVERRIDE="$SRC/.chezmoidata/zz-theme-override.yaml"
 
-current() { sed -n 's/^  name: "\(.*\)"/\1/p' "$ACTIVE" | head -1; }
+active_file() { if [ -f "$OVERRIDE" ]; then echo "$OVERRIDE"; else echo "$ACTIVE"; fi; }
+current() { sed -n 's/^  name: "\(.*\)"/\1/p' "$(active_file)" | head -1; }
 
 case "${1:-}" in
   list)
@@ -30,6 +38,24 @@ case "${1:-}" in
     ;;
   current)
     current
+    ;;
+  random)
+    # Random theme (never the current one). Fired by hypr-lock after every
+    # unlock and by an exec-once at session start. `theme random off`
+    # disables the surprises; `theme random on` re-enables.
+    offflag="$HOME/.local/state/theme-random.off"
+    case "${2:-}" in
+      on)  rm -f "$offflag"; echo "random-on-unlock: enabled"; exit 0 ;;
+      off) mkdir -p "${offflag%/*}"; touch "$offflag"; echo "random-on-unlock: disabled"; exit 0 ;;
+    esac
+    if [ -e "$offflag" ]; then
+      echo "random mode disabled (enable with: theme random on)"
+      exit 0
+    fi
+    pick="$(for f in "$SRC"/themes/*.yaml; do basename "$f" .yaml; done \
+      | grep -vx "$(current)" | shuf -n 1)"
+    [ -n "$pick" ] || exit 0
+    exec "$0" set "$pick"
     ;;
   menu)
     # Visual picker: chrome-less carousel (theme-carousel, GTK4 layer-shell
@@ -78,7 +104,7 @@ case "${1:-}" in
       "$0" list >&2
       exit 1
     fi
-    cp "$f" "$ACTIVE"
+    cp "$f" "$OVERRIDE"
     echo "==> Applying $name..."
     chezmoi apply
 

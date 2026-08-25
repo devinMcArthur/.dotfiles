@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# hypr-lock — lock the session; greet the unlock with a random theme.
+# hyprlock blocks until successful auth (password or fingerprint), so
+# whatever runs after it is the unlock moment. Used as hypridle's lock_cmd
+# (which loginctl lock-session and before_sleep both route through) and by
+# the Super+Escape bind ($lock in hyprland.conf).
+#
+# Tire of the surprises? `theme random off` (re-enable: `theme random on`).
+
+pidof hyprlock >/dev/null && exit 0
+hyprlock
+exec "$HOME/.local/bin/theme" random
