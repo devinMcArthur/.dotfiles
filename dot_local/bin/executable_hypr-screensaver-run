@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# hypr-screensaver-run — the loop inside each screensaver terminal.
+# Cycles random TerminalTextEffects (tte) over figlet ASCII art of the
+# hostname until any key is pressed; exiting kills every screensaver
+# window so all monitors dismiss together. Colors come free: it's a
+# terminal, so the active theme's ghostty palette applies.
+
+host="${HOSTNAME:-$(uname -n)}"
+art="$(figlet -f big -w 220 "$host" 2>/dev/null || printf '%s' "$host")"
+
+# Known-good effect names for tte 0.15.
+EFFECTS=(beams binarypath blackhole bouncyballs bubbles burn colorshift
+         crumble decrypt errorcorrect expand fireworks matrix
+         orbittingvolley overflow pour print rain randomsequence rings
+         scattered slide spotlights spray swarm synthgrid unstable
+         vhstape waves wipe)
+
+cleanup() {
+  # Take every screensaver window down with us (all monitors at once).
+  # [.] keeps the pattern from matching any shell quoting it in its args.
+  pkill -f 'ghostty --class=screensaver[.]tui' 2>/dev/null
+}
+trap cleanup EXIT
+tput civis 2>/dev/null || true
+
+while :; do
+  effect="${EFFECTS[RANDOM % ${#EFFECTS[@]}]}"
+  clear
+  printf '%s\n' "$art" | tte --frame-rate 60 --anchor-canvas c --anchor-text c "$effect" &
+  TTE=$!
+  # Any key exits; otherwise cap the effect at 20s and pick another.
+  if read -rs -n 1 -t 20; then
+    kill "$TTE" 2>/dev/null
+    exit 0
+  fi
+  kill "$TTE" 2>/dev/null
+  wait "$TTE" 2>/dev/null
+done

@@ -105,6 +105,11 @@ PACMAN_PKGS=(
   # TUIs & shell goodies
   lazygit lazydocker htop btop fastfetch
 
+  # Terminal screensaver (Omarchy-style): figlet renders the hostname art,
+  # tte (python-terminaltexteffects, AUR) animates it. See hypr-screensaver
+  # + the hypridle screensaver stage.
+  figlet
+
   # Laptop documentation site (rendered from ~/.local/share/chezmoi/docs/)
   mdbook
 
@@ -166,6 +171,9 @@ AUR_PKGS=(
   # Catppuccin Mocha GTK theme for regreet, matching GRUB menu theme.
   catppuccin-gtk-theme-mocha
   catppuccin-mocha-grub-theme-git
+
+  # TerminalTextEffects CLI (`tte`) — the screensaver's animation engine.
+  python-terminaltexteffects
 
   # Local push-to-talk dictation (whisper.cpp, offline). Hold F12 to talk
   # (hyprland.conf); config in ~/.config/voxtype/config.toml; model

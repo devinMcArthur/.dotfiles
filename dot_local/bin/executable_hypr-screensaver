@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# hypr-screensaver — Omarchy-style terminal screensaver launcher.
+# Opens a fullscreen ghostty on EVERY monitor running hypr-screensaver-run
+# (random TerminalTextEffects over figlet ASCII art). Any key dismisses all
+# of them together.
+#
+# Launched by hypridle before the lock stage (battery 4min / AC 15min);
+# the waybar caffeine toggle inhibits it along with the rest of the idle
+# pipeline. Manual: `hypr-screensaver` from any shell in the session.
+
+set -euo pipefail
+
+# Already showing — don't stack a second set. ([.] so the pattern never
+# matches a shell whose own cmdline quotes it, e.g. hypridle's on-timeout.)
+pgrep -f 'ghostty --class=screensaver[.]tui' >/dev/null && exit 0
+
+for m in $(hyprctl monitors -j | jq -r '.[].name'); do
+  hyprctl dispatch focusmonitor "$m" >/dev/null
+  # NOTE: --fullscreen requires an explicit value; the bare flag is a
+  # ghostty config error (dialog + tiled window).
+  hyprctl dispatch exec \
+    "ghostty --class=screensaver.tui --fullscreen=true -e $HOME/.local/bin/hypr-screensaver-run" \
+    >/dev/null
+  sleep 0.4   # let the window map on its monitor before focusing the next
+done
