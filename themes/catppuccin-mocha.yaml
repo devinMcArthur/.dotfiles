@@ -16,7 +16,7 @@ theme:
   nvim: "catppuccin"              # colorscheme command / plugin
   nvimFlavour: "mocha"
   btop: "catppuccin_mocha"        # theme file name (bundled or vendored in dot_config/btop/themes)
-  wallpaper: "evening-landscape.jpg"  # file in ~/Pictures/wallpapers (repo: Pictures/wallpapers)
+  wallpaper: "omarchy-catppuccin-waves.webp"  # file in ~/Pictures/wallpapers (repo: Pictures/wallpapers)
   colors:
     rosewater: "f5e0dc"
     flamingo: "f2cdcd"

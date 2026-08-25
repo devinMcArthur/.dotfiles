@@ -6,7 +6,7 @@ theme:
   nvim: "gruvbox"
   nvimFlavour: ""
   btop: "gruvbox_dark"
-  wallpaper: "aurora-gruvbox.jpg"
+  wallpaper: "omarchy-gruvbox-flower-basket.webp"
   colors:
     rosewater: "ebdbb2"
     flamingo: "d65d0e"
