@@ -26,6 +26,33 @@ PACMAN_PKGS=(
   # Wayland clipboard + history + screenshot annotation + media control
   cliphist wl-clipboard wl-clip-persist swappy grim slurp playerctl brightnessctl
 
+  # Screen recording (hardware-encoded, Super+Alt+S via hypr-record) + OCR
+  # text extraction (Super+Shift+T via hypr-ocr). wtype = wayland key
+  # injection, used by wofi-emoji to type the picked emoji.
+  gpu-screen-recorder tesseract tesseract-data-eng wtype
+
+  # On-screen display for volume/brightness keys (swayosd-server is
+  # exec-once'd from hyprland.conf; binds call swayosd-client)
+  swayosd
+
+  # Audio stack — was assumed-preinstalled, now pinned (waybar's pulseaudio
+  # module + its pamixer clicks, and wpctl in Hyprland binds, depend on it)
+  pipewire pipewire-pulse pipewire-alsa wireplumber pamixer
+
+  # Bluetooth: bluez daemon + bluetui TUI (Super+Shift+B / waybar click)
+  bluez bluez-utils bluetui
+
+  # Networking: standalone iwd stack — iwd owns Wi-Fi + DHCP, systemd-
+  # resolved does DNS, systemd-networkd does wired/dock DHCP (see
+  # run_onchange_after_network-iwd.sh). impala = Wi-Fi TUI on Super+I.
+  # networkmanager stays INSTALLED but DISABLED: it's the offline escape
+  # hatch (`sudo net-rollback --classic`) and the PSK source for migration.
+  networkmanager iwd impala
+
+  # Desktop apps — was assumed-preinstalled, now pinned ($browser and
+  # $fileManager in hyprland.conf, firefox also default http/https handler)
+  firefox thunar
+
   # Login / display manager (regreet = GTK4 greeter, cage = embedded
   # Wayland kiosk compositor that hosts it; tuigreet kept as fallback)
   greetd greetd-regreet cage greetd-tuigreet
@@ -46,7 +73,7 @@ PACMAN_PKGS=(
   reflector
 
   # CLI utilities
-  git git-delta github-cli jq fd ripgrep fzf eza zoxide atuin wget less man-db unzip openssh
+  git git-delta github-cli jq fd ripgrep fzf eza zoxide atuin bat wget less man-db unzip openssh
 
   # Local LLM runner — hosts embedding model for pi-knowledge-search
   # (nomic-embed-text). Model lives in /usr/share/ollama/.ollama after
@@ -107,6 +134,10 @@ AUR_PKGS=(
   # installer to provide virtio storage/net drivers, plus spice-vdagent
   # for clipboard, dynamic resize, and USB redirection.
   virtio-win
+
+  # Emoji picker: wofi frontend, copies to clipboard / types via wtype.
+  # Bound to Super+Ctrl+E in hyprland.conf.
+  wofi-emoji
 )
 
 echo "==> Installing pacman packages..."
@@ -165,6 +196,14 @@ if ! id -nG "$USER" | grep -qw libvirt \
     virsh net-info default 2>/dev/null | grep -q 'Active:.*yes' || virsh net-start default 2>/dev/null || true
   "
   echo "    Note: log out and back into Hyprland to pick up new group membership."
+fi
+
+# Bluetooth daemon — bluetui and the waybar module both need it running.
+# Guarded so the sudo call only fires when state actually needs fixing.
+if ! systemctl is-enabled --quiet bluetooth.service 2>/dev/null \
+   || ! systemctl is-active --quiet bluetooth.service 2>/dev/null; then
+  echo "==> Enabling bluetooth.service..."
+  sudo systemctl enable --now bluetooth.service
 fi
 
 # Switch login shell to zsh if it isn't already.
