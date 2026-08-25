@@ -89,6 +89,11 @@ exec-once = dms run
 # exec-once = swayosd-server
 exec-once = hypridle
 exec-once = hyprpaper
+
+# Phone integration (DMS Phone Connect plugin backend) — kdeconnectd must
+# run for discovery/pairing (/usr/bin/kdeconnectd since 24.x — used to be
+# under /usr/lib/kdeconnect/).
+exec-once = kdeconnectd
 exec-once = wl-paste --type text  --watch cliphist store   # clipboard history (text)
 exec-once = wl-paste --type image --watch cliphist store   # clipboard history (images)
 # Keep Wayland clipboard contents alive after the setting app exits. Without

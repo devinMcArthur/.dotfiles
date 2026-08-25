@@ -182,6 +182,12 @@ AUR_PKGS=(
   # dialog; exec-once'd from hyprland.conf)
   soteria-bin
 
+  # Phone integration daemon for the DMS Phone Connect plugin (battery,
+  # ring, ping, clipboard, notifications, SMS). Chosen over Valent: Valent
+  # needs ssh-add into SSH_AUTH_SOCK, which is the read-only 1Password
+  # agent here. File browsing (kdeconnect:// URIs) needs dolphin — skipped.
+  kdeconnect
+
   # Login screen + boot menu theming (see run_onchange_after_boot-theming.sh):
   # Catppuccin Mocha GTK theme for regreet, matching GRUB menu theme.
   catppuccin-gtk-theme-mocha
