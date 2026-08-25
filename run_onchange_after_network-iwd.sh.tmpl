@@ -3,9 +3,10 @@
 #!/usr/bin/env bash
 # Network stack: standalone iwd (Omarchy 1.x style, single owner of Wi-Fi).
 #   Wi-Fi + DHCP : iwd (EnableNetworkConfiguration=true), impala TUI on Super+I
-#   DNS          : systemd-resolved (iwd pushes per-network DNS into it;
-#                  /etc/resolv.conf is a static Quad9 file resolved reads as
-#                  global upstream — deliberately left untouched here)
+#   DNS          : systemd-resolved (iwd pushes per-network DNS into it);
+#                  /etc/resolv.conf -> stub-resolv.conf symlink so resolvers
+#                  that read the file directly (Go binaries: op, gh, ...)
+#                  reach resolved at 127.0.0.53 like glibc/nss-resolve apps do
 #   Wired (dock) : systemd-networkd, DHCP on en*, RouteMetric=100 so a cable
 #                  beats Wi-Fi (iwd's route metric is ~300)
 #   NetworkManager + wpa_supplicant: installed but disabled — they are the
@@ -32,7 +33,8 @@ if grep -qs 'EnableNetworkConfiguration=true' /etc/iwd/main.conf \
    && systemctl is-enabled --quiet systemd-resolved.service 2>/dev/null \
    && ! systemctl is-enabled --quiet NetworkManager.service 2>/dev/null \
    && ! systemctl is-enabled --quiet wpa_supplicant.service 2>/dev/null \
-   && [ -L /usr/local/bin/net-snapshot ] && [ -L /usr/local/bin/net-rollback ]; then
+   && [ -L /usr/local/bin/net-snapshot ] && [ -L /usr/local/bin/net-rollback ] \
+   && [ -L /etc/resolv.conf ]; then
   echo "==> Network stack (standalone iwd) already configured; skipping."
   exit 0
 fi
@@ -117,6 +119,15 @@ DHCP=yes
 # Beat Wi-Fi (iwd routes land around metric 300): cable wins when plugged in.
 RouteMetric=100
 NET
+
+# --- DNS: point resolv.conf at resolved's stub -----------------------------
+# NetworkManager's shutdown left resolv.conf with no nameservers. glibc apps
+# kept resolving via nss-resolve (D-Bus, bypasses the file), but resolvers
+# that read the file directly — Go binaries like op and gh — fell back to
+# localhost:53 and got connection refused (broke `op read` → with-secrets →
+# claude on 2026-08-25). The stub symlink is the supported systemd-resolved
+# setup and serves both resolver families from 127.0.0.53.
+ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
 
 # --- Services --------------------------------------------------------------
 # Old NM-with-iwd-backend hint is moot and would sabotage a --classic
