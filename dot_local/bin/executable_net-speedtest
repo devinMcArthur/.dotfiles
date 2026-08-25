@@ -11,7 +11,21 @@ set -uo pipefail
 
 CACHE="$HOME/.cache/speedtest"
 STATE="$CACHE/state"
+NETWORKS="$CACHE/networks"   # per-network ledger: ssid|ping|down|up|at
 mkdir -p "$CACHE"
+
+current_network() {
+  local iface
+  iface="$(ip -j route show default 2>/dev/null | jq -r '.[0].dev // empty')"
+  case "$iface" in
+    wl*)
+      iwctl station "$iface" show 2>/dev/null \
+        | sed 's/\x1b\[[0-9;]*m//g' \
+        | awk '/Connected network/{$1=$2=""; sub(/^ +/,""); print; exit}'
+      ;;
+    en*) echo "wired" ;;
+  esac
+}
 
 if pgrep -x speedtest-cli >/dev/null 2>&1; then
   exit 0   # already running; widget shows the running state
@@ -23,15 +37,23 @@ if ! command -v speedtest-cli >/dev/null 2>&1; then
   exit 1
 fi
 
-printf 'STATUS:running\nAT:%s\n' "$(date +%H:%M)" > "$STATE"
+net="$(current_network)"
+printf 'STATUS:running\nNET:%s\nAT:%s\n' "$net" "$(date +%H:%M)" > "$STATE"
 
 if out="$(speedtest-cli --simple 2>&1)"; then
   ping="$(sed -n 's/^Ping: //p' <<<"$out")"
   down="$(sed -n 's/^Download: //p' <<<"$out")"
   up="$(sed -n 's/^Upload: //p' <<<"$out")"
-  printf 'STATUS:done\nPING:%s\nDOWN:%s\nUP:%s\nAT:%s\n' \
-    "$ping" "$down" "$up" "$(date +%H:%M)" > "$STATE"
-  notify-send -a "Network" -t 15000 "Speed test result" "$out"
+  at="$(date '+%b %e %H:%M')"
+  printf 'STATUS:done\nNET:%s\nPING:%s\nDOWN:%s\nUP:%s\nAT:%s\n' \
+    "$net" "$ping" "$down" "$up" "$(date +%H:%M)" > "$STATE"
+  # Per-network ledger: one line per network, newest result wins.
+  if [ -n "$net" ]; then
+    { grep -v "^$net|" "$NETWORKS" 2>/dev/null; printf '%s|%s|%s|%s|%s\n' \
+        "$net" "$ping" "$down" "$up" "$at"; } > "$NETWORKS.tmp" \
+      && mv "$NETWORKS.tmp" "$NETWORKS"
+  fi
+  notify-send -a "Network" -t 15000 "Speed test — ${net:-network}" "$out"
 else
   err="$(printf '%s' "$out" | head -1)"
   printf 'STATUS:error\nERR:%s\nAT:%s\n' "$err" "$(date +%H:%M)" > "$STATE"

@@ -25,6 +25,19 @@
 
 set -euo pipefail
 
+# --- iwd PSK read access for the user (DMS Wi-Fi QR codes) ------------------
+# /var/lib/iwd is root-only; DMS's `dms qr wifi <ssid>` (the Wi-Fi widget's
+# QR button) reads the network's .psk directly to embed the passphrase.
+# Single-user laptop: grant this user read via ACLs — the default ACL covers
+# .psk files iwd creates for networks joined later. Runs before the main
+# guard so it applies even when the stack itself is already configured.
+if ! getfacl -p /var/lib/iwd 2>/dev/null | grep -q "^user:$USER:r-x"; then
+  echo "==> Granting $USER read access to /var/lib/iwd (Wi-Fi QR codes)..."
+  sudo sh -c "setfacl -m 'u:$USER:rX' /var/lib/iwd \
+    && setfacl -d -m 'u:$USER:rX' /var/lib/iwd \
+    && { setfacl -m 'u:$USER:r' /var/lib/iwd/*.psk 2>/dev/null || true; }"
+fi
+
 # Idempotence guard: skip when the full stack is already in place.
 if grep -qs 'EnableNetworkConfiguration=true' /etc/iwd/main.conf \
    && [ -f /etc/systemd/network/50-wired.network ] \
