@@ -229,6 +229,8 @@ bind = $mainMod, B, exec, $browser # open the browser
 # The ULID is the PWAsForFirefox site id (`firefoxpwa profile list`); the
 # standalone PWA window carries WM class FFPWA-<ULID>.
 bind = $mainMod, O, exec, hyprctl clients -j | grep -q FFPWA-01KT4N89YPWXMQDN8T4TENQ5A6 && hyprctl dispatch focuswindow class:FFPWA-01KT4N89YPWXMQDN8T4TENQ5A6 || firefoxpwa site launch 01KT4N89YPWXMQDN8T4TENQ5A6 # Outlook (work email) — focus or launch
+# Super+Shift+P -> phone SMS (kdeconnect-sms): same focus-or-launch pattern.
+bind = $mainMod SHIFT, P, exec, hyprctl clients -j | grep -q 'org.kde.kdeconnect.sms' && hyprctl dispatch focuswindow class:org.kde.kdeconnect.sms || kdeconnect-sms # SMS (phone) — focus or launch
 bind = $mainMod, Q, killactive, # close the active window
 bind = $mainMod, M, exec, wlogout --protocol layer-shell # show the logout window
 # (Removed Super+Shift+M = exit — too close to the wlogout bind, easy to

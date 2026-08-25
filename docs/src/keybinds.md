@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-25T16:37:23-06:00_
+_Generated 2026-08-25T17:19:37-06:00_
 
 ## Hyprland — window manager
 
@@ -83,6 +83,7 @@ _Generated 2026-08-25T16:37:23-06:00_
 | `SUPER + SHIFT + K` | `movewindow` | u |
 | `SUPER + SHIFT + L` | `movewindow` | r |
 | `SUPER + SHIFT + period` | `movewindow` | mon:desc:Acer Technologies KA272 0x13800FAE |
+| `SUPER + SHIFT + P` | `exec` | hyprctl clients -j \| grep -q 'org.kde.kdeconnect.sms' && hyprctl dispatch focuswindow class:org.kde.kdeconnect.sms \|\| kdeconnect-sms # SMS (phone) — focus or launch |
 | `SUPER + SHIFT + S` | `exec` | dms ipc call quickCapture screenshot window edit # screenshot window → annotate |
 | `SUPER + SHIFT + slash` | `exec` | $HOME/.local/bin/laptop-docs # Super+? → open laptop reference site (mdBook). Displaced the previous `movewindow mon:eDP-1` bind below — restore it if you want the comma/period/slash monitor-movement symmetry back. |
 | `SUPER + SHIFT + T` | `exec` | $HOME/.local/bin/hypr-ocr                    # grab text from screen → clipboard |
