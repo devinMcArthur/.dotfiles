@@ -50,6 +50,7 @@ tooltip {
 
 #custom-power_profile,
 #custom-sysinfo,
+#idle_inhibitor,
 #custom-weather,
 #window,
 #clock,
@@ -98,6 +99,16 @@ tooltip {
     color: #a6e3a1;
     border-left: 0px;
     border-right: 0px;
+}
+
+#idle_inhibitor {
+    color: #6c7086;          /* Catppuccin overlay0 — dormant */
+    border-left: 0px;
+    border-right: 0px;
+}
+
+#idle_inhibitor.activated {
+    color: #f38ba8;          /* red — actively holding the machine awake */
 }
 
 #custom-sysinfo {
