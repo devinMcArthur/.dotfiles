@@ -143,11 +143,6 @@ case "${1:-}" in
     echo "==> Theme: $name"
     echo "    Live now: borders, wallpaper, bar, notifications, tmux, next prompt."
     echo "    Per-window: Ctrl+Shift+, reloads a ghostty; nvim/btop/lazygit on relaunch."
-    # From the menu bind there's no terminal to read — notify instead.
-    if [ ! -t 1 ]; then
-      notify-send -a "Theme" -t 3000 "Theme: $name" \
-        "ghostty windows: Ctrl+Shift+, · nvim/btop: relaunch"
-    fi
     ;;
   *)
     sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
