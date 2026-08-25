@@ -47,7 +47,10 @@ PACMAN_PKGS=(
   # run_onchange_after_network-iwd.sh). impala = Wi-Fi TUI on Super+I.
   # networkmanager stays INSTALLED but DISABLED: it's the offline escape
   # hatch (`sudo net-rollback --classic`) and the PSK source for migration.
-  networkmanager iwd impala
+  # wireless-regdb = Wi-Fi regulatory database (kernel warned it was
+  # missing at boot; without it the radio runs on conservative world
+  # defaults — some 5GHz channels and tx power levels unavailable).
+  networkmanager iwd impala wireless-regdb
 
   # Desktop apps — was assumed-preinstalled, now pinned ($browser and
   # $fileManager in hyprland.conf, firefox also default http/https handler)
@@ -62,6 +65,10 @@ PACMAN_PKGS=(
 
   # Power management (Framework laptop battery life)
   power-profiles-daemon
+
+  # Firmware updates via LVFS (Framework BIOS/controllers; laptop-update
+  # runs fwupdmgr as one of its stages)
+  fwupd
 
   # Btrfs snapshots + auto pre/post around pacman + grub boot-into-snapshot
   snapper snap-pac grub-btrfs inotify-tools
@@ -93,7 +100,9 @@ PACMAN_PKGS=(
   # virt-viewer = lightweight SPICE display window (used by the `win` launcher
   # for hotkey-driven attach without dragging in the full virt-manager UI).
   # dnsmasq is pulled in transitively by libvirt for the default NAT network.
-  qemu-full libvirt virt-manager virt-viewer edk2-ovmf swtpm virtiofsd
+  # dmidecode: libvirtd logged "Cannot find 'dmidecode'" every boot — it
+  # reads host SMBIOS data to expose to guests.
+  qemu-full libvirt virt-manager virt-viewer edk2-ovmf swtpm virtiofsd dmidecode
 
   # Progressive Web App support for Firefox (native connector half of
   # PWAsForFirefox). Used to install work Outlook (outlook.office.com) as
@@ -138,6 +147,14 @@ AUR_PKGS=(
   # Emoji picker: wofi frontend, copies to clipboard / types via wtype.
   # Bound to Super+Ctrl+E in hyprland.conf.
   wofi-emoji
+
+  # Local push-to-talk dictation (whisper.cpp, offline). Hold F12 to talk
+  # (hyprland.conf); config in ~/.config/voxtype/config.toml; model
+  # downloaded by run_onchange_after_voxtype-setup.sh.
+  # -bin because the source PKGBUILD is broken: it cargo-fetches locked
+  # deps for Linux only, then builds --frozen and trips over a macOS-only
+  # crate (core-foundation) in the lockfile.
+  voxtype-bin
 )
 
 echo "==> Installing pacman packages..."
