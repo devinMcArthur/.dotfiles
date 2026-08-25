@@ -242,6 +242,15 @@ if ! systemctl is-enabled --quiet bluetooth.service 2>/dev/null \
   sudo systemctl enable --now bluetooth.service
 fi
 
+# gh extensions (user-level, not pacman-managed). gh-dash = lazygit-style
+# dashboard of your PRs/issues across repos (`gh dash`). Needs gh auth, so
+# it's skipped on a fresh machine until `gh auth login` has run once.
+if gh auth status >/dev/null 2>&1 \
+   && ! gh extension list 2>/dev/null | grep -q 'dlvhdr/gh-dash'; then
+  echo "==> Installing gh extension: gh-dash..."
+  gh extension install dlvhdr/gh-dash
+fi
+
 # Switch login shell to zsh if it isn't already.
 if [ "$(getent passwd "$USER" | cut -d: -f7)" != "$(command -v zsh)" ]; then
   echo "==> Changing login shell to zsh..."

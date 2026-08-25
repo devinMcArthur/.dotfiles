@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# crash-claude — AI crash diagnosis (Omarchy's `omarchy agent crash`,
+# claude-flavored). Feeds a systemd coredump report (plus a gdb backtrace
+# when gdb is installed) to Claude for a plain-English diagnosis.
+#
+# Usage:
+#   crash-claude              # newest coredump
+#   crash-claude firefox      # newest coredump for a program name
+#   crash-claude 316793       # a specific PID
+#   crash-claude -n [...]     # dry run: print the report, don't ask Claude
+
+set -uo pipefail
+
+dry=0
+if [ "${1:-}" = "-n" ] || [ "${1:-}" = "--dry-run" ]; then
+  dry=1
+  shift
+fi
+
+report="$(coredumpctl info --no-pager "$@" 2>&1 | head -120)"
+if ! printf '%s' "$report" | grep -q 'Storage:'; then
+  echo "no matching coredump (see: coredumpctl list)" >&2
+  exit 1
+fi
+
+# coredumpctl info already includes a resolved stack trace; gdb adds full
+# frames for every thread when available. Best-effort — empty on failure.
+if command -v gdb >/dev/null 2>&1; then
+  bt="$(coredumpctl debug "$@" --debugger-arguments='-batch -ex "thread apply all bt"' 2>/dev/null | tail -n 120)"
+  [ -n "$bt" ] && report="$report
+
+=== gdb: thread apply all bt ===
+$bt"
+fi
+
+if [ "$dry" -eq 1 ]; then
+  printf '%s\n' "$report"
+  exit 0
+fi
+
+# Resolve the API key the way the zshrc `claude` alias does (op:// refs in
+# ~/.config/op-dev.env), so this also works from binds and plain bash.
+if command -v op >/dev/null 2>&1 && [ -f "$HOME/.config/op-dev.env" ]; then
+  while IFS='=' read -r key ref; do
+    [[ "$key" =~ ^[A-Z_][A-Z0-9_]*$ ]] || continue
+    ref="${ref#\"}"; ref="${ref%\"}"
+    [[ "$ref" == op://* ]] || continue
+    val="$(op read "$ref" 2>/dev/null)" && [ -n "$val" ] && export "$key=$val"
+  done < "$HOME/.config/op-dev.env"
+fi
+
+printf '%s\n' "$report" | exec claude -p \
+  "This is a systemd coredump report from my Arch Linux laptop (Hyprland desktop). Diagnose the crash in plain English: what crashed, the likely root cause, whether it looks like an app bug / bad config / hardware, and what I should do about it. Be concise."

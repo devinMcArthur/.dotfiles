@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# AI-agent scratchpad: dropdown ghostty running Claude Code on special:agent.
+# Same pattern as hypr-notes — toggle is instant show/hide, and the agent
+# session (context, conversation) persists in the background between toggles.
+#
+# `zsh -ic 'with-secrets claude'` reuses the zshrc function that injects
+# ANTHROPIC_API_KEY from 1Password, same as typing `claude` in a shell.
+#
+# Triggered by:
+#   - Hyprland keybind: SUPER + A (see dot_config/hypr/hyprland.conf)
+#   - Manual: `hypr-agent` from any shell inside the Hyprland session
+
+set -euo pipefail
+
+# Stable dedicated workdir (same ~/.local/state convention as hypr-notes):
+# claude launched from $HOME re-prompts the trust dialog every single time
+# (home-dir trust is deliberately never persisted); a dedicated folder is
+# asked once and remembered. Drop files here to hand them to the agent.
+WORKDIR="$HOME/.local/state/agent-scratchpad"
+mkdir -p "$WORKDIR"
+
+if hyprctl clients -j | grep -qF '"scratch.agent"'; then
+  hyprctl dispatch togglespecialworkspace agent
+else
+  # setsid so ghostty survives this one-shot script exiting.
+  # NOTE: ghostty --class must be a valid GTK app-id (needs a dot).
+  setsid ghostty --class=scratch.agent --working-directory="$WORKDIR" \
+    -e zsh -ic 'with-secrets claude' \
+    >/dev/null 2>&1 &
+fi
