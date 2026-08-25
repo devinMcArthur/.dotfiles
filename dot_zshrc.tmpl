@@ -118,6 +118,59 @@ ta() {
   else tmux attach -t "$@"; fi
 }
 
+# --- Omarchy-inspired shell helpers -----------------------------------------
+# compress <file-or-dir> → <name>.tar.gz ; decompress <file.tar.gz>
+compress() { tar -czvf "${1%/}.tar.gz" "${1%/}"; }
+alias decompress='tar -xzvf'
+
+# try [name] → cd into a fresh dated scratch dir under ~/tries.
+# For experiments that deserve a directory but not a home. `try zig-http`
+# on 2026-08-25 → ~/tries/2026-08-25-zig-http.
+try() {
+  local slug="${*:-scratch}"
+  local dir="$HOME/tries/$(date +%F)-${slug// /-}"
+  mkdir -p "$dir" && cd "$dir"
+}
+
+# SSH port forwards (secure-context testing on remote dev boxes without SSL):
+#   fip <host> <port...>  → forward remote ports to localhost
+#   lip                   → list active forwards
+#   dip <port...>         → disconnect forwards
+fip() {
+  local host="$1"; shift 2>/dev/null
+  if [[ -z "$host" || $# -eq 0 ]]; then
+    echo "usage: fip <host> <port...>" >&2; return 2
+  fi
+  local p
+  for p in "$@"; do
+    ssh -fN -o ExitOnForwardFailure=yes -L "$p:localhost:$p" "$host" \
+      && echo "localhost:$p ← $host:$p"
+  done
+}
+lip() { pgrep -af '^ssh -fN' || echo 'no active forwards'; }
+dip() {
+  local p
+  for p in "$@"; do
+    pkill -f "^ssh -fN.*-L $p:localhost:$p" \
+      && echo "closed :$p" || echo "no forward on :$p"
+  done
+}
+
+# iso2sd <image.iso> — write an ISO to a USB drive. DESTRUCTIVE: erases the
+# target drive. Only lists USB-transport disks, and requires confirmation.
+iso2sd() {
+  [[ -f "$1" ]] || { echo "usage: iso2sd <image.iso>" >&2; return 2 }
+  local drive
+  drive=$(lsblk -dno NAME,SIZE,MODEL,TRAN | awk '$NF=="usb"' \
+    | fzf --prompt='write ISO to> ' --header='USB drives (everything on it will be ERASED)') || return
+  drive="${drive%% *}"
+  [[ -n "$drive" ]] || return 1
+  echo "About to ERASE /dev/$drive and write: $1"
+  read -q "?Press y to continue: " || { echo; return 1 }
+  echo
+  sudo dd if="$1" of="/dev/$drive" bs=4M status=progress oflag=sync && sync
+}
+
 # --- PATH (deduplicated via typeset -U; leftmost wins) -----------------------
 typeset -U PATH path
 export ANDROID_HOME="$HOME/Android/Sdk"
