@@ -17,7 +17,15 @@ ICON_BAL=$'\U000f04c5'
 ICON_SAVE=$'\uf06c'
 ICON_UNKNOWN=$'\uf128'   # nf-fa-question
 
-profile="$(powerprofilesctl get 2>/dev/null || echo unknown)"
+# Read via D-Bus directly, NOT `powerprofilesctl get`: that CLI is a Python/
+# PyGObject script with an interpreter-teardown race on Python 3.14 that
+# segfaulted (harmlessly, after output) on a fraction of this module's
+# 5-second polls — filling coredumpctl with a crash every ~30 min. Found by
+# crash-claude, 2026-08-25. busctl is C, no interpreter, nothing to race.
+profile="$(busctl get-property net.hadess.PowerProfiles /net/hadess/PowerProfiles \
+             net.hadess.PowerProfiles ActiveProfile 2>/dev/null \
+           | sed 's/^s "\(.*\)"$/\1/' || true)"
+profile="${profile:-unknown}"
 
 case "${1:-status}" in
   status)
@@ -38,7 +46,10 @@ case "${1:-status}" in
       performance) target="power-saver" ;;
       *)           target="balanced"    ;;
     esac
-    powerprofilesctl set "$target"
+    # Same D-Bus-direct approach as the read above (and click-time set was
+    # hitting the same Python teardown race, just far less often).
+    busctl set-property net.hadess.PowerProfiles /net/hadess/PowerProfiles \
+      net.hadess.PowerProfiles ActiveProfile s "$target"
     ;;
   *)
     echo "usage: $0 {status|next}" >&2
