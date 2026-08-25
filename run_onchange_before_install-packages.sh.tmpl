@@ -42,6 +42,10 @@ PACMAN_PKGS=(
   # injection, used by wofi-emoji to type the picked emoji.
   gpu-screen-recorder tesseract tesseract-data-eng wtype
 
+  # Quick Capture (DMS plugin) dependencies: annotation/compose via
+  # imagemagick, PDF export, QR decode. tesseract (OCR) already above.
+  imagemagick img2pdf zbar
+
   # On-screen display for volume/brightness keys (swayosd-server is
   # exec-once'd from hyprland.conf; binds call swayosd-client)
   swayosd
@@ -177,6 +181,12 @@ AUR_PKGS=(
   # Emoji picker: wofi frontend, copies to clipboard / types via wtype.
   # Bound to Super+Ctrl+E in hyprland.conf.
   wofi-emoji
+
+  # NOTE: kdeconnect-sms shows numbers not names — the KPeople vcard
+  # backend (kpeoplevcard) only exists as KF5/Qt5 AUR packages (one of
+  # which tries to compile ALL OF QT5 from source), incompatible with our
+  # Qt6 kdeconnect. Desktop SMS lives in the Google Messages web app
+  # instead (web2app add Messages https://messages.google.com/web).
 
   # Polkit agent (GTK4/libadwaita — replaces hyprpolkitagent's cramped QML
   # dialog; exec-once'd from hyprland.conf)

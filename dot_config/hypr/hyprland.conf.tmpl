@@ -88,7 +88,9 @@ exec-once = dms run
 # exec-once = swaync
 # exec-once = swayosd-server
 exec-once = hypridle
-exec-once = hyprpaper
+# hyprpaper retired: DMS owns the wallpaper (theme set drives it via
+# `dms ipc call wallpaper set`; two background layers raced otherwise).
+# exec-once = hyprpaper
 
 # Phone integration (DMS Phone Connect plugin backend) — kdeconnectd must
 # run for discovery/pairing (/usr/bin/kdeconnectd since 24.x — used to be
@@ -248,6 +250,11 @@ bindp = $mainMod SHIFT, W, workspace, 1
 # power-button signal; same effect as Start → Power → Shut down.
 bindp = $mainMod SHIFT, Q, exec, $HOME/.local/bin/win stop
 bind = $mainMod SHIFT, slash, exec, $HOME/.local/bin/laptop-docs # Super+? → open laptop reference site (mdBook). Displaced the previous `movewindow mon:eDP-1` bind below — restore it if you want the comma/period/slash monitor-movement symmetry back.
+
+# Quick Capture (DMS plugin) AUDITION — region select → full annotator
+# (draw/arrows/text, OCR, QR, PDF export, scroll capture, history). If it
+# beats the grim+swappy flow below, Super+S points here and swappy retires.
+bind = $mainMod, C, exec, dms ipc call quickCapture screenshot region edit   # Quick Capture: region → annotate
 
 # Screenshots: grim + slurp save to ~/Pictures/Screenshots, then swappy opens for
 # annotation. swappy can re-save or copy to clipboard.

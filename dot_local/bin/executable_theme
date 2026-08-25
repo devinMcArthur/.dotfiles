@@ -110,9 +110,16 @@ case "${1:-}" in
 
     echo "==> Reloading desktop..."
     hyprctl reload >/dev/null 2>&1 || true
-    # Wallpaper: hyprpaper reads its config at startup only.
-    killall -q hyprpaper 2>/dev/null || true
-    hyprctl dispatch exec hyprpaper >/dev/null 2>&1 || true
+    # Wallpaper: DMS owns it (hyprpaper retired — two background layers
+    # raced, and DMS's default wallpaper surfaced whenever its layer was
+    # recreated). Falls back to hyprpaper if the shell isn't running.
+    wall="$HOME/Pictures/wallpapers/$(sed -n 's/^  wallpaper: "\(.*\)"/\1/p' "$(active_file)" | head -1)"
+    if pgrep -f quickshell >/dev/null 2>&1 && command -v dms >/dev/null 2>&1; then
+      dms ipc call wallpaper set "$wall" >/dev/null 2>&1 || true
+    else
+      killall -q hyprpaper 2>/dev/null || true
+      hyprctl dispatch exec hyprpaper >/dev/null 2>&1 || true
+    fi
     # Bar + notifications — only when the waybar federation is actually
     # running (during the DMS trial the shell re-themes itself reactively
     # off the re-rendered dank-theme.json; restarting waybar would start a
