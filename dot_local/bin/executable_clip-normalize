@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# clip-normalize — collapse file-manager-style image copies to image-only.
+# Quick Capture (and some file managers) put BOTH text/uri-list and
+# image/png on the clipboard; default-paste then resolves to the URI text,
+# so image pastes into apps that prefer text (Claude Code's TUI, some chat
+# inputs) produce a file:// string instead of the picture. When both types
+# are present, re-copy just the PNG.
+#
+# Run under `wl-paste --watch` (exec-once in hyprland.conf). Loop-safe: the
+# re-copied offer is image-only, so the condition can't match twice. Plain
+# file copies (uri-list without image data) are left untouched.
+
+types="$(wl-paste --list-types 2>/dev/null)" || exit 0
+if grep -q 'text/uri-list' <<<"$types" && grep -q 'image/png' <<<"$types"; then
+  wl-paste --type image/png 2>/dev/null | wl-copy --type image/png
+fi

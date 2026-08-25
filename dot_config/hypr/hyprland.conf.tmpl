@@ -104,6 +104,10 @@ exec-once = wl-paste --type image --watch cliphist store   # clipboard history (
 # else races the offer's lifetime. wl-clip-persist re-claims the offer as
 # its own and keeps it available indefinitely.
 exec-once = wl-clip-persist --clipboard regular
+# Collapse dual file+image clipboard offers (Quick Capture copies) to
+# image-only so pastes into text-preferring apps get the picture, not a
+# file:// URI. See clip-normalize.
+exec-once = wl-paste --watch $HOME/.local/bin/clip-normalize
 
 # Relaunch the win11 virt-viewer on monitor dock/undock so its SPICE
 # guest re-sizes to the now-current monitor (virt-viewer doesn't do this
@@ -251,16 +255,15 @@ bindp = $mainMod SHIFT, W, workspace, 1
 bindp = $mainMod SHIFT, Q, exec, $HOME/.local/bin/win stop
 bind = $mainMod SHIFT, slash, exec, $HOME/.local/bin/laptop-docs # Super+? → open laptop reference site (mdBook). Displaced the previous `movewindow mon:eDP-1` bind below — restore it if you want the comma/period/slash monitor-movement symmetry back.
 
-# Quick Capture (DMS plugin) AUDITION — region select → full annotator
-# (draw/arrows/text, OCR, QR, PDF export, scroll capture, history). If it
-# beats the grim+swappy flow below, Super+S points here and swappy retires.
-bind = $mainMod, C, exec, dms ipc call quickCapture screenshot region edit   # Quick Capture: region → annotate
-
-# Screenshots: grim + slurp save to ~/Pictures/Screenshots, then swappy opens for
-# annotation. swappy can re-save or copy to clipboard.
-bind = $mainMod, S, exec, $HOME/.local/bin/hypr-screenshot region            # screenshot region → annotate
-bind = $mainMod SHIFT, S, exec, $HOME/.local/bin/hypr-screenshot window      # screenshot window → annotate
-bind = $mainMod CTRL, S, exec, $HOME/.local/bin/hypr-screenshot output       # screenshot monitor → annotate
+# Screenshots: Quick Capture (DMS plugin) — audition passed, replacing the
+# grim+swappy flow. Region/window/monitor into the full annotator
+# (draw/arrows/text, OCR, QR, PDF export, history); Super+C = scrolling
+# capture for taller-than-screen content. Old flow remains available as
+# `hypr-screenshot` from a shell.
+bind = $mainMod, S, exec, dms ipc call quickCapture screenshot region edit   # screenshot region → annotate
+bind = $mainMod SHIFT, S, exec, dms ipc call quickCapture screenshot window edit # screenshot window → annotate
+bind = $mainMod CTRL, S, exec, dms ipc call quickCapture screenshot output edit  # screenshot monitor → annotate
+bind = $mainMod, C, exec, dms ipc call quickCapture screenshot scroll edit   # scrolling capture → annotate
 
 # Screen recording: gpu-screen-recorder toggle (same bind stops + saves to ~/Videos)
 bind = $mainMod ALT, S, exec, $HOME/.local/bin/hypr-record region            # record region (press again to stop)

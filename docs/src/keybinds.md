@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-25T16:30:59-06:00_
+_Generated 2026-08-25T16:37:03-06:00_
 
 ## Hyprland — window manager
 
@@ -35,12 +35,13 @@ _Generated 2026-08-25T16:30:59-06:00_
 | `SUPER + B` | `exec` | $browser # open the browser |
 | `SUPER + bracketleft` | `workspace` | m-1 |
 | `SUPER + bracketright` | `workspace` | m+1 |
+| `SUPER + C` | `exec` | dms ipc call quickCapture screenshot scroll edit   # scrolling capture → annotate |
 | `SUPER + comma` | `focusmonitor` | desc:Acer Technologies KA272 0x13800DD9 |
 | `SUPER + CTRL + comma` | `movecurrentworkspacetomonitor` | desc:Acer Technologies KA272 0x13800DD9 |
 | `SUPER + CTRL + E` | `exec` | wofi-emoji                                    # emoji picker |
 | `SUPER + CTRL + period` | `movecurrentworkspacetomonitor` | desc:Acer Technologies KA272 0x13800FAE |
 | `SUPER + CTRL + R` | `exec` | $HOME/.local/bin/hypr-remind                  # set a reminder |
-| `SUPER + CTRL + S` | `exec` | $HOME/.local/bin/hypr-screenshot output       # screenshot monitor → annotate |
+| `SUPER + CTRL + S` | `exec` | dms ipc call quickCapture screenshot output edit  # screenshot monitor → annotate |
 | `SUPER + CTRL + SHIFT + SPACE` | `exec` | $HOME/.local/bin/theme menu                            # theme switcher menu |
 | `SUPER + CTRL + slash` | `movecurrentworkspacetomonitor` | eDP-1 |
 | `SUPER + E` | `exec` | $fileManager # Show the graphical file browser |
@@ -62,7 +63,7 @@ _Generated 2026-08-25T16:30:59-06:00_
 | `SUPER + Q` | `killactive` | # close the active window |
 | `SUPER + return` | `exec` | $terminal  #open the terminal |
 | `SUPER + semicolon` | `exec` | $HOME/.local/bin/hypr-cheatsheet                              # show keybind cheatsheet |
-| `SUPER + S` | `exec` | $HOME/.local/bin/hypr-screenshot region            # screenshot region → annotate |
+| `SUPER + S` | `exec` | dms ipc call quickCapture screenshot region edit   # screenshot region → annotate |
 | `SUPER + SHIFT + 0` | `movetoworkspace` | 10 |
 | `SUPER + SHIFT + 1` | `movetoworkspace` | 1 |
 | `SUPER + SHIFT + 2` | `movetoworkspace` | 2 |
@@ -82,7 +83,7 @@ _Generated 2026-08-25T16:30:59-06:00_
 | `SUPER + SHIFT + K` | `movewindow` | u |
 | `SUPER + SHIFT + L` | `movewindow` | r |
 | `SUPER + SHIFT + period` | `movewindow` | mon:desc:Acer Technologies KA272 0x13800FAE |
-| `SUPER + SHIFT + S` | `exec` | $HOME/.local/bin/hypr-screenshot window      # screenshot window → annotate |
+| `SUPER + SHIFT + S` | `exec` | dms ipc call quickCapture screenshot window edit # screenshot window → annotate |
 | `SUPER + SHIFT + slash` | `exec` | $HOME/.local/bin/laptop-docs # Super+? → open laptop reference site (mdBook). Displaced the previous `movewindow mon:eDP-1` bind below — restore it if you want the comma/period/slash monitor-movement symmetry back. |
 | `SUPER + SHIFT + T` | `exec` | $HOME/.local/bin/hypr-ocr                    # grab text from screen → clipboard |
 | `SUPER + SHIFT + V` | `exec` | cliphist wipe                                  # wipe clipboard history |
