@@ -1,0 +1,233 @@
+{{- if eq .chezmoi.os "linux" -}}
+{{- if eq .chezmoi.osRelease.id "arch" -}}
+#!/usr/bin/env bash
+# Boot + login theming (Omarchy-inspired), managed as one migration:
+#   Greeter : regreet in cage — Catppuccin Mocha GTK theme, Papirus icons,
+#             JetBrainsMono, wallpaper background, Catppuccin card CSS.
+#             Drops cage's `-m last` (non-deterministic output on
+#             multi-monitor; the old config warned against it yet used it) —
+#             cage's default extends the greeter to every output.
+#   Splash  : Plymouth `bgrt` theme (firmware logo + spinner), hook added to
+#             mkinitcpio, `splash` kernel param. greetd already orders itself
+#             After=plymouth-quit-wait.service, so handoff is native.
+#   GRUB    : Catppuccin Mocha menu theme.
+#
+# Safety: every modified /etc file gets a timestamped .bak next to it; the
+# pre-change initramfs images are kept as /boot/*.img.bak. Rebuilds
+# (mkinitcpio/grub-mkconfig) run only when their inputs actually changed.
+#
+# ESCAPE HATCHES if boot looks wrong:
+#   - No/broken splash: boot proceeds anyway (plymouth failure is cosmetic).
+#     To disable: at the GRUB entry press `e`, remove `splash`, add
+#     `plymouth.enable=0`, F10 to boot; then remove `splash` from
+#     /etc/default/grub + `plymouth` from mkinitcpio HOOKS and rebuild.
+#   - Broken greeter: Ctrl+Alt+F2 for a TTY, restore
+#     /etc/greetd/config.toml from its .bak (tuigreet fallback:
+#     config.toml.bak.tuigreet), `systemctl restart greetd`.
+
+set -euo pipefail
+
+echo "==> Applying boot/login theming..."
+
+sudo env USER_HOME="$HOME" bash <<'ROOT'
+set -euo pipefail
+
+changed_initramfs=0
+changed_grub=0
+
+# Replace a file only when content differs; keep a timestamped backup.
+write_if_changed() {
+  local tmp="$1" dest="$2"
+  if ! cmp -s "$tmp" "$dest" 2>/dev/null; then
+    [ -e "$dest" ] && cp -a "$dest" "$dest.bak.$(date +%Y%m%d%H%M%S)"
+    install -m644 "$tmp" "$dest"
+    echo "    updated: $dest"
+    return 0
+  fi
+  return 1
+}
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+# --- Greeter background (matches the desktop wallpaper) --------------------
+if ! cmp -s "$USER_HOME/Pictures/wallpapers/evening-landscape.jpg" \
+            /usr/share/backgrounds/greeter.jpg 2>/dev/null; then
+  install -Dm644 "$USER_HOME/Pictures/wallpapers/evening-landscape.jpg" \
+    /usr/share/backgrounds/greeter.jpg
+  echo "    updated: /usr/share/backgrounds/greeter.jpg"
+fi
+
+# --- greetd: cage without -m last ------------------------------------------
+cat > "$tmp/config.toml" <<'EOF'
+# greetd config — regreet (GTK4) greeter running inside Cage Wayland kiosk.
+# Managed by chezmoi (run_onchange_after_boot-theming.sh). Fallback greeter
+# preserved at /etc/greetd/config.toml.bak.tuigreet.
+#
+# Cage flags:
+#   -s  allow VT switching (Ctrl+Alt+F1..F6 from inside the login)
+#   -d  don't draw client-side decorations (kiosk is fullscreen anyway)
+#   No -m flag: cage's default (extend) shows the greeter on every output,
+#   so it's always on the screen you're looking at. `-m last` picked a
+#   non-deterministic output on multi-monitor setups.
+
+[terminal]
+vt = 1
+
+[default_session]
+command = "cage -s -d -- regreet"
+user = "greeter"
+EOF
+write_if_changed "$tmp/config.toml" /etc/greetd/config.toml || true
+
+# --- regreet: Catppuccin GTK theme -----------------------------------------
+GTK_THEME="$(ls /usr/share/themes 2>/dev/null | grep -im1 'catppuccin.*mocha' || true)"
+if [ -z "$GTK_THEME" ]; then
+  GTK_THEME="Adwaita-dark"
+  echo "    WARN: no Catppuccin GTK theme in /usr/share/themes (AUR install"
+  echo "          skipped?) — greeter falls back to Adwaita-dark for now."
+fi
+cat > "$tmp/regreet.toml" <<EOF
+# Regreet config for turing — GTK4 greeter for greetd.
+# Managed by chezmoi (run_onchange_after_boot-theming.sh).
+# Background installed from ~/Pictures/wallpapers/ (chezmoi-managed).
+
+[background]
+path = "/usr/share/backgrounds/greeter.jpg"
+fit = "Cover"
+
+[GTK]
+application_prefer_dark_theme = true
+cursor_theme_name = "Adwaita"
+cursor_blink = true
+font_name = "JetBrainsMono Nerd Font 16"
+icon_theme_name = "Papirus-Dark"
+theme_name = "$GTK_THEME"
+
+[commands]
+reboot = ["systemctl", "reboot"]
+poweroff = ["systemctl", "poweroff"]
+
+[appearance]
+greeting_msg = "Welcome back, Devin"
+
+[widget.clock]
+format = "%A %B %-d  ·  %H:%M"
+resolution = "1s"
+label_width = 280
+EOF
+write_if_changed "$tmp/regreet.toml" /etc/greetd/regreet.toml || true
+
+# --- regreet: Catppuccin card CSS ------------------------------------------
+cat > "$tmp/regreet.css" <<'EOF'
+/* Catppuccin Mocha tinting for regreet.
+   The login box is a semi-transparent card layered over the wallpaper. */
+
+window {
+  background-color: rgba(30, 30, 46, 0.0);    /* base, fully transparent — show wallpaper */
+}
+
+/* Central login card */
+.background-card,
+.main-box {
+  background-color: rgba(30, 30, 46, 0.85);   /* base @ 85% */
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Greeting text */
+label {
+  color: #cdd6f4;                              /* text */
+}
+
+/* Buttons (login / reboot / poweroff) */
+button {
+  background-color: rgba(49, 50, 68, 0.9);     /* surface0 */
+  color: #cdd6f4;
+  border: 1px solid rgba(108, 112, 134, 0.3);  /* overlay0 */
+  border-radius: 8px;
+  padding: 8px 16px;
+}
+
+button:hover {
+  background-color: rgba(69, 71, 90, 1.0);     /* surface1 */
+  border-color: #f9e2af;                       /* yellow accent */
+}
+
+/* Password / username input */
+entry {
+  background-color: rgba(24, 24, 37, 0.9);     /* mantle */
+  color: #cdd6f4;
+  border: 1px solid rgba(108, 112, 134, 0.5);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+entry:focus {
+  border-color: #fab387;                       /* peach accent */
+}
+
+/* Combo boxes (session / user dropdowns) */
+combobox {
+  background-color: rgba(49, 50, 68, 0.9);
+  color: #cdd6f4;
+  border-radius: 8px;
+}
+EOF
+write_if_changed "$tmp/regreet.css" /etc/greetd/regreet.css || true
+
+# --- Plymouth: bgrt theme + mkinitcpio hook --------------------------------
+if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+  if [ "$(plymouth-set-default-theme 2>/dev/null)" != "bgrt" ]; then
+    plymouth-set-default-theme bgrt
+    echo "    plymouth theme -> bgrt"
+    changed_initramfs=1
+  fi
+  if ! grep -qE '^HOOKS=.* plymouth ' /etc/mkinitcpio.conf; then
+    cp -a /etc/mkinitcpio.conf "/etc/mkinitcpio.conf.bak.$(date +%Y%m%d%H%M%S)"
+    sed -i 's/^HOOKS=(base udev /HOOKS=(base udev plymouth /' /etc/mkinitcpio.conf
+    grep -qE '^HOOKS=.* plymouth ' /etc/mkinitcpio.conf \
+      || { echo "ERROR: failed to insert plymouth hook"; exit 1; }
+    echo "    mkinitcpio: plymouth hook added"
+    changed_initramfs=1
+  fi
+else
+  echo "    WARN: plymouth not installed (package install skipped?) — no splash."
+fi
+
+if [ "$changed_initramfs" -eq 1 ]; then
+  for img in /boot/initramfs-*.img; do
+    [ -e "$img" ] && cp -a "$img" "$img.bak"
+  done
+  echo "    pre-change initramfs kept as /boot/*.img.bak"
+  mkinitcpio -P
+fi
+
+# --- GRUB: splash param + Catppuccin menu theme ----------------------------
+if ! grep -q 'splash' /etc/default/grub; then
+  cp -a /etc/default/grub "/etc/default/grub.bak.$(date +%Y%m%d%H%M%S)"
+  sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="/&splash /' /etc/default/grub
+  echo "    kernel cmdline: +splash"
+  changed_grub=1
+fi
+GRUB_THEME_TXT="$(ls /usr/share/grub/themes/*/theme.txt 2>/dev/null | grep -im1 catppuccin || true)"
+if [ -n "$GRUB_THEME_TXT" ] \
+   && ! grep -q "^GRUB_THEME=\"$GRUB_THEME_TXT\"" /etc/default/grub; then
+  [ "$changed_grub" -eq 1 ] || cp -a /etc/default/grub "/etc/default/grub.bak.$(date +%Y%m%d%H%M%S)"
+  sed -i '/^GRUB_THEME=/d' /etc/default/grub
+  printf 'GRUB_THEME="%s"\n' "$GRUB_THEME_TXT" >> /etc/default/grub
+  echo "    grub theme -> $GRUB_THEME_TXT"
+  changed_grub=1
+elif [ -z "$GRUB_THEME_TXT" ]; then
+  echo "    WARN: no Catppuccin GRUB theme found (AUR install skipped?) — menu unthemed."
+fi
+
+if [ "$changed_grub" -eq 1 ]; then
+  grub-mkconfig -o /boot/grub/grub.cfg
+fi
+ROOT
+
+echo "==> Boot/login theming applied. Takes effect at next boot"
+echo "    (or preview the greeter now: sudo systemctl restart greetd — logs you out!)."
+{{ end -}}
+{{ end -}}

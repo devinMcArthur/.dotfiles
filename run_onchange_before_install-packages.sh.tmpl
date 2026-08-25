@@ -60,6 +60,11 @@ PACMAN_PKGS=(
   # Wayland kiosk compositor that hosts it; tuigreet kept as fallback)
   greetd greetd-regreet cage greetd-tuigreet
 
+  # Boot splash (bgrt theme: firmware logo + spinner) + greeter icon theme.
+  # Wired up by run_onchange_after_boot-theming.sh (initramfs hook, GRUB
+  # splash param, regreet GTK theming).
+  plymouth papirus-icon-theme
+
   # Fingerprint reader
   fprintd libfprint
 
@@ -72,6 +77,11 @@ PACMAN_PKGS=(
 
   # Btrfs snapshots + auto pre/post around pacman + grub boot-into-snapshot
   snapper snap-pac grub-btrfs inotify-tools
+
+  # fsck for the FAT32 ESP (/boot). fstab already has passno 2, but the
+  # boot-time systemd-fsck was silently a no-op without fsck.fat — a hard
+  # power-off left the FAT dirty bit set and it could never self-heal.
+  dosfstools
 
   # LTS kernel as a fallback — boot menu offers it when mainline breaks
   linux-lts linux-lts-headers
@@ -147,6 +157,11 @@ AUR_PKGS=(
   # Emoji picker: wofi frontend, copies to clipboard / types via wtype.
   # Bound to Super+Ctrl+E in hyprland.conf.
   wofi-emoji
+
+  # Login screen + boot menu theming (see run_onchange_after_boot-theming.sh):
+  # Catppuccin Mocha GTK theme for regreet, matching GRUB menu theme.
+  catppuccin-gtk-theme-mocha
+  catppuccin-mocha-grub-theme-git
 
   # Local push-to-talk dictation (whisper.cpp, offline). Hold F12 to talk
   # (hyprland.conf); config in ~/.config/voxtype/config.toml; model
