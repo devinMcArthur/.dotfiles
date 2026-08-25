@@ -5,9 +5,9 @@ import qs.Common
 import qs.Widgets
 import qs.Modules.Plugins
 
-// Dank Speedtest — click the bar pill for a popout with an on-demand
-// speedtest-cli run (ping / down / up). Saturates the link ~30s while
-// testing; results stay in the pill until the next run.
+// Dank Speedtest — Control Center widget (lives in the volume/wifi/bt
+// popup, not its own bar pill). Click the icon to run speedtest-cli;
+// expand for full results. Saturates the link ~30s while testing.
 PluginComponent {
     id: root
 
@@ -17,8 +17,6 @@ PluginComponent {
     property string up: "—"
     property string lastRun: ""
     property string errorMsg: ""
-
-    popoutHeight: 320
 
     function mbits(s) {
         var f = parseFloat(s);
@@ -60,69 +58,32 @@ PluginComponent {
         }
     }
 
-    // ── Bar pill ──
-    horizontalBarPill: Component {
-        Row {
-            spacing: 3
+    // ── Control Center pill ──
+    ccWidgetIcon: root.testing ? "pending" : "speed"
+    ccWidgetPrimaryText: "Speed Test"
+    ccWidgetSecondaryText: root.testing
+        ? "testing… ~30s"
+        : (root.errorMsg !== ""
+            ? "failed — expand for details"
+            : (root.down !== "—"
+                ? "↓ " + root.mbits(root.down) + "  ↑ " + root.mbits(root.up)
+                : "click icon to run"))
+    ccWidgetIsActive: root.testing
 
-            DankIcon {
-                name: root.testing ? "pending" : "speed"
-                size: 16
-                color: root.testing ? Theme.warning : (root.errorMsg !== "" ? Theme.error : Theme.surfaceText)
-                anchors.verticalCenter: parent.verticalCenter
+    onCcWidgetToggled: root.startTest()
 
-                SequentialAnimation on opacity {
-                    running: root.testing
-                    loops: Animation.Infinite
-                    NumberAnimation { to: 0.3; duration: 500 }
-                    NumberAnimation { to: 1.0; duration: 500 }
-                    onStopped: opacity = 1.0
-                }
-            }
-
-            StyledText {
-                visible: root.down !== "—" && !root.testing
-                text: "↓" + root.mbits(root.down)
-                font.pixelSize: Theme.barTextSize(root.barThickness, root.barConfig?.fontScale, root.barConfig?.maximizeWidgetText)
-                color: Theme.surfaceText
-                anchors.verticalCenter: parent.verticalCenter
-            }
-        }
-    }
-
-    verticalBarPill: Component {
-        DankIcon {
-            name: root.testing ? "pending" : "speed"
-            size: 16
-            color: root.testing ? Theme.warning : Theme.surfaceText
-        }
-    }
-
-    // ── Popout ──
-    popoutContent: Component {
-        PopoutComponent {
-            showCloseButton: false
+    // ── Expanded detail panel ──
+    ccDetailContent: Component {
+        Rectangle {
+            implicitHeight: detailCol.implicitHeight + Theme.spacingL * 2
+            color: Theme.surfaceContainerHigh
+            radius: Theme.cornerRadius
 
             Column {
-                width: parent.width
+                id: detailCol
+                anchors.fill: parent
+                anchors.margins: Theme.spacingL
                 spacing: Theme.spacingM
-
-                Row {
-                    spacing: Theme.spacingS
-                    DankIcon {
-                        name: "speed"
-                        size: 22
-                        color: Theme.primary
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-                    StyledText {
-                        text: "Speed Test"
-                        font.pixelSize: Theme.fontSizeLarge
-                        font.weight: Font.Bold
-                        color: Theme.surfaceText
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-                }
 
                 Repeater {
                     model: [
@@ -171,7 +132,7 @@ PluginComponent {
 
                 Rectangle {
                     width: parent.width
-                    height: 40
+                    height: 36
                     radius: 10
                     color: root.testing ? Theme.surfaceVariant : Theme.primary
                     opacity: runArea.pressed ? 0.8 : 1.0

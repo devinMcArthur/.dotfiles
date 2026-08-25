@@ -121,7 +121,12 @@ case "${1:-}" in
       killall -q waybar 2>/dev/null || true
       hyprctl dispatch exec waybar >/dev/null 2>&1 || true
     fi
-    swaync-client -rs >/dev/null 2>&1 || true
+    # Guard on the daemon actually running: with swaync retired (DMS trial),
+    # swaync-client blocks FOREVER on the D-Bus name — which hung every
+    # theme switch here and starved the tmux/ghostty reloads below.
+    if pgrep -x swaync >/dev/null 2>&1; then
+      timeout 5 swaync-client -rs >/dev/null 2>&1 || true
+    fi
     # tmux statusline for every running session.
     tmux source-file ~/.tmux.conf 2>/dev/null || true
     # ghostty (>=1.2) reloads config on SIGUSR2 — the ONLY safe signal
