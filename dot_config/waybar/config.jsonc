@@ -84,15 +84,19 @@
     "tooltip-format-enumerate-connected": "{device_alias}"
   },
   "network": {
-    // Click opens impala (same floating TUI as Super+I)
+    // Click opens impala (same floating TUI as Super+I). Hover: SSID with
+    // band + signal, IP, and LIVE ⇣/⇡ throughput (Omarchy's trick — the
+    // 3s interval keeps the bandwidth numbers ticking while you hover).
     "on-click": "ghostty --class=tui.wifi -e impala",
     "format-wifi": "{icon}",
     "format-icons": ["󰤯", "󰤟", "󰤢", "󰤥", "󰤨"],
     "format-ethernet": "󰀂",
     "format-linked": "󰀂",
     "format-disconnected": "󰖪",
-    "tooltip-format": "{essid} ({signalStrength}%) — {ifname} via {gwaddr}",
-    "tooltip-format-ethernet": "{ipaddr}/{cidr} — {ifname}"
+    "tooltip-format-wifi": "{essid} ({frequency} GHz · {signalStrength}%)\n{ifname} · {ipaddr}\n⇣ {bandwidthDownBytes}   ⇡ {bandwidthUpBytes}",
+    "tooltip-format-ethernet": "{ifname} · {ipaddr}/{cidr}\n⇣ {bandwidthDownBytes}   ⇡ {bandwidthUpBytes}",
+    "tooltip-format-disconnected": "Disconnected",
+    "interval": 3
   },
   "pulseaudio": {
     "format": "{icon}",
