@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# laptop-update — one-command system maintenance (Omarchy's `omarchy update`,
+# adapted). Snapper checkpoint first, then: pacman → AUR → firmware (fwupd,
+# Framework BIOS/controllers via LVFS) → chezmoi apply (runs this repo's
+# migration scripts) → nvim plugins → orphan report → reboot-pending check.
+#
+# Individual step failures don't abort the run; they're collected and the
+# script exits nonzero with a summary.
+
+set -uo pipefail
+
+fail=()
+step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
+
+step "Snapper checkpoint (undo a bad batch: snapper -c root list)"
+sudo snapper -c root create -d "laptop-update $(date +%F-%H%M)" || fail+=(snapper)
+
+step "System packages (pacman -Syu)"
+sudo pacman -Syu || fail+=(pacman)
+
+if command -v yay >/dev/null 2>&1; then
+  step "AUR packages (yay -Sua)"
+  yay -Sua || fail+=(aur)
+fi
+
+if command -v fwupdmgr >/dev/null 2>&1; then
+  step "Firmware (fwupd / LVFS)"
+  fwupdmgr refresh --force >/dev/null 2>&1 || true
+  if fwupdmgr get-updates 2>/dev/null | grep -q .; then
+    fwupdmgr update || fail+=(firmware)
+  else
+    echo "firmware up to date"
+  fi
+fi
+
+step "Dotfiles (chezmoi apply — runs pending migrations)"
+chezmoi apply || fail+=(chezmoi)
+
+step "Neovim plugins (Lazy! sync)"
+nvim --headless "+Lazy! sync" +qa || fail+=(nvim)
+if ! git -C "$HOME/.local/share/chezmoi" diff --quiet -- dot_config/nvim/lazy-lock.json 2>/dev/null; then
+  echo "note: lazy-lock.json changed — review and commit it in the chezmoi repo"
+fi
+
+step "Orphaned packages (report only — never auto-removed)"
+if orphans="$(pacman -Qtdq 2>/dev/null)" && [ -n "$orphans" ]; then
+  echo "$orphans"
+  echo 'remove with: sudo pacman -Rns $(pacman -Qtdq)'
+else
+  echo "none"
+fi
+
+step "Summary"
+if [ ! -d "/lib/modules/$(uname -r)" ]; then
+  echo "!! Kernel was upgraded: REBOOT before loading any new modules or"
+  echo "!! touching the network stack (iwd needs crypto modules from the new tree)."
+fi
+if [ "${#fail[@]}" -gt 0 ]; then
+  echo "failed steps: ${fail[*]}"
+  exit 1
+fi
+echo "all good"
