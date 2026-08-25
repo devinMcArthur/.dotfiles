@@ -263,6 +263,9 @@ bind = $mainMod SHIFT, C, exec, hyprpicker -a                                  #
 # Keybind cheatsheet
 bind = $mainMod, semicolon, exec, $HOME/.local/bin/hypr-cheatsheet                              # show keybind cheatsheet
 
+# Theme switcher (wofi picker over themes/*.yaml — Omarchy's bind)
+bind = $mainMod CTRL SHIFT, SPACE, exec, $HOME/.local/bin/theme menu                            # theme switcher menu
+
 # Move focus with mainMod + arrow keys
 bind = $mainMod, h, movefocus, l
 bind = $mainMod, j, movefocus, d

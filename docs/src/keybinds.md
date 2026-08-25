@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-25T12:16:42-06:00_
+_Generated 2026-08-25T12:20:33-06:00_
 
 ## Hyprland — window manager
 
@@ -41,6 +41,7 @@ _Generated 2026-08-25T12:16:42-06:00_
 | `SUPER + CTRL + period` | `movecurrentworkspacetomonitor` | desc:Acer Technologies KA272 0x13800FAE |
 | `SUPER + CTRL + R` | `exec` | $HOME/.local/bin/hypr-remind                  # set a reminder |
 | `SUPER + CTRL + S` | `exec` | $HOME/.local/bin/hypr-screenshot output       # screenshot monitor → annotate |
+| `SUPER + CTRL + SHIFT + SPACE` | `exec` | $HOME/.local/bin/theme menu                            # theme switcher menu |
 | `SUPER + CTRL + slash` | `movecurrentworkspacetomonitor` | eDP-1 |
 | `SUPER + E` | `exec` | $fileManager # Show the graphical file browser |
 | `SUPER + escape` | `exec` | $lock                                           # lock the screen |
