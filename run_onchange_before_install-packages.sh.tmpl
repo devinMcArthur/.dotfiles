@@ -34,7 +34,13 @@ PACMAN_PKGS=(
   # panels now but the CLIs stand alone).
   vnstat speedtest-cli
 
-  # Wayland clipboard + history + screenshot annotation + media control
+  # Wayland clipboard + history + screenshot annotation + media control.
+  # NOTE: deliberately NO xclip — Claude Code probes xclip BEFORE wl-paste
+  # (anthropics/claude-code#67486, detection cached at startup), and on
+  # this pure-Wayland setup the X11 clipboard is permanently empty
+  # (Hyprland only syncs it when an X window takes focus). With xclip
+  # installed, Claude finds it, reads the empty X clipboard, and image
+  # paste fails; without it, detection falls through to wl-paste.
   cliphist wl-clipboard wl-clip-persist swappy grim slurp playerctl brightnessctl
 
   # Screen recording (hardware-encoded, Super+Alt+S via hypr-record) + OCR
