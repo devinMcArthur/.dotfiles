@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-25T08:16:57-06:00_
+_Generated 2026-08-25T09:25:10-06:00_
 
 ## Hyprland — window manager
 
@@ -16,6 +16,7 @@ _Generated 2026-08-25T08:16:57-06:00_
 | `ALT + R` | `submap` | resize |
 | `down` | `resizeactive` | 0 10 |
 | `escape` | `submap` | reset |
+| `F12` | `exec` | voxtype record start                                     # dictation: hold F12 to talk |
 | `left` | `resizeactive` | -10 0 |
 | `right` | `resizeactive` | 10 0 |
 | `SUPER + 0` | `workspace` | 10 |
