@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-25T15:16:35-06:00_
+_Generated 2026-08-25T15:39:46-06:00_
 
 ## Hyprland — window manager
 
@@ -87,23 +87,23 @@ _Generated 2026-08-25T15:16:35-06:00_
 | `SUPER + SHIFT + T` | `exec` | $HOME/.local/bin/hypr-ocr                    # grab text from screen → clipboard |
 | `SUPER + SHIFT + V` | `exec` | cliphist wipe                                  # wipe clipboard history |
 | `SUPER + slash` | `focusmonitor` | eDP-1 |
-| `SUPER + SPACE` | `exec` | wofi # Show the graphicall app launcher |
+| `SUPER + SPACE` | `exec` | dms ipc call launcher toggle # app launcher (DMS; wofi remains for scripts) |
 | `SUPER + Tab` | `swapactiveworkspaces` | desc:Acer Technologies KA272 0x13800DD9 desc:Acer Technologies KA272 0x13800FAE |
 | `SUPER + T` | `togglefloating` | # toggle window float / tile |
 | `SUPER + V` | `exec` | cliphist-menu                                        # clipboard history |
 | `SUPER + W` | `exec` | $HOME/.local/bin/win # smart launcher for the win11 KVM VM (starts + attaches virt-viewer) |
 | `SUPER + Y` | `layoutmsg` | togglesplit # dwindle |
 | `up` | `resizeactive` | 0 -10 |
-| `XF86AudioLowerVolume` | `exec` | swayosd-client --output-volume lower |
-| `XF86AudioMicMute` | `exec` | swayosd-client --input-volume mute-toggle  # mic mute |
-| `XF86AudioMute` | `exec` | swayosd-client --output-volume mute-toggle |
+| `XF86AudioLowerVolume` | `exec` | wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- |
+| `XF86AudioMicMute` | `exec` | wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle  # mic mute |
+| `XF86AudioMute` | `exec` | wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle |
 | `XF86AudioNext` | `exec` | playerctl next |
 | `XF86AudioPause` | `exec` | playerctl play-pause |
 | `XF86AudioPlay` | `exec` | playerctl play-pause |
 | `XF86AudioPrev` | `exec` | playerctl previous |
-| `XF86AudioRaiseVolume` | `exec` | swayosd-client --output-volume raise --max-volume 150 |
-| `XF86MonBrightnessDown` | `exec` | swayosd-client --brightness -10 |
-| `XF86MonBrightnessUp` | `exec` | swayosd-client --brightness +10 |
+| `XF86AudioRaiseVolume` | `exec` | wpctl set-volume -l 1.5 @DEFAULT_AUDIO_SINK@ 5%+ |
+| `XF86MonBrightnessDown` | `exec` | brightnessctl s 10%- |
+| `XF86MonBrightnessUp` | `exec` | brightnessctl s +10% |
 
 ## tmux
 

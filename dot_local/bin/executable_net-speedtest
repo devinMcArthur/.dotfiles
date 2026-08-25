@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# net-speedtest — on-demand connection capacity test (middle-click on the
+# waybar network icon, or run from a shell). Saturates the link for ~30s
+# while running — that's inherent to what a speed test is.
+
+set -uo pipefail
+
+if pgrep -x speedtest-cli >/dev/null || pgrep -f 'speedtest-cli' | grep -qv $$; then
+  notify-send -a "Network" "Speed test already running"
+  exit 0
+fi
+
+command -v speedtest-cli >/dev/null 2>&1 || {
+  notify-send -u critical -a "Network" "speedtest-cli not installed" "Run: chezmoi apply"
+  exit 1
+}
+
+notify-send -a "Network" -t 4000 "Speed test running…" "~30s — saturates the link while measuring"
+
+if out="$(speedtest-cli --simple 2>&1)"; then
+  # out: "Ping: X ms\nDownload: Y Mbit/s\nUpload: Z Mbit/s"
+  notify-send -a "Network" -t 15000 "Speed test result" "$out"
+else
+  notify-send -u critical -a "Network" "Speed test failed" "$(printf '%s' "$out" | head -3)"
+fi

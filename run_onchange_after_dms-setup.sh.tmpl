@@ -1,0 +1,37 @@
+{{- if eq .chezmoi.os "linux" -}}
+{{- if eq .chezmoi.osRelease.id "arch" -}}
+#!/usr/bin/env bash
+# DankMaterialShell trial setup: point DMS at the chezmoi-rendered custom
+# theme (dank-theme.json — a template over .chezmoidata/theme.yaml, so
+# `theme set`/`theme random` re-render it and DMS hot-reloads reactively).
+# settings.json is DMS-owned (it rewrites it constantly), so we only merge
+# our two keys in rather than chezmoi-managing the file.
+
+set -euo pipefail
+
+S="$HOME/.config/DankMaterialShell/settings.json"
+THEME_FILE="$HOME/.config/DankMaterialShell/dank-theme.json"
+mkdir -p "${S%/*}"
+
+if [ -f "$S" ]; then
+  if ! grep -q 'dank-theme.json' "$S"; then
+    tmp="$(mktemp)"
+    jq --arg f "$THEME_FILE" \
+      '.currentThemeName = "custom" | .customThemeFile = $f' "$S" > "$tmp" \
+      && mv "$tmp" "$S"
+    echo "==> DMS: custom theme wired into existing settings.json"
+  fi
+else
+  # Fresh seed: custom theme + the preferred bar look (transparent bar
+  # strip, per-widget pills — transparency 0 / widgetTransparency 1 /
+  # noBackground false; note noBackground=true removes the WIDGET pills,
+  # not the strip). settings.json is DMS-owned after this — day-to-day
+  # changes happen in its Settings UI, not chezmoi.
+  printf '{\n  "currentThemeName": "custom",\n  "customThemeFile": "%s"\n}\n' "$THEME_FILE" > "$S"
+  tmp="$(mktemp)"
+  jq '.barConfigs = [{"id":"default","enabled":true,"transparency":0,"widgetTransparency":1,"noBackground":false}]' \
+    "$S" > "$tmp" && mv "$tmp" "$S"
+  echo "==> DMS: settings.json seeded (custom theme, transparent bar + pills)"
+fi
+{{ end -}}
+{{ end -}}

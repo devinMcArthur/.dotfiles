@@ -75,11 +75,20 @@ exec-once = systemctl --user import-environment --all
 # so we kick it manually; Restart=on-failure supervision comes free.
 exec-once = systemctl --user start soteria.service
 
-exec-once = waybar
-exec-once = swaync
+# --- Desktop shell: DankMaterialShell TRIAL (Quickshell) --------------------
+# One process replaces the waybar+swaync+swayosd federation: bar with real
+# interactive panels (network Wi-Fi toggle, bluetooth, audio), control
+# center, notifications, OSD, spotlight launcher. Theme comes from the
+# chezmoi-rendered ~/.config/DankMaterialShell/dank-theme.json (reactive —
+# theme set / theme random re-render it and DMS live-updates).
+# REVERT: comment `dms run`, uncomment the three lines below, restore the
+# wofi Super+Space bind and swayosd volume/brightness binds (git has them).
+exec-once = dms run
+# exec-once = waybar
+# exec-once = swaync
+# exec-once = swayosd-server
 exec-once = hypridle
 exec-once = hyprpaper
-exec-once = swayosd-server   # OSD popups for volume/brightness keys (binds use swayosd-client)
 exec-once = wl-paste --type text  --watch cliphist store   # clipboard history (text)
 exec-once = wl-paste --type image --watch cliphist store   # clipboard history (images)
 # Keep Wayland clipboard contents alive after the setting app exits. Without
@@ -215,7 +224,7 @@ bind = $mainMod, M, exec, wlogout --protocol layer-shell # show the logout windo
 # mishit. Use wlogout's "Exit" tile if you need to terminate Hyprland.)
 bind = $mainMod, E, exec, $fileManager # Show the graphical file browser
 bind = $mainMod, T, togglefloating, # toggle window float / tile
-bind = $mainMod, SPACE, exec, wofi # Show the graphicall app launcher
+bind = $mainMod, SPACE, exec, dms ipc call launcher toggle # app launcher (DMS; wofi remains for scripts)
 bind = $mainMod, P, pseudo, # dwindle
 bind = $mainMod, Y, layoutmsg, togglesplit # dwindle
 bind = $mainMod, F, fullscreen
@@ -346,18 +355,17 @@ bind = $mainMod, A, exec, $HOME/.local/bin/hypr-agent # AI agent scratchpad (dro
 bindm = $mainMod, mouse:272, movewindow
 bindm = $mainMod, mouse:273, resizewindow
 
-# Framework Brightness — swayosd-client changes brightness AND draws the OSD
-# (was brightnessctl, which changed it blind). ±10 keeps the old 10% steps.
-# bindel (was plain bind) so holding the key repeats, matching volume keys.
-bindel = ,XF86MonBrightnessDown, exec, swayosd-client --brightness -10
-bindel = ,XF86MonBrightnessUp, exec, swayosd-client --brightness +10
+# Framework Brightness — direct brightnessctl (DMS trial: swayosd retired;
+# DMS's own OSD reacts to system changes).
+bindel = ,XF86MonBrightnessDown, exec, brightnessctl s 10%-
+bindel = ,XF86MonBrightnessUp, exec, brightnessctl s +10%
 
-# Framework Volume + Media — swayosd-client sets volume via wpctl underneath
-# and draws the OSD. Default step 5%, --max-volume 150 matches the old -l 1.5.
-bindel = , XF86AudioRaiseVolume, exec, swayosd-client --output-volume raise --max-volume 150
-bindel = , XF86AudioLowerVolume, exec, swayosd-client --output-volume lower
-bindl  = , XF86AudioMute,        exec, swayosd-client --output-volume mute-toggle
-bindl  = , XF86AudioMicMute,     exec, swayosd-client --input-volume mute-toggle  # mic mute
+# Framework Volume + Media — direct wpctl; DMS watches PipeWire and draws
+# its OSD on any change, so no OSD client needed in the bind.
+bindel = , XF86AudioRaiseVolume, exec, wpctl set-volume -l 1.5 @DEFAULT_AUDIO_SINK@ 5%+
+bindel = , XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
+bindl  = , XF86AudioMute,        exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
+bindl  = , XF86AudioMicMute,     exec, wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle  # mic mute
 bindl  = , XF86AudioPlay,        exec, playerctl play-pause
 bindl  = , XF86AudioPause,       exec, playerctl play-pause
 bindl  = , XF86AudioNext,        exec, playerctl next

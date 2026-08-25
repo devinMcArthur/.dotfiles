@@ -1,0 +1,12 @@
+{
+    "id": "dankSpeedtest",
+    "name": "Speed Test",
+    "description": "On-demand connection speed test (speedtest-cli) with results in a bar popout",
+    "version": "1.0.0",
+    "author": "devin + claude",
+    "icon": "speed",
+    "type": "widget",
+    "component": "./DankSpeedtest.qml",
+    "permissions": ["process"],
+    "requires_dms": ">=1.4.6"
+}

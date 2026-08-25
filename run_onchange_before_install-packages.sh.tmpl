@@ -23,6 +23,17 @@ PACMAN_PKGS=(
   xdg-desktop-portal xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
   waybar wofi swaync
 
+  # DankMaterialShell TRIAL (Quickshell one-process shell: bar with
+  # interactive panels, notifications, OSD, launcher). waybar/swaync/swayosd
+  # stay installed as the revert path. Fonts: Inter (UI) + Material Symbols
+  # (icons) are hard requirements for DMS rendering.
+  dms-shell inter-font ttf-material-symbols-variable
+
+  # Network usage totals (vnstat daemon, passive counter sampling) and
+  # on-demand speed test (net-speedtest, middle-click concepts live in DMS
+  # panels now but the CLIs stand alone).
+  vnstat speedtest-cli
+
   # Wayland clipboard + history + screenshot annotation + media control
   cliphist wl-clipboard wl-clip-persist swappy grim slurp playerctl brightnessctl
 
@@ -252,6 +263,14 @@ if ! systemctl is-enabled --quiet bluetooth.service 2>/dev/null \
    || ! systemctl is-active --quiet bluetooth.service 2>/dev/null; then
   echo "==> Enabling bluetooth.service..."
   sudo systemctl enable --now bluetooth.service
+fi
+
+# vnstat daemon — passive network-usage accounting (totals for `vnstat -d/-m`).
+if command -v vnstatd >/dev/null 2>&1 \
+   && { ! systemctl is-enabled --quiet vnstat.service 2>/dev/null \
+        || ! systemctl is-active --quiet vnstat.service 2>/dev/null; }; then
+  echo "==> Enabling vnstat.service..."
+  sudo systemctl enable --now vnstat.service
 fi
 
 # gh extensions (user-level, not pacman-managed). gh-dash = lazygit-style
