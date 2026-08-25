@@ -26,7 +26,11 @@ tput civis 2>/dev/null || true
 while :; do
   effect="${EFFECTS[RANDOM % ${#EFFECTS[@]}]}"
   clear
-  printf '%s\n' "$art" | tte --frame-rate 60 --anchor-canvas c --anchor-text c "$effect" &
+  # Canvas 0x0 = the full terminal (default is the text's own bounding box),
+  # so effects sweep the whole screen and the text lands dead center.
+  printf '%s\n' "$art" | tte --frame-rate 60 \
+    --canvas-width 0 --canvas-height 0 --anchor-text c --anchor-canvas c \
+    "$effect" &
   TTE=$!
   # Any key exits; otherwise cap the effect at 20s and pick another.
   if read -rs -n 1 -t 20; then

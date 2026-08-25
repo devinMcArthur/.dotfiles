@@ -26,8 +26,9 @@ for m in $(hyprctl monitors -j | jq -r '.[].name'); do
   hyprctl dispatch focusmonitor "$m" >/dev/null
   # NOTE: --fullscreen requires an explicit value; the bare flag is a
   # ghostty config error (dialog + tiled window).
+  # Big font so the figlet banner fills a meaningful chunk of the screen.
   hyprctl dispatch exec \
-    "ghostty --class=screensaver.tui --fullscreen=true -e $HOME/.local/bin/hypr-screensaver-run" \
+    "ghostty --class=screensaver.tui --fullscreen=true --font-size=32 -e $HOME/.local/bin/hypr-screensaver-run" \
     >/dev/null
   sleep 0.4   # let the window map on its monitor before focusing the next
 done
