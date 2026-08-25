@@ -2,8 +2,8 @@
 # Regenerate docs/src/keybinds.md from authoritative sources.
 #
 # Sources (paths relative to this script):
-#   ../dot_config/hypr/hyprland.conf
-#   ../dot_tmux.conf
+#   ../dot_config/hypr/hyprland.conf.tmpl
+#   ../dot_tmux.conf.tmpl
 #   ../dot_zshrc.tmpl
 #
 # Run manually after editing any of those, or wire into a git hook.
@@ -13,8 +13,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 REPO=".."
-HYPR="$REPO/dot_config/hypr/hyprland.conf"
-TMUX="$REPO/dot_tmux.conf"
+HYPR="$REPO/dot_config/hypr/hyprland.conf.tmpl"
+TMUX="$REPO/dot_tmux.conf.tmpl"
 ZSHRC="$REPO/dot_zshrc.tmpl"
 OUT="src/keybinds.md"
 
@@ -32,8 +32,8 @@ cat <<'HEADER'
 > **Auto-generated.** Do not edit this page by hand.
 >
 > Regenerate with `docs/regen-keybinds.sh`. Source files:
-> [`hyprland.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_config/hypr/hyprland.conf),
-> [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf),
+> [`hyprland.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_config/hypr/hyprland.conf.tmpl),
+> [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
 HEADER
@@ -179,7 +179,7 @@ awk '
 echo ""
 echo "## How to add a new binding"
 echo ""
-echo "1. Edit the source: \`dot_config/hypr/hyprland.conf\`, \`dot_tmux.conf\`, or \`dot_zshrc.tmpl\`"
+echo "1. Edit the source: \`dot_config/hypr/hyprland.conf.tmpl\`, \`dot_tmux.conf.tmpl\`, or \`dot_zshrc.tmpl\`"
 echo "2. Run \`docs/regen-keybinds.sh\` from the chezmoi repo root or \`docs/\`"
 echo "3. Commit both the source change and the regenerated \`docs/src/keybinds.md\`"
 echo ""

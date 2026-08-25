@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# theme — Omarchy-style theme switcher over chezmoi template data.
+#
+#   theme list           # available themes (from <chezmoi>/themes/*.yaml)
+#   theme current        # the active theme
+#   theme set <name>     # switch: copy palette -> .chezmoidata/theme.yaml,
+#                        # chezmoi apply, reload the running desktop
+#
+# What reloads live: Hyprland borders/gaps, wallpaper, waybar, wofi (next
+# open), swaync, tmux statusline (all sessions), starship (next prompt),
+# fzf/zsh (new shells). What needs a restart: ghostty windows (Ctrl+Shift+,
+# reloads one in place), nvim, btop, lazygit. The login screen deliberately
+# stays Catppuccin Mocha (boot theming needs sudo; a theme switch shouldn't).
+
+set -euo pipefail
+
+SRC="$HOME/.local/share/chezmoi"
+ACTIVE="$SRC/.chezmoidata/theme.yaml"
+
+current() { sed -n 's/^  name: "\(.*\)"/\1/p' "$ACTIVE" | head -1; }
+
+case "${1:-}" in
+  list)
+    cur="$(current)"
+    for f in "$SRC"/themes/*.yaml; do
+      name="$(basename "$f" .yaml)"
+      if [ "$name" = "$cur" ]; then echo "* $name"; else echo "  $name"; fi
+    done
+    ;;
+  current)
+    current
+    ;;
+  set)
+    name="${2:?usage: theme set <name>  (see: theme list)}"
+    f="$SRC/themes/$name.yaml"
+    if [ ! -f "$f" ]; then
+      echo "unknown theme: $name" >&2
+      "$0" list >&2
+      exit 1
+    fi
+    cp "$f" "$ACTIVE"
+    echo "==> Applying $name..."
+    chezmoi apply
+
+    echo "==> Reloading desktop..."
+    hyprctl reload >/dev/null 2>&1 || true
+    # Wallpaper: hyprpaper reads its config at startup only.
+    killall -q hyprpaper 2>/dev/null || true
+    hyprctl dispatch exec hyprpaper >/dev/null 2>&1 || true
+    # Bar + notifications.
+    killall -q waybar 2>/dev/null || true
+    hyprctl dispatch exec waybar >/dev/null 2>&1 || true
+    swaync-client -rs >/dev/null 2>&1 || true
+    # tmux statusline for every running session.
+    tmux source-file ~/.tmux.conf 2>/dev/null || true
+
+    echo "==> Theme: $name"
+    echo "    Live now: borders, wallpaper, bar, notifications, tmux, next prompt."
+    echo "    Per-window: Ctrl+Shift+, reloads a ghostty; nvim/btop/lazygit on relaunch."
+    ;;
+  *)
+    sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+    exit 2
+    ;;
+esac

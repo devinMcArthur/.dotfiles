@@ -1,6 +1,6 @@
 # ~/.tmux.conf — chezmoi-managed.
 # Hand-written replacement for gpakosz/oh-my-tmux. ~80 lines, no framework.
-# Palette: Catppuccin Mocha (https://github.com/catppuccin/catppuccin).
+# Palette: from chezmoi theme data (.chezmoidata/theme.yaml; `theme set`).
 
 # ---------- Sensible baseline ----------
 set -g @plugin 'tmux-plugins/tpm'
@@ -106,19 +106,19 @@ bind -T copy-mode-vi y   send-keys -X copy-selection-and-cancel
 
 # ---------- Catppuccin Mocha palette ----------
 # Define once, reference below. Keep all hex literals here.
-%hidden CTP_BASE="#1e1e2e"
-%hidden CTP_MANTLE="#181825"
-%hidden CTP_CRUST="#11111b"
-%hidden CTP_TEXT="#cdd6f4"
-%hidden CTP_SUBTEXT0="#a6adc8"
-%hidden CTP_OVERLAY0="#6c7086"
-%hidden CTP_SURFACE0="#313244"
-%hidden CTP_BLUE="#89b4fa"
-%hidden CTP_MAUVE="#cba6f7"
-%hidden CTP_PEACH="#fab387"
-%hidden CTP_YELLOW="#f9e2af"
-%hidden CTP_RED="#f38ba8"
-%hidden CTP_GREEN="#a6e3a1"
+%hidden CTP_BASE="#{{ .theme.colors.base }}"
+%hidden CTP_MANTLE="#{{ .theme.colors.mantle }}"
+%hidden CTP_CRUST="#{{ .theme.colors.crust }}"
+%hidden CTP_TEXT="#{{ .theme.colors.text }}"
+%hidden CTP_SUBTEXT0="#{{ .theme.colors.subtext0 }}"
+%hidden CTP_OVERLAY0="#{{ .theme.colors.overlay0 }}"
+%hidden CTP_SURFACE0="#{{ .theme.colors.surface0 }}"
+%hidden CTP_BLUE="#{{ .theme.colors.blue }}"
+%hidden CTP_MAUVE="#{{ .theme.colors.mauve }}"
+%hidden CTP_PEACH="#{{ .theme.colors.peach }}"
+%hidden CTP_YELLOW="#{{ .theme.colors.yellow }}"
+%hidden CTP_RED="#{{ .theme.colors.red }}"
+%hidden CTP_GREEN="#{{ .theme.colors.green }}"
 
 # ---------- Status line ----------
 set -g status-position bottom

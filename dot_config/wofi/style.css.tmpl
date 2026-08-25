@@ -11,10 +11,10 @@
 window {
   margin: 0;
   padding: 0;
-  background-color: rgba(30, 30, 46, 0.96);    /* base, near-opaque */
-  border: 2px solid #585b70;                   /* surface2 */
+  background-color: alpha(#{{ .theme.colors.base }}, 0.96);    /* base, near-opaque (alpha() — GTK3 rejects #rrggbbaa) */
+  border: 2px solid #{{ .theme.colors.surface2 }};                   /* surface2 */
   border-radius: 14px;
-  color: #cdd6f4;                              /* text */
+  color: #{{ .theme.colors.text }};                              /* text */
 }
 
 #outer-box {
@@ -28,20 +28,20 @@ window {
 #input {
   margin: 0 0 10px 0;
   padding: 10px 14px;
-  border: 1px solid #45475a;                   /* surface1 */
+  border: 1px solid #{{ .theme.colors.surface1 }};                   /* surface1 */
   border-radius: 10px;
-  background-color: #181825;                   /* mantle */
-  color: #cdd6f4;
-  caret-color: #f9e2af;                        /* yellow */
+  background-color: #{{ .theme.colors.mantle }};                   /* mantle */
+  color: #{{ .theme.colors.text }};
+  caret-color: #{{ .theme.colors.yellow }};                        /* yellow */
 }
 
 #input:focus {
-  border-color: #fab387;                       /* peach */
+  border-color: #{{ .theme.colors.peach }};                       /* peach */
   outline: none;
 }
 
 #input image {
-  color: #a6adc8;                              /* subtext0 */
+  color: #{{ .theme.colors.subtext0 }};                              /* subtext0 */
   margin-right: 8px;
 }
 
@@ -65,24 +65,24 @@ window {
   border: none;
   border-radius: 8px;
   background-color: transparent;
-  color: #cdd6f4;
+  color: #{{ .theme.colors.text }};
 }
 
 #entry:hover {
-  background-color: #313244;                   /* surface0 */
+  background-color: #{{ .theme.colors.surface0 }};                   /* surface0 */
 }
 
 #entry:selected {
-  background-color: #45475a;                   /* surface1 */
-  color: #f9e2af;                              /* yellow */
+  background-color: #{{ .theme.colors.surface1 }};                   /* surface1 */
+  color: #{{ .theme.colors.yellow }};                              /* yellow */
 }
 
 #entry:selected #text {
-  color: #f9e2af;
+  color: #{{ .theme.colors.yellow }};
 }
 
 #text {
-  color: #cdd6f4;
+  color: #{{ .theme.colors.text }};
   margin-left: 6px;
 }
 

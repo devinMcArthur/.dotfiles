@@ -1,5 +1,5 @@
 Devim = {
-  colorscheme = "catppuccin",
+  colorscheme = require("config.theme").colorscheme,
   ui = {
     float = {
       border = "rounded",

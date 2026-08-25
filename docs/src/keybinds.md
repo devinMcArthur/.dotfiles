@@ -3,11 +3,11 @@
 > **Auto-generated.** Do not edit this page by hand.
 >
 > Regenerate with `docs/regen-keybinds.sh`. Source files:
-> [`hyprland.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_config/hypr/hyprland.conf),
-> [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf),
+> [`hyprland.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_config/hypr/hyprland.conf.tmpl),
+> [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-25T12:01:31-06:00_
+_Generated 2026-08-25T12:16:42-06:00_
 
 ## Hyprland — window manager
 
@@ -152,7 +152,7 @@ Prefix: `C-a`. Bindings shown below assume prefix unless otherwise noted.
 
 ## How to add a new binding
 
-1. Edit the source: `dot_config/hypr/hyprland.conf`, `dot_tmux.conf`, or `dot_zshrc.tmpl`
+1. Edit the source: `dot_config/hypr/hyprland.conf.tmpl`, `dot_tmux.conf.tmpl`, or `dot_zshrc.tmpl`
 2. Run `docs/regen-keybinds.sh` from the chezmoi repo root or `docs/`
 3. Commit both the source change and the regenerated `docs/src/keybinds.md`
 

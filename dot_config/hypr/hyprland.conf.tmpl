@@ -106,8 +106,8 @@ general {
 
     # Catppuccin Mocha: yellow→peach gradient (echoes the moon + sunset in the
     # wallpaper). Inactive: surface0.
-    col.active_border = rgba(f9e2afaa) rgba(fab387aa) 45deg
-    col.inactive_border = rgba(313244aa)
+    col.active_border = rgba({{ .theme.colors.accent }}aa) rgba({{ .theme.colors.accent2 }}aa) 45deg
+    col.inactive_border = rgba({{ .theme.colors.surface0 }}aa)
 
     # Set to true enable resizing windows by clicking and dragging on borders and gaps
     resize_on_border = false

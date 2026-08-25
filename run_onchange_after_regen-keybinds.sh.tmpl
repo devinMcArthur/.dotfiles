@@ -10,8 +10,8 @@
 # Tracked inputs (hash lines below pin this script's rendered content
 # to the contents of the source files):
 {{ $src := .chezmoi.sourceDir -}}
-# {{ output "sha256sum" (printf "%s/dot_config/hypr/hyprland.conf" $src) }}
-# {{ output "sha256sum" (printf "%s/dot_tmux.conf" $src) }}
+# {{ output "sha256sum" (printf "%s/dot_config/hypr/hyprland.conf.tmpl" $src) }}
+# {{ output "sha256sum" (printf "%s/dot_tmux.conf.tmpl" $src) }}
 # {{ output "sha256sum" (printf "%s/dot_zshrc.tmpl" $src) }}
 #
 # Output is committed in the chezmoi source tree (docs/src/keybinds.md)

@@ -12,13 +12,15 @@
 }
 
 window#waybar {
-    background: rgba(30, 30, 46, 0.9);      /* base */
-    color: #cdd6f4;                          /* text */
+    /* alpha() not #rrggbbaa: waybar/wofi are GTK3, whose CSS parser
+       rejects 8-digit hex ("Junk at end of value") and kills the bar. */
+    background: alpha(#{{ .theme.colors.base }}, 0.9);   /* base */
+    color: #{{ .theme.colors.text }};                          /* text */
 }
 
 tooltip {
-    background: #1e1e2e;
-    border: 1px solid #313244;               /* surface0 */
+    background: #{{ .theme.colors.base }};
+    border: 1px solid #{{ .theme.colors.surface0 }};               /* surface0 */
     border-radius: 8px;
 }
 
@@ -27,20 +29,20 @@ tooltip {
     padding: 0 6px;
     margin: 0 1px;
     background: transparent;
-    color: #6c7086;                          /* overlay0 — inactive */
+    color: #{{ .theme.colors.overlay0 }};                          /* overlay0 — inactive */
 }
 
 #workspaces button.active {
-    color: #cdd6f4;
+    color: #{{ .theme.colors.text }};
 }
 
 #workspaces button.urgent {
-    color: #f38ba8;                          /* red */
+    color: #{{ .theme.colors.red }};                          /* red */
 }
 
 #workspaces button:hover {
     background: transparent;
-    color: #cdd6f4;
+    color: #{{ .theme.colors.text }};
     box-shadow: none;
     text-shadow: none;
 }
@@ -70,25 +72,25 @@ tooltip {
 
 /* --- State colors (the only color on the bar) ---------------------------- */
 #idle_inhibitor.activated {
-    color: #f38ba8;                          /* red — holding machine awake */
+    color: #{{ .theme.colors.red }};                          /* red — holding machine awake */
 }
 
 #custom-sysinfo.warning {
-    color: #f9e2af;                          /* yellow */
+    color: #{{ .theme.colors.yellow }};                          /* yellow */
 }
 
 #custom-sysinfo.critical {
-    color: #f38ba8;
+    color: #{{ .theme.colors.red }};
 }
 
 #network.disconnected {
-    color: #f38ba8;
+    color: #{{ .theme.colors.red }};
 }
 
 #battery.warning {
-    color: #f9e2af;
+    color: #{{ .theme.colors.yellow }};
 }
 
 #battery.critical:not(.charging) {
-    color: #f38ba8;
+    color: #{{ .theme.colors.red }};
 }
