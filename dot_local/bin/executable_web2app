@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# web2app — install any website as a standalone app window (Omarchy's web2app,
+# Gecko-flavored: wraps firefoxpwa, same machinery as the Super+O Outlook app).
+#
+# Usage:
+#   web2app add <name> <url> [manifest-url]   # install; auto-discovers the
+#                                             # site's web-app manifest
+#   web2app launch <name>                     # focus-or-launch (bindable)
+#   web2app list                              # installed web apps
+#   web2app rm <name>                         # uninstall
+#
+# After `add`, a ready-to-paste hyprland.conf bind line is printed.
+
+set -euo pipefail
+
+resolve_ulid() {
+  # firefoxpwa lists sites as "- Name: https://... (ULID)"; match name
+  # case-insensitively and return the ULID.
+  firefoxpwa profile list 2>/dev/null \
+    | grep -iE "^- ${1}:" \
+    | grep -oE '\([0-9A-HJKMNP-TV-Z]{26}\)' \
+    | head -1 | tr -d '()'
+}
+
+case "${1:-}" in
+  add)
+    name="${2:?usage: web2app add <name> <url> [manifest-url]}"
+    url="${3:?usage: web2app add <name> <url> [manifest-url]}"
+    manifest="${4:-}"
+    if [ -z "$manifest" ]; then
+      # Discover <link rel="manifest"> and resolve it against the page URL.
+      manifest="$(python3 - "$url" <<'PY'
+import re, sys, urllib.request
+url = sys.argv[1]
+req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+html = urllib.request.urlopen(req, timeout=15).read().decode("utf-8", "replace")
+for link in re.findall(r"<link[^>]+>", html, re.I):
+    if re.search(r"""rel=["']?manifest["']?""", link, re.I):
+        m = re.search(r"""href=["']?([^"' >]+)""", link, re.I)
+        if m:
+            print(urllib.request.urljoin(url, m.group(1)))
+            break
+PY
+)"
+      if [ -z "$manifest" ]; then
+        echo "error: $url declares no web-app manifest." >&2
+        echo "       Pass one explicitly: web2app add '$name' '$url' <manifest-url>" >&2
+        exit 1
+      fi
+      echo "discovered manifest: $manifest"
+    fi
+    firefoxpwa site install "$manifest" --document-url "$url" --name "$name"
+    ulid="$(resolve_ulid "$name")"
+    echo
+    echo "Installed. Launch with: web2app launch '$name'"
+    if [ -n "$ulid" ]; then
+      echo "Optional hyprland.conf focus-or-launch bind (pick a free key):"
+      echo "bind = \$mainMod, X, exec, \$HOME/.local/bin/web2app launch '$name' # $name web app"
+    fi
+    ;;
+  launch)
+    name="${2:?usage: web2app launch <name>}"
+    ulid="$(resolve_ulid "$name")"
+    [ -n "$ulid" ] || { echo "no web app named '$name' (see: web2app list)" >&2; exit 1; }
+    # Focus the existing window if present (class FFPWA-<ULID>), else launch.
+    if hyprctl clients -j 2>/dev/null | grep -q "FFPWA-$ulid"; then
+      hyprctl dispatch focuswindow "class:FFPWA-$ulid"
+    else
+      firefoxpwa site launch "$ulid"
+    fi
+    ;;
+  list)
+    firefoxpwa profile list
+    ;;
+  rm)
+    name="${2:?usage: web2app rm <name>}"
+    ulid="$(resolve_ulid "$name")"
+    [ -n "$ulid" ] || { echo "no web app named '$name' (see: web2app list)" >&2; exit 1; }
+    firefoxpwa site uninstall "$ulid"
+    ;;
+  *)
+    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+    exit 2
+    ;;
+esac
