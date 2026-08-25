@@ -15,6 +15,17 @@ env = XDG_CURRENT_DESKTOP,Hyprland
 env = XDG_SESSION_TYPE,wayland
 env = XDG_SESSION_DESKTOP,Hyprland
 
+# Qt Quick theming — hyprpolkitagent (the system-auth dialog 1Password &
+# pkexec pop up) renders via Qt Quick Controls; stock look is light Fusion
+# grey. Material Dark with theme tokens matches the desktop (colors follow
+# the theme at next login — env keywords are startup-only, and the agent
+# service inherits them via the dbus-update-activation-environment below).
+env = QT_QUICK_CONTROLS_STYLE,Material
+env = QT_QUICK_CONTROLS_MATERIAL_THEME,Dark
+env = QT_QUICK_CONTROLS_MATERIAL_ACCENT,#{{ .theme.colors.accent }}
+env = QT_QUICK_CONTROLS_MATERIAL_BACKGROUND,#{{ .theme.colors.base }}
+env = QT_QUICK_CONTROLS_MATERIAL_FOREGROUND,#{{ .theme.colors.text }}
+
 ################
 ### MONITORS ###
 ################
