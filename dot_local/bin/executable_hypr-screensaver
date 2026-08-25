@@ -10,6 +10,14 @@
 
 set -euo pipefail
 
+# Missing engine → one clear notification instead of N windows of
+# "command not found" (also keeps idle-triggered runs quiet but visible).
+if ! command -v tte >/dev/null 2>&1; then
+  notify-send -u critical -a "Screensaver" "tte not installed" \
+    "Run: chezmoi apply  (installs python-terminaltexteffects + figlet)"
+  exit 1
+fi
+
 # Already showing — don't stack a second set. ([.] so the pattern never
 # matches a shell whose own cmdline quotes it, e.g. hypridle's on-timeout.)
 pgrep -f 'ghostty --class=screensaver[.]tui' >/dev/null && exit 0
