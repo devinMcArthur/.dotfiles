@@ -70,8 +70,9 @@ source /usr/share/zsh-antidote/antidote.zsh
 antidote load
 
 # zsh-autosuggestions tuning ---------------------------------------------------
-# Default fg=8 is invisible on many terminals. Use Catppuccin overlay0.
-ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=#6c7086'
+# Default fg=8 is invisible on many terminals. Use the theme's overlay0
+# (palette: .chezmoidata/theme.yaml).
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=#{{ .theme.colors.overlay0 }}'
 # Combine history + completions for richer suggestions.
 ZSH_AUTOSUGGEST_STRATEGY=(history completion)
 # Accept full suggestion with Ctrl-Space (in addition to default → and End).
@@ -94,6 +95,10 @@ alias waybar-restart='killall waybar 2>/dev/null; nohup waybar >/dev/null 2>&1 &
 # Opens http://localhost:3030 in a browser, starting `mdbook serve` if needed.
 # Same script the Hyprland Super+F1 binding calls.
 alias laptop-docs='$HOME/.local/bin/laptop-docs'
+
+# --- fzf: colors from the shared palette (.chezmoidata/theme.yaml) ----------
+# bg:-1 keeps fzf transparent so ghostty's background shows through.
+export FZF_DEFAULT_OPTS="--color=bg:-1,bg+:#{{ .theme.colors.surface0 }},fg:#{{ .theme.colors.text }},fg+:#{{ .theme.colors.text }},hl:#{{ .theme.colors.red }},hl+:#{{ .theme.colors.red }},info:#{{ .theme.colors.mauve }},prompt:#{{ .theme.colors.mauve }},pointer:#{{ .theme.colors.rosewater }},marker:#{{ .theme.colors.lavender }},spinner:#{{ .theme.colors.rosewater }},header:#{{ .theme.colors.red }}"
 
 # --- zoxide: smarter cd (`z <partial>` jumps to frecent dirs, `zi` fuzzy) ---
 # Sesh already uses zoxide's db for session matching; this exposes `z`/`zi`

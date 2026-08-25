@@ -1,0 +1,4 @@
+# "ansi" renders via the terminal's 16-color palette, so bat follows the
+# ghostty theme (catppuccin-mocha) automatically — no vendored .tmTheme,
+# no `bat cache --build` step.
+--theme="ansi"

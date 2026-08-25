@@ -9,6 +9,9 @@
 [delta]
 	navigate = true
 	line-numbers = true
+	; "ansi" renders syntax with the terminal's 16-color palette, so delta
+	; follows the ghostty theme (catppuccin-mocha) with zero maintenance.
+	syntax-theme = ansi
 [merge]
 	conflictstyle = zdiff3
 [diff]

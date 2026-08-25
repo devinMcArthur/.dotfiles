@@ -1,0 +1,25 @@
+# Lazygit theme from the shared palette ({{ .theme.name }} — see
+# .chezmoidata/theme.yaml); token mapping follows catppuccin/lazygit.
+gui:
+  theme:
+    activeBorderColor:
+      - '#{{ .theme.colors.blue }}'
+      - bold
+    inactiveBorderColor:
+      - '#{{ .theme.colors.subtext0 }}'
+    optionsTextColor:
+      - '#{{ .theme.colors.blue }}'
+    selectedLineBgColor:
+      - '#{{ .theme.colors.surface0 }}'
+    cherryPickedCommitBgColor:
+      - '#{{ .theme.colors.surface1 }}'
+    cherryPickedCommitFgColor:
+      - '#{{ .theme.colors.blue }}'
+    unstagedChangesColor:
+      - '#{{ .theme.colors.red }}'
+    defaultFgColor:
+      - '#{{ .theme.colors.text }}'
+    searchingActiveBorderColor:
+      - '#{{ .theme.colors.yellow }}'
+  authorColors:
+    '*': '#{{ .theme.colors.lavender }}'

@@ -1,12 +1,18 @@
 return {
-  -- Themes
+  -- Themes — catppuccin mocha, matching the rest of the desktop
+  -- (palette source of truth: chezmoi .chezmoidata/theme.yaml)
   {
-    "folke/tokyonight.nvim",
+    "catppuccin/nvim",
+    name = "catppuccin",
     lazy = false,
     priority = 1000,
     config = function()
+      require("catppuccin").setup({
+        flavour = "mocha",
+        transparent_background = true,
+      })
       -- Load the colorscheme here
-      vim.cmd([[colorscheme tokyonight]])
+      vim.cmd([[colorscheme catppuccin]])
       require("config.colorscheme")
     end,
   },

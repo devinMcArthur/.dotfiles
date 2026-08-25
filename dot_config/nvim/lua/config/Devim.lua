@@ -1,5 +1,5 @@
 Devim = {
-  colorscheme = "tokyonight",
+  colorscheme = "catppuccin",
   ui = {
     float = {
       border = "rounded",

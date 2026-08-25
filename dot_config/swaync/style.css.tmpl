@@ -1,0 +1,110 @@
+/* swaync — notifications + control center themed from the shared palette
+   ({{ .theme.name }} — see .chezmoidata/theme.yaml). Previously ran on
+   stock upstream styling, the last unthemed piece of the desktop shell.
+   Reload with: swaync-client -rs */
+
+* {
+  font-family: "JetBrainsMono Nerd Font";
+  font-size: 13px;
+}
+
+/* --- Notification popups -------------------------------------------------- */
+.notification-row {
+  outline: none;
+  background: transparent;
+}
+
+.notification {
+  border-radius: 10px;
+  margin: 6px 10px;
+  border: 1px solid #{{ .theme.colors.surface0 }};
+  background: rgba({{ .theme.colors.base }}e6);   /* base @ ~90% */
+  padding: 0;
+}
+
+.notification-content {
+  padding: 8px;
+}
+
+.notification-default-action:hover,
+.notification-action:hover {
+  background: #{{ .theme.colors.surface0 }};
+}
+
+.close-button {
+  background: transparent;
+  color: #{{ .theme.colors.overlay0 }};
+  border-radius: 8px;
+  margin: 4px;
+}
+
+.close-button:hover {
+  background: #{{ .theme.colors.surface0 }};
+  color: #{{ .theme.colors.red }};
+}
+
+.summary {
+  color: #{{ .theme.colors.text }};
+  font-weight: bold;
+}
+
+.body {
+  color: #{{ .theme.colors.subtext1 }};
+}
+
+.time {
+  color: #{{ .theme.colors.overlay1 }};
+}
+
+/* Urgency accents */
+.notification.critical {
+  border: 1px solid #{{ .theme.colors.red }};
+}
+
+.notification.low {
+  border: 1px solid #{{ .theme.colors.surface0 }};
+}
+
+/* --- Control center (swaync-client -t) ------------------------------------ */
+.control-center {
+  background: rgba({{ .theme.colors.base }}f2);   /* base @ ~95% */
+  border: 1px solid #{{ .theme.colors.surface0 }};
+  border-radius: 10px;
+  margin: 8px;
+}
+
+.control-center .notification {
+  background: #{{ .theme.colors.mantle }};
+}
+
+.widget-title {
+  color: #{{ .theme.colors.text }};
+  font-weight: bold;
+  margin: 8px;
+}
+
+.widget-title > button {
+  background: #{{ .theme.colors.surface0 }};
+  color: #{{ .theme.colors.text }};
+  border: none;
+  border-radius: 8px;
+}
+
+.widget-title > button:hover {
+  background: #{{ .theme.colors.surface1 }};
+  color: #{{ .theme.colors.accent }};
+}
+
+.widget-dnd {
+  color: #{{ .theme.colors.text }};
+  margin: 8px;
+}
+
+.widget-dnd > switch {
+  background: #{{ .theme.colors.surface0 }};
+  border-radius: 10px;
+}
+
+.widget-dnd > switch:checked {
+  background: #{{ .theme.colors.accent2 }};
+}

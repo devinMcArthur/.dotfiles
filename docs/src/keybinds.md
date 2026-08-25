@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-25T09:59:47-06:00_
+_Generated 2026-08-25T12:01:31-06:00_
 
 ## Hyprland — window manager
 
@@ -29,6 +29,7 @@ _Generated 2026-08-25T09:59:47-06:00_
 | `SUPER + 7` | `workspace` | 7 |
 | `SUPER + 8` | `workspace` | 8 |
 | `SUPER + 9` | `workspace` | 9 |
+| `SUPER + A` | `exec` | $HOME/.local/bin/hypr-agent # AI agent scratchpad (dropdown claude) |
 | `SUPER + ALT + S` | `exec` | $HOME/.local/bin/hypr-record region            # record region (press again to stop) |
 | `SUPER + ALT + SHIFT + S` | `exec` | $HOME/.local/bin/hypr-record output      # record monitor (press again to stop) |
 | `SUPER + B` | `exec` | $browser # open the browser |

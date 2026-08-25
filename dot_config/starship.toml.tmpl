@@ -1,0 +1,67 @@
+# Powerline prompt, colored from the shared palette ({{ .theme.name }} —
+# see .chezmoidata/theme.yaml). Segment ramp: lavender cap → blue directory
+# → surface1 git → surface0 languages → mantle time.
+format = """
+[░▒▓](#{{ .theme.colors.lavender }})\
+[  ](bg:#{{ .theme.colors.lavender }} fg:#{{ .theme.colors.crust }})\
+[](bg:#{{ .theme.colors.blue }} fg:#{{ .theme.colors.lavender }})\
+$directory\
+[](fg:#{{ .theme.colors.blue }} bg:#{{ .theme.colors.surface1 }})\
+$git_branch\
+$git_status\
+[](fg:#{{ .theme.colors.surface1 }} bg:#{{ .theme.colors.surface0 }})\
+$nodejs\
+$rust\
+$golang\
+$php\
+[](fg:#{{ .theme.colors.surface0 }} bg:#{{ .theme.colors.mantle }})\
+$time\
+[ ](fg:#{{ .theme.colors.mantle }})\
+\n$character"""
+
+[directory]
+style = "fg:#{{ .theme.colors.crust }} bg:#{{ .theme.colors.blue }}"
+format = "[ $path ]($style)"
+truncation_length = 3
+truncation_symbol = "…/"
+
+[directory.substitutions]
+"Documents" = " "
+"Downloads" = " "
+"Music" = " "
+"Pictures" = " "
+
+[git_branch]
+symbol = ""
+style = "bg:#{{ .theme.colors.surface1 }}"
+format = '[[ $symbol $branch ](fg:#{{ .theme.colors.blue }} bg:#{{ .theme.colors.surface1 }})]($style)'
+
+[git_status]
+style = "bg:#{{ .theme.colors.surface1 }}"
+format = '[[($all_status$ahead_behind )](fg:#{{ .theme.colors.blue }} bg:#{{ .theme.colors.surface1 }})]($style)'
+
+[nodejs]
+symbol = ""
+style = "bg:#{{ .theme.colors.surface0 }}"
+format = '[[ $symbol ($version) ](fg:#{{ .theme.colors.blue }} bg:#{{ .theme.colors.surface0 }})]($style)'
+
+[rust]
+symbol = ""
+style = "bg:#{{ .theme.colors.surface0 }}"
+format = '[[ $symbol ($version) ](fg:#{{ .theme.colors.blue }} bg:#{{ .theme.colors.surface0 }})]($style)'
+
+[golang]
+symbol = "ﳑ"
+style = "bg:#{{ .theme.colors.surface0 }}"
+format = '[[ $symbol ($version) ](fg:#{{ .theme.colors.blue }} bg:#{{ .theme.colors.surface0 }})]($style)'
+
+[php]
+symbol = ""
+style = "bg:#{{ .theme.colors.surface0 }}"
+format = '[[ $symbol ($version) ](fg:#{{ .theme.colors.blue }} bg:#{{ .theme.colors.surface0 }})]($style)'
+
+[time]
+disabled = true
+time_format = "%R" # Hour:Minute Format
+style = "bg:#{{ .theme.colors.mantle }}"
+format = '[[  $time ](fg:#{{ .theme.colors.subtext0 }} bg:#{{ .theme.colors.mantle }})]($style)'
