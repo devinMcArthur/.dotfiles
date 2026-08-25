@@ -1,180 +1,94 @@
+/* Omarchy-inspired minimal bar — flat, monochrome, no per-module cards.
+   Palette: Catppuccin Mocha. Color is reserved for state (urgent, critical,
+   caffeine active); everything at rest is quiet text on the bar. */
+
 * {
     border: none;
     border-radius: 0;
     font-family: "JetBrainsMono Nerd Font";
-    font-weight: bold;
-    font-size: 16px;
+    font-size: 13px;
+    font-weight: 500;
     min-height: 0;
 }
 
 window#waybar {
-    background: rgba(21, 18, 27, 0);
-    color: #cdd6f4;
+    background: rgba(30, 30, 46, 0.9);      /* base */
+    color: #cdd6f4;                          /* text */
 }
 
 tooltip {
     background: #1e1e2e;
-    border-radius: 10px;
-    border-width: 2px;
-    border-style: solid;
-    border-color: #11111b;
+    border: 1px solid #313244;               /* surface0 */
+    border-radius: 8px;
 }
 
+/* --- Workspaces (left) --------------------------------------------------- */
 #workspaces button {
-    padding: 5px;
-    color: #313244;
-    margin-right: 5px;
+    padding: 0 6px;
+    margin: 0 1px;
+    background: transparent;
+    color: #6c7086;                          /* overlay0 — inactive */
 }
 
 #workspaces button.active {
-    color: #a6adc8;
-}
-
-#workspaces button.focused {
-    color: #a6adc8;
-    background: #eba0ac;
-    border-radius: 10px;
+    color: #cdd6f4;
 }
 
 #workspaces button.urgent {
-    color: #11111b;
-    background: #a6e3a1;
-    border-radius: 10px;
+    color: #f38ba8;                          /* red */
 }
 
 #workspaces button:hover {
-    background: #11111b;
+    background: transparent;
     color: #cdd6f4;
-    border-radius: 10px;
-}
-
-#custom-power_profile,
-#custom-sysinfo,
-#idle_inhibitor,
-#custom-weather,
-#window,
-#clock,
-#battery,
-#pulseaudio,
-#network,
-#bluetooth,
-#temperature,
-#workspaces,
-#tray,
-#backlight {
-    background: #1e1e2e;
-    opacity: 0.8;
-    padding: 0px 10px;
-    margin: 3px 0px;
-    margin-top: 10px;
-    border: 1px solid #181825;
-}
-
-#temperature {
-    border-radius: 10px 0px 0px 10px;
-}
-
-#temperature.critical {
-    color: #eba0ac;
-}
-
-#backlight {
-    border-radius: 10px 0px 0px 10px;
-}
-
-#tray {
-    border-radius: 10px;
-    margin-right: 10px;
+    box-shadow: none;
+    text-shadow: none;
 }
 
 #workspaces {
-    background: #1e1e2e;
-    border-radius: 10px;
-    margin-left: 10px;
-    padding-right: 0px;
-    padding-left: 5px;
+    margin-left: 8px;
 }
 
-#custom-power_profile {
-    color: #a6e3a1;
-    border-left: 0px;
-    border-right: 0px;
-}
-
-#idle_inhibitor {
-    color: #6c7086;          /* Catppuccin overlay0 — dormant */
-    border-left: 0px;
-    border-right: 0px;
-}
-
-#idle_inhibitor.activated {
-    color: #f38ba8;          /* red — actively holding the machine awake */
-}
-
-#custom-sysinfo {
-    color: #94e2d5;          /* Catppuccin teal — calm baseline */
-    border-left: 0px;
-    border-right: 0px;
-    padding: 0px 12px;
-}
-
-#custom-sysinfo.warning {
-    color: #f9e2af;          /* yellow */
-}
-
-#custom-sysinfo.critical {
-    color: #f38ba8;          /* red */
-}
-
-#window {
-    border-radius: 10px;
-    margin-left: 60px;
-    margin-right: 60px;
-}
-
-#clock {
-    color: #fab387;
-    border-radius: 10px 0px 0px 10px;
-    margin-left: 10px;
-    border-right: 0px;
-}
-
-#network {
-    color: #f9e2af;
-    border-radius: 10px 0px 0px 10px;
-    border-left: 0px;
-    border-right: 0px;
-}
-
-#bluetooth {
-    color: #89b4fa;
-    border-radius: 0px 10px 10px 0px;
-    margin-right: 10px
-} 
-
-#pulseaudio {
-    color: #89b4fa;
-    border-left: 0px;
-    border-right: 0px;
-}
-
-#pulseaudio.microphone {
-    color: #cba6f7;
-    border-left: 0px;
-    border-right: 0px;
-    border-radius: 0px 10px 10px 0px;
-    margin-right: 10px;
+/* --- Right-side cluster: even quiet spacing, no boxes -------------------- */
+#clock,
+#idle_inhibitor,
+#custom-power_profile,
+#custom-sysinfo,
+#bluetooth,
+#network,
+#pulseaudio,
+#battery,
+#tray {
+    background: transparent;
+    padding: 0;
+    margin: 0 8px;
 }
 
 #battery {
-    color: #a6e3a1;
-    border-radius: 0 10px 10px 0;
-    margin-right: 10px;
-    border-left: 0px;
+    margin-right: 12px;
 }
 
-#custom-weather {
-    border-radius: 0px 10px 10px 0px;
-    border-right: 0px;
-    margin-left: 0px;
+/* --- State colors (the only color on the bar) ---------------------------- */
+#idle_inhibitor.activated {
+    color: #f38ba8;                          /* red — holding machine awake */
+}
+
+#custom-sysinfo.warning {
+    color: #f9e2af;                          /* yellow */
+}
+
+#custom-sysinfo.critical {
+    color: #f38ba8;
+}
+
+#network.disconnected {
+    color: #f38ba8;
+}
+
+#battery.warning {
+    color: #f9e2af;
+}
+
+#battery.critical:not(.charging) {
+    color: #f38ba8;
 }

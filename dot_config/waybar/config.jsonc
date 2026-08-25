@@ -1,73 +1,47 @@
 {
+  // Omarchy-inspired minimal bar: flat, monochrome, no per-module cards.
+  // Left: workspaces · Center: clock · Right: compact icon cluster.
+  // Dropped from the old bar: weather, window title, temperature, backlight,
+  // mic module (swayosd gives volume/mic/brightness feedback now), split
+  // date/time clocks.
   "layer": "top",
   "position": "top",
   "mod": "dock",
   "exclusive": true,
-  // passthrough=true would forward all clicks to the layer below, making
-  // the bar purely decorative. We want clickable modules (power profile
-  // cycler, workspace switcher, etc.) so keep it false.
   "passthrough": false,
   "gtk-layer-shell": true,
-  "height": 50,
+  "height": 30,
   "modules-left": [
-    "clock#date",
-    "clock#time",
-    "custom/weather",
     "hyprland/workspaces"
   ],
   "modules-center": [
-    "hyprland/window"
+    "clock"
   ],
   "modules-right": [
-    "network",
-    "bluetooth",
-    "custom/sysinfo",
-    "temperature",
-    "custom/power_profile",
+    "tray",
     "idle_inhibitor",
-    "battery",
-    "backlight",
+    "custom/power_profile",
+    "custom/sysinfo",
+    "bluetooth",
+    "network",
     "pulseaudio",
-    "pulseaudio#microphone",
-    "tray"
+    "battery"
   ],
-  "hyprland/window": {
-    "format": "{}"
-  },
   "hyprland/workspaces": {
+    // Occupied workspaces only (persistent 1-10 was 10 numbers of noise
+    // across three monitors); numbers stay pinned per-monitor via
+    // hyprland.conf workspace rules.
     "disable-scroll": true,
     "all-outputs": true,
-    "on-click": "activate",
-    "persistent_workspaces": {
-      "1": [],
-      "2": [],
-      "3": [],
-      "4": [],
-      "5": [],
-      "6": [],
-      "7": [],
-      "8": [],
-      "9": [],
-      "10": []
-    }
+    "on-click": "activate"
   },
-  "custom/sysinfo": {
-    // CPU% + MEM% in the bar; hover for a rich popup (load, top procs).
-    // Left-click opens btop in a Ghostty window. Interval matches the
-    // 1s sample inside the script (script sleeps 1s for the CPU delta).
-    "exec": "~/.config/waybar/scripts/sysinfo.sh",
-    "return-type": "json",
-    "interval": 2,
-    "tooltip": true,
-    "on-click": "ghostty --class=sysmon -e btop"
-  },
-  "custom/power_profile": {
-    // Power-profiles-daemon current profile; left-click cycles forward.
-    "exec": "~/.config/waybar/scripts/power-profile.sh status",
-    "return-type": "json",
-    "interval": 5,
-    "on-click": "~/.config/waybar/scripts/power-profile.sh next && pkill -SIGRTMIN+8 waybar",
-    "signal": 8
+  "clock": {
+    // Single centered clock, Omarchy-style. Click opens a calendar flyout
+    // (yad, Windows-style — closes on unfocus or second click).
+    "format": "{:%A %H:%M}",
+    "on-click": "~/.config/waybar/scripts/calendar.sh",
+    "tooltip-format": "{:%A, %e %B %Y}",
+    "interval": 60
   },
   "idle_inhibitor": {
     // Caffeine toggle: click to keep the machine awake. Uses the Wayland
@@ -82,120 +56,71 @@
     "tooltip-format-activated": "Caffeine: staying awake (idle/lock inhibited)",
     "tooltip-format-deactivated": "Idle timeouts active — click to stay awake"
   },
-  "custom/weather": {
-    //shows the current weather and forecast
+  "custom/power_profile": {
+    // Power-profiles-daemon current profile; left-click cycles forward.
+    "exec": "~/.config/waybar/scripts/power-profile.sh status",
+    "return-type": "json",
+    "interval": 5,
+    "on-click": "~/.config/waybar/scripts/power-profile.sh next && pkill -SIGRTMIN+8 waybar",
+    "signal": 8
+  },
+  "custom/sysinfo": {
+    // CPU% + MEM% in the bar; hover for a rich popup (load, top procs).
+    // Left-click opens btop in a Ghostty window.
+    "exec": "~/.config/waybar/scripts/sysinfo.sh",
+    "return-type": "json",
+    "interval": 2,
     "tooltip": true,
-    "format": "{}",
-    "interval": 30,
-    "exec": "~/.config/waybar/scripts/waybar-wttr.py",
-    "return-type": "json"
+    "on-click": "ghostty --class=sysmon -e btop"
   },
-  "tray": {
-    "icon-size": 18,
-    "spacing": 10
+  "bluetooth": {
+    // Click opens bluetui (same floating TUI as Super+Shift+B)
+    "on-click": "ghostty --class=tui.bluetooth -e bluetui",
+    "format": "",
+    "format-disabled": "󰂲",
+    "format-connected": " {num_connections}",
+    "tooltip-format": "{device_alias}",
+    "tooltip-format-connected": " {device_enumerate}",
+    "tooltip-format-enumerate-connected": "{device_alias}"
   },
-  "clock#time": {
-    "interval": 1,
-    "format": "{:%H:%M:%S}",
-    "tooltip": false
-  },
-  "clock#date": {
-    "interval": 10,
-    "format": "  {:%e %b %Y}", // Icon: calendar-alt
-    "tooltip-format": "{:%e %B %Y}"
-  },
-  "backlight": {
-    "device": "intel_backlight",
-    "format": "{icon} {percent}%",
-    "format-icons": [
-      "󰃞",
-      "󰃟",
-      "󰃠"
-    ],
-    "on-scroll-up": "brightnessctl set 1%+",
-    "on-scroll-down": "brightnessctl set 1%-",
-    "min-length": 6
-  },
-  "battery": {
-    "states": {
-      "good": 95,
-      "warning": 30,
-      "critical": 20
-    },
-    "format": "{icon} {capacity}%",
-    "format-charging": " {capacity}%",
-    "format-plugged": " {capacity}%",
-    "format-alt": "{time} {icon}",
-    "format-icons": [
-      "󰂎",
-      "󰁺",
-      "󰁻",
-      "󰁼",
-      "󰁽",
-      "󰁾",
-      "󰁿",
-      "󰂀",
-      "󰂁",
-      "󰂂",
-      "󰁹"
-    ]
+  "network": {
+    // Click opens impala (same floating TUI as Super+I)
+    "on-click": "ghostty --class=tui.wifi -e impala",
+    "format-wifi": "{icon}",
+    "format-icons": ["󰤯", "󰤟", "󰤢", "󰤥", "󰤨"],
+    "format-ethernet": "󰀂",
+    "format-linked": "󰀂",
+    "format-disconnected": "󰖪",
+    "tooltip-format": "{essid} ({signalStrength}%) — {ifname} via {gwaddr}",
+    "tooltip-format-ethernet": "{ipaddr}/{cidr} — {ifname}"
   },
   "pulseaudio": {
-    "format": "{icon} {volume}%",
-    "tooltip": false,
-    "format-muted": " Muted",
+    "format": "{icon}",
+    "format-muted": "󰝟",
+    "tooltip-format": "{desc} — {volume}%",
     "on-click": "pamixer -t",
     "on-scroll-up": "pamixer -i 5",
     "on-scroll-down": "pamixer -d 5",
     "scroll-step": 5,
     "format-icons": {
-      "headphone": "",
-      "hands-free": "",
-      "headset": "",
-      "phone": "",
-      "portable": "",
-      "car": "",
-      "default": [
-        "",
-        "",
-        ""
-      ]
+      "headphone": "",
+      "default": ["", "", ""]
     }
   },
-  "pulseaudio#microphone": {
-    "format": "{format_source}",
-    "format-source": " {volume}%",
-    "format-source-muted": " Muted",
-    "on-click": "pamixer --default-source -t",
-    "on-scroll-up": "pamixer --default-source -i 5",
-    "on-scroll-down": "pamixer --default-source -d 5",
-    "scroll-step": 5
+  "battery": {
+    "states": {
+      "warning": 30,
+      "critical": 20
+    },
+    "format": "{icon} {capacity}%",
+    "format-charging": " {capacity}%",
+    "format-plugged": " {capacity}%",
+    "format-alt": "{time} {icon}",
+    "format-icons": ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"],
+    "interval": 10
   },
-  "temperature": {
-    "thermal-zone": 1,
-    "format": "{temperatureC}°C ",
-    "critical-threshold": 80,
-    "format-critical": "{temperatureC}°C "
-  },
-  "network": {
-    // "interface": "wlp2*", // (Optional) To force the use of this interface
-    // Click opens impala (same floating TUI as Super+I)
-    "on-click": "ghostty --class=tui.wifi -e impala",
-    "format-wifi": "  {signalStrength}%",
-    "format-ethernet": "{ipaddr}/{cidr}",
-    "tooltip-format": "{essid} - {ifname} via {gwaddr}",
-    "format-linked": "{ifname} (No IP)",
-    "format-disconnected": "Disconnected ⚠",
-    "format-alt": "{ifname}:{essid} {ipaddr}/{cidr}"
-  },
-  "bluetooth": {
-    // Click opens bluetui (same floating TUI as Super+Shift+B)
-    "on-click": "ghostty --class=tui.bluetooth -e bluetui",
-    "format": " {status}",
-    "format-disabled": "", // an empty format will hide the module
-    "format-connected": " {num_connections}",
-    "tooltip-format": "{device_alias}",
-    "tooltip-format-connected": " {device_enumerate}",
-    "tooltip-format-enumerate-connected": "{device_alias}"
+  "tray": {
+    "icon-size": 16,
+    "spacing": 8
   }
 }
