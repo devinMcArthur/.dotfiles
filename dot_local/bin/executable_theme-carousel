@@ -52,8 +52,16 @@ if not ITEMS:
     print("usage: theme-carousel --current NAME name card.png ...", file=sys.stderr)
     sys.exit(3)
 
-CSS = b"""
+CSS = """
 window { background: transparent; }
+.footer {
+  /* Pill behind name/dots/hint — text-shadow alone dissolved into bright
+     wallpapers; a dark chip guarantees contrast on any background. */
+  background: rgba(10, 10, 16, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  padding: 12px 30px;
+}
 .card-name {
   font-family: "JetBrainsMono Nerd Font";
   font-size: 22px;
@@ -87,7 +95,7 @@ class Carousel(Gtk.Application):
         LayerShell.set_namespace(win, "theme-carousel")
 
         css = Gtk.CssProvider()
-        css.load_from_data(CSS)
+        css.load_from_data(CSS.encode())
         Gtk.StyleContext.add_provider_for_display(
             Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
@@ -108,13 +116,18 @@ class Carousel(Gtk.Application):
         hint = Gtk.Label(label="←  → browse   ·   ⏎ apply   ·   esc close")
         hint.add_css_class("hint")
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        footer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
+        footer.add_css_class("footer")
+        footer.set_halign(Gtk.Align.CENTER)
+        footer.append(self.name_label)
+        footer.append(self.dots)
+        footer.append(hint)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         box.set_margin_top(12)
         box.set_margin_bottom(12)
         box.append(self.stack)
-        box.append(self.name_label)
-        box.append(self.dots)
-        box.append(hint)
+        box.append(footer)
         win.set_child(box)
 
         keys = Gtk.EventControllerKey()

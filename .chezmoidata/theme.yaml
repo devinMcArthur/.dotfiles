@@ -1,38 +1,49 @@
-# Nord mapped onto the catppuccin-shaped token schema.
-# Activate with: theme set nord
+# Single source of truth for the desktop palette — Catppuccin Mocha.
+# Consumed by *.tmpl configs as {{ .theme.colors.<token> }} (hex, no '#',
+# so templates can emit "#rrggbb", "rgba(rrggbbaa)", or bare hex as needed).
+#
+# THIS FILE IS THE ACTIVE THEME and is overwritten by `theme set <name>`,
+# which copies one of the palettes from themes/*.yaml over it (then
+# chezmoi-applies and reloads the desktop). Edit the themes/ files, not
+# this one, unless you're tweaking the currently-active theme in place.
+# The login screen (regreet/plymouth/GRUB) deliberately stays Mocha —
+# run_onchange_after_boot-theming.sh needs sudo, which a theme switch
+# shouldn't require.
 theme:
-  name: "nord"
-  ghostty: "Nord"
-  nvim: "nord"
-  nvimFlavour: ""
-  btop: "nord"
-  wallpaper: "omarchy-nord-night-hawks.webp"
+  name: "catppuccin-mocha"
+  # Names understood by specific tools:
+  ghostty: "Catppuccin Mocha"     # built-in ghostty theme (display-name style, with space)
+  nvim: "catppuccin"              # colorscheme command / plugin
+  nvimFlavour: "mocha"
+  btop: "catppuccin_mocha"        # theme file name (bundled or vendored in dot_config/btop/themes)
+  wallpaper: "omarchy-catppuccin-waves.webp"  # file in ~/Pictures/wallpapers (repo: Pictures/wallpapers)
   colors:
-    rosewater: "d8dee9"
-    flamingo: "d08770"
-    pink: "b48ead"
-    mauve: "b48ead"
-    red: "bf616a"
-    maroon: "bf616a"
-    peach: "d08770"
-    yellow: "ebcb8b"
-    green: "a3be8c"
-    teal: "8fbcbb"
-    sky: "88c0d0"
-    sapphire: "5e81ac"
-    blue: "81a1c1"
-    lavender: "88c0d0"
-    text: "eceff4"
-    subtext1: "e5e9f0"
-    subtext0: "d8dee9"
-    overlay2: "9099ab"
-    overlay1: "7b88a1"
-    overlay0: "616e88"
-    surface2: "4c566a"
-    surface1: "434c5e"
-    surface0: "3b4252"
-    base: "2e3440"
-    mantle: "292e39"
-    crust: "242933"
-    accent: "88c0d0"              # frost cyan — Nord's signature
-    accent2: "81a1c1"             # frost blue
+    rosewater: "f5e0dc"
+    flamingo: "f2cdcd"
+    pink: "f5c2e7"
+    mauve: "cba6f7"
+    red: "f38ba8"
+    maroon: "eba0ac"
+    peach: "fab387"
+    yellow: "f9e2af"
+    green: "a6e3a1"
+    teal: "94e2d5"
+    sky: "89dceb"
+    sapphire: "74c7ec"
+    blue: "89b4fa"
+    lavender: "b4befe"
+    text: "cdd6f4"
+    subtext1: "bac2de"
+    subtext0: "a6adc8"
+    overlay2: "9399b2"
+    overlay1: "7f849c"
+    overlay0: "6c7086"
+    surface2: "585b70"
+    surface1: "45475a"
+    surface0: "313244"
+    base: "1e1e2e"
+    mantle: "181825"
+    crust: "11111b"
+    # Semantic aliases (duplicated hex — YAML has no refs):
+    accent: "f9e2af"              # yellow — primary accent (border gradient start)
+    accent2: "fab387"             # peach — secondary accent (gradient end)

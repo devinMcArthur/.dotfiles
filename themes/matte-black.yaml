@@ -1,0 +1,40 @@
+# Matte Black (from Omarchy's colors.toml) mapped onto the token schema.
+# Deliberately monochrome: greys + one amber accent; "green" is amber and
+# reds carry the warning roles, faithful to upstream.
+# Activate with: theme set matte-black
+theme:
+  name: "matte-black"
+  ghostty: "matte-black"          # custom: dot_config/ghostty/themes/matte-black
+  nvim: "matteblack"              # tahayvr/matteblack.nvim
+  nvimFlavour: ""
+  btop: "matte-black"             # generated: dot_config/btop/themes/matte-black.theme
+  wallpaper: "omarchy-matte-black-dark-waters.webp"
+  colors:
+    rosewater: "eaeaea"
+    flamingo: "c63d3d"
+    pink: "d35f5f"
+    mauve: "d35f5f"
+    red: "d35f5f"
+    maroon: "b91c1c"
+    peach: "e68e0d"
+    yellow: "ffc107"
+    green: "ffc107"
+    teal: "bebebe"
+    sky: "eaeaea"
+    sapphire: "8a8a8d"
+    blue: "e68e0d"
+    lavender: "eaeaea"
+    text: "bebebe"
+    subtext1: "a5a5a5"
+    subtext0: "8a8a8d"
+    overlay2: "666666"
+    overlay1: "555555"
+    overlay0: "444444"
+    surface2: "333333"
+    surface1: "2a2a2a"
+    surface0: "1e1e1e"
+    base: "121212"
+    mantle: "0d0d0d"
+    crust: "090909"
+    accent: "e68e0d"              # amber — the one color matte-black allows
+    accent2: "f59e0b"

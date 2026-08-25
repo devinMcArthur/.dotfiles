@@ -22,6 +22,7 @@ return {
   { "ellisonleao/gruvbox.nvim", lazy = false, priority = 1000 },
   { "gbprod/nord.nvim", lazy = false, priority = 1000 },
   { "rose-pine/neovim", name = "rose-pine", lazy = false, priority = 1000 },
+  { "tahayvr/matteblack.nvim", lazy = false, priority = 1000 },
   { "nvim-lua/plenary.nvim" },
   -- LSP Base
   {
