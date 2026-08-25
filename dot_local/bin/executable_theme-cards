@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+"""Generate theme preview cards for the carousel (and yad fallback list).
+
+For each <chezmoi>/themes/<name>.yaml, renders a mini desktop mockup —
+that theme's wallpaper with a fake bar and terminal drawn in its palette —
+so the picker shows what the desktop will actually look like.
+
+Outputs (mtime-cached against the theme yaml + wallpaper):
+  ~/.cache/theme-previews/card-<name>.png   900x520 rounded RGBA (carousel)
+  ~/.cache/theme-previews/<name>.png        300x164 strip (yad fallback)
+"""
+
+import os
+import re
+import sys
+
+from PIL import Image, ImageDraw, ImageFont
+
+HOME = os.path.expanduser("~")
+SRC = os.path.join(HOME, ".local/share/chezmoi")
+THEMES = os.path.join(SRC, "themes")
+WALLS = os.path.join(HOME, "Pictures/wallpapers")
+CACHE = os.path.join(HOME, ".cache/theme-previews")
+
+FONT = "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf"
+FONT_B = "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Bold.ttf"
+
+CW, CH, R = 900, 520, 22   # card size / corner radius
+
+
+def rgb(h, a=255):
+    return tuple(int(h[i : i + 2], 16) for i in (0, 2, 4)) + (a,)
+
+
+def rounded(img, radius):
+    mask = Image.new("L", img.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, *img.size], radius, fill=255)
+    img.putalpha(mask)
+    return img
+
+
+def cover(img, w, h):
+    s = max(w / img.width, h / img.height)
+    img = img.resize((round(img.width * s), round(img.height * s)))
+    x, y = (img.width - w) // 2, (img.height - h) // 2
+    return img.crop((x, y, x + w, y + h))
+
+
+def card(colors, wallpaper):
+    f13 = ImageFont.truetype(FONT, 13)
+    f15 = ImageFont.truetype(FONT, 15)
+    f15b = ImageFont.truetype(FONT_B, 15)
+
+    base = Image.new("RGBA", (CW, CH))
+    wall = cover(Image.open(wallpaper).convert("RGB"), CW, CH).convert("RGBA")
+    base.paste(wall, (0, 0))
+    d = ImageDraw.Draw(base, "RGBA")
+
+    # --- bar (minimal waybar) ---
+    d.rounded_rectangle([14, 12, CW - 14, 46], 10, fill=rgb(colors["base"], 235))
+    for i in range(5):
+        col = colors["blue"] if i == 0 else colors["overlay0"]
+        d.text((34 + i * 22, 21), str(i + 1), font=f13, fill=rgb(col))
+    d.text((CW / 2, 22), "Tuesday 12:30", font=f13, fill=rgb(colors["text"]), anchor="ma")
+    for i, key in enumerate(["overlay0", "green", "blue", "text"]):
+        d.ellipse([CW - 130 + i * 26, 24, CW - 118 + i * 26, 36], fill=rgb(colors[key]))
+
+    # --- terminal window ---
+    tx0, ty0, tx1, ty1 = 46, 78, 570, 440
+    d.rounded_rectangle([tx0, ty0, tx1, ty1], 14, fill=rgb(colors["base"], 228),
+                        outline=rgb(colors["accent"], 200), width=2)
+    lines = [
+        [("❯ ", "green"), ("nvim ", "text"), ("theme.yaml", "blue")],
+        [("", None)],
+        [("function ", "mauve"), ("switch", "blue"), ("(theme) {", "text")],
+        [("  const ", "mauve"), ("palette ", "text"), ("= ", "overlay1"),
+         ("load", "blue"), ("(theme)", "text")],
+        [("  apply", "blue"), ("(palette)  ", "text"), ("// live", "overlay0")],
+        [("}", "text")],
+        [("", None)],
+        [("❯ ", "green"), ("git status", "text")],
+        [("On branch ", "text"), ("master", "yellow")],
+        [("nothing to commit", "overlay1")],
+    ]
+    y = ty0 + 22
+    for line in lines:
+        x = tx0 + 22
+        for txt, key in line:
+            if key:
+                d.text((x, y), txt, font=f15, fill=rgb(colors[key]))
+                x += d.textlength(txt, font=f15)
+        y += 26
+    d.rectangle([tx0 + 22, y + 2, tx0 + 33, y + 20], fill=rgb(colors["text"], 200))
+
+    # --- side panel (btop-ish meters) ---
+    px0, py0, px1, py1 = 600, 78, CW - 46, 300
+    d.rounded_rectangle([px0, py0, px1, py1], 14, fill=rgb(colors["base"], 228),
+                        outline=rgb(colors["surface1"], 220), width=2)
+    d.text((px0 + 18, py0 + 14), "cpu  mem  net", font=f15b, fill=rgb(colors["text"]))
+    for i, (key, frac) in enumerate([("green", 0.7), ("yellow", 0.45), ("red", 0.25),
+                                     ("blue", 0.55), ("mauve", 0.35)]):
+        by = py0 + 52 + i * 32
+        d.rounded_rectangle([px0 + 18, by, px1 - 18, by + 14], 7,
+                            fill=rgb(colors["surface0"], 255))
+        bw = (px1 - px0 - 36) * frac
+        d.rounded_rectangle([px0 + 18, by, px0 + 18 + bw, by + 14], 7,
+                            fill=rgb(colors[key]))
+
+    # --- palette strip ---
+    keys = ["red", "peach", "yellow", "green", "teal", "blue", "mauve", "text"]
+    sw = (px1 - px0) / len(keys)
+    for i, key in enumerate(keys):
+        d.rounded_rectangle([px0 + i * sw + 2, 330, px0 + (i + 1) * sw - 2, 362], 6,
+                            fill=rgb(colors[key]))
+
+    return rounded(base, R)
+
+
+def main():
+    os.makedirs(CACHE, exist_ok=True)
+    for f in sorted(os.listdir(THEMES)):
+        if not f.endswith(".yaml"):
+            continue
+        name = f[:-5]
+        ypath = os.path.join(THEMES, f)
+        txt = open(ypath).read()
+        colors = dict(re.findall(r'^\s+(\w+): "([0-9a-fA-F]{6})"', txt, re.M))
+        wall = os.path.join(WALLS, re.search(r'wallpaper: "(.+?)"', txt).group(1))
+
+        newest_src = max(os.path.getmtime(ypath), os.path.getmtime(wall))
+        big = os.path.join(CACHE, f"card-{name}.png")
+        if not (os.path.exists(big) and os.path.getmtime(big) >= newest_src):
+            c = card(colors, wall)
+            c.save(big)
+            # Small strip for the yad fallback list.
+            c.convert("RGB").resize((300, 173)).save(os.path.join(CACHE, f"{name}.png"))
+            print(f"rendered {name}")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

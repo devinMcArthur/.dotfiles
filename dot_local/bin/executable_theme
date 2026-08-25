@@ -32,66 +32,41 @@ case "${1:-}" in
     current
     ;;
   menu)
-    # Visual picker: yad image-list with a preview card per theme
-    # (wallpaper crop + palette strip, PIL-generated, mtime-cached).
-    # wofi's img: dmenu thumbnails don't render — see cliphist-menu — and
-    # yad is already a dependency (calendar flyout).
+    # Visual picker: chrome-less carousel (theme-carousel, GTK4 layer-shell
+    # overlay — transparent, sliding transitions) over desktop-mockup cards
+    # rendered by theme-cards. Falls back to a yad image list if the
+    # carousel can't start (exit 3: missing typelib, no display).
     cache="$HOME/.cache/theme-previews"
-    mkdir -p "$cache"
-    python3 - "$SRC/themes" "$cache" "$HOME/Pictures/wallpapers" <<'PY'
-import os, re, sys
-from PIL import Image, ImageDraw
-
-themes_dir, cache, walls = sys.argv[1:4]
-W, H, S = 300, 130, 34   # card width, wallpaper height, swatch strip height
-SWATCHES = ["base", "surface0", "red", "peach", "yellow", "green", "blue", "mauve"]
-
-for f in sorted(os.listdir(themes_dir)):
-    if not f.endswith(".yaml"):
-        continue
-    name = f[:-5]
-    ypath = os.path.join(themes_dir, f)
-    out = os.path.join(cache, name + ".png")
-    if os.path.exists(out) and os.path.getmtime(out) >= os.path.getmtime(ypath):
-        continue
-    txt = open(ypath).read()
-    colors = dict(re.findall(r'^\s+(\w+): "([0-9a-fA-F]{6})"', txt, re.M))
-    wall = re.search(r'wallpaper: "(.+?)"', txt).group(1)
-
-    img = Image.open(os.path.join(walls, wall)).convert("RGB")
-    scale = max(W / img.width, H / img.height)
-    img = img.resize((round(img.width * scale), round(img.height * scale)))
-    left, top = (img.width - W) // 2, (img.height - H) // 2
-    img = img.crop((left, top, left + W, top + H))
-
-    card = Image.new("RGB", (W, H + S), "#" + colors.get("base", "000000"))
-    card.paste(img, (0, 0))
-    draw = ImageDraw.Draw(card)
-    w = W / len(SWATCHES)
-    for i, key in enumerate(SWATCHES):
-        draw.rectangle([i * w, H, (i + 1) * w, H + S], fill="#" + colors.get(key, "888888"))
-    card.save(out)
-PY
+    "$HOME/.local/bin/theme-cards" >/dev/null
     cur="$(current)"
-    args=()
+    args=(--current "$cur")
     for f in "$SRC"/themes/*.yaml; do
       name="$(basename "$f" .yaml)"
-      # Non-empty placeholder: yad shifts row cells when a value is "".
-      mark=" "
-      if [ "$name" = "$cur" ]; then mark="◀ current"; fi
-      args+=("$cache/$name.png" "$name" "$mark")
+      args+=("$name" "$cache/card-$name.png")
     done
-    # Double-click (or Enter) picks; Esc cancels. --name sets the Wayland
-    # app-id so the hyprland float rule matches (yad ignores --class).
-    # GTK theme matched to the desktop, same as the calendar flyout.
-    GTK_THEME="$(ls /usr/share/themes 2>/dev/null | grep -im1 'catppuccin.*mocha' || echo Adwaita-dark)"
-    export GTK_THEME
-    sel="$(yad --list --name=theme.picker --title=Theme \
-      --no-headers --no-buttons --borders=8 \
-      --width=520 --height=780 \
-      --column=:IMG --column=Theme --column=Note \
-      --print-column=2 --separator='' \
-      "${args[@]}")" || exit 0
+    rc=0
+    sel="$("$HOME/.local/bin/theme-carousel" "${args[@]}")" || rc=$?
+    if [ "$rc" -eq 3 ]; then
+      # Fallback: yad image list (small strip previews from theme-cards).
+      yargs=()
+      for f in "$SRC"/themes/*.yaml; do
+        name="$(basename "$f" .yaml)"
+        # Non-empty placeholder: yad shifts row cells when a value is "".
+        mark=" "
+        if [ "$name" = "$cur" ]; then mark="◀ current"; fi
+        yargs+=("$cache/$name.png" "$name" "$mark")
+      done
+      GTK_THEME="$(ls /usr/share/themes 2>/dev/null | grep -im1 'catppuccin.*mocha' || echo Adwaita-dark)"
+      export GTK_THEME
+      sel="$(yad --list --name=theme.picker --title=Theme \
+        --no-headers --no-buttons --borders=8 \
+        --width=520 --height=780 \
+        --column=:IMG --column=Theme --column=Note \
+        --print-column=2 --separator='' \
+        "${yargs[@]}")" || exit 0
+    elif [ "$rc" -ne 0 ]; then
+      exit 0   # cancelled
+    fi
     [ -n "$sel" ] || exit 0
     exec "$0" set "$sel"
     ;;

@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""Chrome-less theme carousel: floating cards over the desktop, no backdrop.
+
+Usage: theme-carousel --current NAME name1 card1.png name2 card2.png ...
+Keys:  Left/Right or h/l browse (sliding transition), Enter/Space apply
+       (prints the selected name to stdout), Esc cancels.
+Exit:  0 selected · 1 cancelled · 3 environment error (caller falls back
+       to the yad list picker).
+
+Runs as a gtk4-layer-shell overlay with an exclusive keyboard grab, so it
+floats above the desktop with fully transparent background — only the card,
+name, and dots are visible. gtk4-layer-shell must be LD_PRELOADed before
+GTK loads when used from Python; the script re-execs itself to arrange that.
+"""
+
+import os
+import sys
+
+# gtk4-layer-shell requirement for interpreted languages: preload before GTK.
+if os.environ.get("_THEME_CAROUSEL_PRELOADED") != "1":
+    env = dict(os.environ)
+    env["LD_PRELOAD"] = "/usr/lib/libgtk4-layer-shell.so" + (
+        ":" + env["LD_PRELOAD"] if env.get("LD_PRELOAD") else ""
+    )
+    env["_THEME_CAROUSEL_PRELOADED"] = "1"
+    os.execvpe(sys.argv[0], sys.argv, env)
+
+try:
+    import gi
+
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Gdk", "4.0")
+    gi.require_version("Gtk4LayerShell", "1.0")
+    from gi.repository import Gdk, Gtk, Gtk4LayerShell as LayerShell
+except Exception as e:  # missing typelib, no display, ...
+    print(f"theme-carousel: environment error: {e}", file=sys.stderr)
+    sys.exit(3)
+
+
+def parse_args(argv):
+    current, items, it = None, [], iter(argv)
+    for a in it:
+        if a == "--current":
+            current = next(it, None)
+        else:
+            items.append((a, next(it)))
+    return current, items
+
+
+CURRENT, ITEMS = parse_args(sys.argv[1:])
+if not ITEMS:
+    print("usage: theme-carousel --current NAME name card.png ...", file=sys.stderr)
+    sys.exit(3)
+
+CSS = b"""
+window { background: transparent; }
+.card-name {
+  font-family: "JetBrainsMono Nerd Font";
+  font-size: 22px;
+  font-weight: bold;
+  color: #ffffff;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.9);
+}
+.dots {
+  font-size: 15px;
+  color: #ffffff;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+}
+.hint {
+  font-size: 12px;
+  color: rgba(255,255,255,0.75);
+  text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+}
+"""
+
+
+class Carousel(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id="dev.turing.theme-carousel")
+        self.index = next((i for i, (n, _) in enumerate(ITEMS) if n == CURRENT), 0)
+
+    def do_activate(self):
+        win = Gtk.ApplicationWindow(application=self)
+        LayerShell.init_for_window(win)
+        LayerShell.set_layer(win, LayerShell.Layer.OVERLAY)
+        LayerShell.set_keyboard_mode(win, LayerShell.KeyboardMode.EXCLUSIVE)
+        LayerShell.set_namespace(win, "theme-carousel")
+
+        css = Gtk.CssProvider()
+        css.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+        self.stack = Gtk.Stack(
+            transition_type=Gtk.StackTransitionType.SLIDE_LEFT_RIGHT,
+            transition_duration=220,
+        )
+        for name, path in ITEMS:
+            pic = Gtk.Picture.new_for_filename(path)
+            pic.set_size_request(900, 520)
+            self.stack.add_named(pic, name)
+
+        self.name_label = Gtk.Label()
+        self.name_label.add_css_class("card-name")
+        self.dots = Gtk.Label()
+        self.dots.add_css_class("dots")
+        hint = Gtk.Label(label="←  → browse   ·   ⏎ apply   ·   esc close")
+        hint.add_css_class("hint")
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_margin_top(12)
+        box.set_margin_bottom(12)
+        box.append(self.stack)
+        box.append(self.name_label)
+        box.append(self.dots)
+        box.append(hint)
+        win.set_child(box)
+
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self.on_key)
+        win.add_controller(keys)
+
+        self.show(0)
+        win.present()
+
+    def show(self, step):
+        self.index = (self.index + step) % len(ITEMS)
+        self.stack.set_transition_type(
+            Gtk.StackTransitionType.SLIDE_LEFT if step >= 0
+            else Gtk.StackTransitionType.SLIDE_RIGHT
+        )
+        name = ITEMS[self.index][0]
+        self.stack.set_visible_child_name(name)
+        self.name_label.set_text(name + ("   (current)" if name == CURRENT else ""))
+        self.dots.set_text("   ".join(
+            "●" if i == self.index else "○" for i in range(len(ITEMS))
+        ))
+
+    def on_key(self, _c, keyval, _code, _state):
+        k = Gdk.keyval_name(keyval)
+        if k in ("Right", "l"):
+            self.show(1)
+        elif k in ("Left", "h"):
+            self.show(-1)
+        elif k in ("Return", "KP_Enter", "space"):
+            print(ITEMS[self.index][0], flush=True)
+            self.quit()
+        elif k in ("Escape", "q"):
+            self._cancelled = True
+            self.quit()
+        return True
+
+
+app = Carousel()
+app.run(None)
+sys.exit(1 if getattr(app, "_cancelled", False) else 0)

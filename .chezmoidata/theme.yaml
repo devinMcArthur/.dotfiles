@@ -6,7 +6,7 @@ theme:
   nvim: "nord"
   nvimFlavour: ""
   btop: "nord"
-  wallpaper: "evening-landscape.jpg"
+  wallpaper: "aurora-nord.jpg"
   colors:
     rosewater: "d8dee9"
     flamingo: "d08770"

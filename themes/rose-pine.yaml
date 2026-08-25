@@ -6,7 +6,7 @@ theme:
   nvim: "rose-pine"
   nvimFlavour: ""
   btop: "rose-pine"               # vendored: dot_config/btop/themes/rose-pine.theme
-  wallpaper: "evening-landscape.jpg"
+  wallpaper: "aurora-rose-pine.jpg"
   colors:
     rosewater: "ebbcba"
     flamingo: "ebbcba"
