@@ -1,25 +1,39 @@
 #!/usr/bin/env bash
-# net-speedtest — on-demand connection capacity test (middle-click on the
-# waybar network icon, or run from a shell). Saturates the link for ~30s
-# while running — that's inherent to what a speed test is.
+# net-speedtest — on-demand connection capacity test. Saturates the link
+# ~30s while measuring; that's inherent to what a speed test is.
+#
+# Detach-safe worker for the DMS Control Center widget: state and results
+# go to ~/.cache/speedtest/state (STATUS/PING/DOWN/UP/AT/ERR lines), the
+# finish lands as a notification — so the widget can be closed mid-test
+# and merely re-reads state whenever it next exists.
 
 set -uo pipefail
 
-if pgrep -x speedtest-cli >/dev/null || pgrep -f 'speedtest-cli' | grep -qv $$; then
-  notify-send -a "Network" "Speed test already running"
-  exit 0
+CACHE="$HOME/.cache/speedtest"
+STATE="$CACHE/state"
+mkdir -p "$CACHE"
+
+if pgrep -x speedtest-cli >/dev/null 2>&1; then
+  exit 0   # already running; widget shows the running state
 fi
 
-command -v speedtest-cli >/dev/null 2>&1 || {
+if ! command -v speedtest-cli >/dev/null 2>&1; then
+  printf 'STATUS:error\nERR:speedtest-cli not installed (chezmoi apply)\n' > "$STATE"
   notify-send -u critical -a "Network" "speedtest-cli not installed" "Run: chezmoi apply"
   exit 1
-}
+fi
 
-notify-send -a "Network" -t 4000 "Speed test running…" "~30s — saturates the link while measuring"
+printf 'STATUS:running\nAT:%s\n' "$(date +%H:%M)" > "$STATE"
 
 if out="$(speedtest-cli --simple 2>&1)"; then
-  # out: "Ping: X ms\nDownload: Y Mbit/s\nUpload: Z Mbit/s"
+  ping="$(sed -n 's/^Ping: //p' <<<"$out")"
+  down="$(sed -n 's/^Download: //p' <<<"$out")"
+  up="$(sed -n 's/^Upload: //p' <<<"$out")"
+  printf 'STATUS:done\nPING:%s\nDOWN:%s\nUP:%s\nAT:%s\n' \
+    "$ping" "$down" "$up" "$(date +%H:%M)" > "$STATE"
   notify-send -a "Network" -t 15000 "Speed test result" "$out"
 else
-  notify-send -u critical -a "Network" "Speed test failed" "$(printf '%s' "$out" | head -3)"
+  err="$(printf '%s' "$out" | head -1)"
+  printf 'STATUS:error\nERR:%s\nAT:%s\n' "$err" "$(date +%H:%M)" > "$STATE"
+  notify-send -u critical -a "Network" "Speed test failed" "$err"
 fi

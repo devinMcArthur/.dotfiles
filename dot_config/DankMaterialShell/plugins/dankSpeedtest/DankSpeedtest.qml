@@ -5,9 +5,11 @@ import qs.Common
 import qs.Widgets
 import qs.Modules.Plugins
 
-// Dank Speedtest — Control Center widget (lives in the volume/wifi/bt
-// popup, not its own bar pill). Click the icon to run speedtest-cli;
-// expand for full results. Saturates the link ~30s while testing.
+// Dank Speedtest — Control Center widget. The test itself runs in a
+// DETACHED net-speedtest process (survives the popup closing — CC widget
+// instances die with the popup, taking child processes with them); this
+// widget only launches it and renders ~/.cache/speedtest/state. Completion
+// arrives as a notification regardless of whether the popup is open.
 PluginComponent {
     id: root
 
@@ -26,43 +28,58 @@ PluginComponent {
     function startTest() {
         if (root.testing)
             return;
-        root.testing = true;
+        root.testing = true;   // optimistic; state file confirms
         root.errorMsg = "";
-        proc.running = true;
+        launcher.running = true;
     }
 
+    // Fire-and-forget: setsid -f orphans the worker so it outlives both
+    // this Process object and the popup.
     Process {
-        id: proc
+        id: launcher
         running: false
-        command: ["sh", "-c",
-            "out=$(speedtest-cli --simple 2>&1); " +
-            "if [ $? -eq 0 ]; then " +
-            "  echo \"$out\" | sed -n 's/^Ping: /PING:/p; s/^Download: /DOWN:/p; s/^Upload: /UP:/p'; " +
-            "else echo \"ERR:$(echo \"$out\" | head -1)\"; fi; " +
-            "echo DONE"]
+        command: ["sh", "-c", "setsid -f \"$HOME/.local/bin/net-speedtest\" >/dev/null 2>&1 </dev/null"]
+    }
+
+    // State viewer: poll the worker's state file while the widget exists.
+    Process {
+        id: reader
+        running: false
+        command: ["sh", "-c", "cat \"$HOME/.cache/speedtest/state\" 2>/dev/null || echo STATUS:none"]
         stdout: SplitParser {
             onRead: line => {
-                if (line.startsWith("PING:"))
+                if (line.startsWith("STATUS:")) {
+                    const s = line.slice(7).trim();
+                    root.testing = (s === "running");
+                    if (s !== "error")
+                        root.errorMsg = "";
+                } else if (line.startsWith("PING:"))
                     root.ping = line.slice(5).trim();
                 else if (line.startsWith("DOWN:"))
                     root.down = line.slice(5).trim();
                 else if (line.startsWith("UP:"))
                     root.up = line.slice(3).trim();
+                else if (line.startsWith("AT:"))
+                    root.lastRun = line.slice(3).trim();
                 else if (line.startsWith("ERR:"))
                     root.errorMsg = line.slice(4).trim();
-                else if (line.trim() === "DONE") {
-                    root.testing = false;
-                    root.lastRun = Qt.formatDateTime(new Date(), "HH:mm");
-                }
             }
         }
+    }
+
+    Timer {
+        interval: 1500
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: reader.running = true
     }
 
     // ── Control Center pill ──
     ccWidgetIcon: root.testing ? "pending" : "speed"
     ccWidgetPrimaryText: "Speed Test"
     ccWidgetSecondaryText: root.testing
-        ? "testing… ~30s"
+        ? "testing… ~30s (popup can close)"
         : (root.errorMsg !== ""
             ? "failed — expand for details"
             : (root.down !== "—"
@@ -125,7 +142,7 @@ PluginComponent {
 
                 StyledText {
                     visible: root.lastRun !== ""
-                    text: "last run " + root.lastRun
+                    text: (root.testing ? "started " : "last run ") + root.lastRun
                     color: Theme.surfaceVariantText
                     font.pixelSize: Theme.fontSizeSmall
                 }
@@ -139,7 +156,7 @@ PluginComponent {
 
                     StyledText {
                         anchors.centerIn: parent
-                        text: root.testing ? "testing… (~30s, saturates the link)" : "Run speed test"
+                        text: root.testing ? "testing… feel free to close this" : "Run speed test"
                         color: root.testing ? Theme.surfaceVariantText : Theme.primaryText
                         font.weight: Font.Bold
                     }
