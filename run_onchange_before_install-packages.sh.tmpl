@@ -188,11 +188,9 @@ AUR_PKGS=(
   # Bound to Super+Ctrl+E in hyprland.conf.
   wofi-emoji
 
-  # NOTE: kdeconnect-sms shows numbers not names — the KPeople vcard
-  # backend (kpeoplevcard) only exists as KF5/Qt5 AUR packages (one of
-  # which tries to compile ALL OF QT5 from source), incompatible with our
-  # Qt6 kdeconnect. Desktop SMS lives in the Google Messages web app
-  # instead (web2app add Messages https://messages.google.com/web).
+  # (kdeconnect-sms contact names come from kpeoplevcard-qt6 — our own
+  # KF6 PKGBUILD in pkgbuilds/, installed below; the AUR only has broken
+  # KF5 variants.)
 
   # Polkit agent (GTK4/libadwaita — replaces hyprpolkitagent's cramped QML
   # dialog; exec-once'd from hyprland.conf)
@@ -293,6 +291,15 @@ if command -v vnstatd >/dev/null 2>&1 \
         || ! systemctl is-active --quiet vnstat.service 2>/dev/null; }; then
   echo "==> Enabling vnstat.service..."
   sudo systemctl enable --now vnstat.service
+fi
+
+# Local PKGBUILDs (repo pkgbuilds/ — things the AUR packages wrongly).
+# kpeoplevcard-qt6: KF6 vcard backend so kdeconnect-sms shows contact
+# NAMES; upstream is dual-Qt but AUR only ships KF5 builds.
+if ! pacman -Q kpeoplevcard-qt6 >/dev/null 2>&1; then
+  echo "==> Building kpeoplevcard-qt6 (contact names for kdeconnect-sms)..."
+  (cd "$HOME/.local/share/chezmoi/pkgbuilds/kpeoplevcard-qt6" \
+    && makepkg -si --noconfirm --clean)
 fi
 
 # gh extensions (user-level, not pacman-managed). gh-dash = lazygit-style

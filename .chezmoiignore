@@ -60,6 +60,7 @@ openai_api.txt.gpg
 README.md
 docs
 themes
+pkgbuilds
 
 # Self-modifying state files (apps write to these; chezmoi must not revert)
 .pi/agent/settings.json

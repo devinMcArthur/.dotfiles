@@ -2,6 +2,13 @@
 # mdBook build output (regenerated locally)
 docs/book/
 
+# makepkg build artifacts in pkgbuilds/ (only PKGBUILDs are tracked)
+pkgbuilds/*/src/
+pkgbuilds/*/pkg/
+pkgbuilds/*/*.pkg.tar.zst
+pkgbuilds/*/*.log
+pkgbuilds/kpeoplevcard-qt6/kpeoplevcard/
+
 # Active-theme override, rewritten by every `theme set`/`theme random`
 # (incl. each unlock) — merges over the tracked .chezmoidata/theme.yaml
 # default; tracking it would keep the repo permanently dirty.

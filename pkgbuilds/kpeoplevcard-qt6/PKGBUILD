@@ -1,0 +1,35 @@
+# Maintainer: Devin McArthur
+# KF6 build of KPeople's vcard backend — gives kdeconnect-sms contact NAMES
+# instead of bare numbers (it resolves people via KPeople, which needs this
+# reader for the vcards kdeconnect syncs into ~/.local/share/kpeoplevcard/).
+# Upstream is dual-Qt (Qt${QT_MAJOR_VERSION} everywhere) but both AUR
+# packages only ever built the KF5 flavor — one of them via compiling the
+# entire Qt5 source tree. Hence this local package.
+# Installed by run_onchange_before_install-packages.sh (guarded makepkg -si).
+
+pkgname=kpeoplevcard-qt6
+pkgver=0.2
+pkgrel=1
+pkgdesc="KPeople vcard backend built against KF6/Qt6 (contact names in kdeconnect-sms)"
+arch=(x86_64)
+url="https://invent.kde.org/pim/kpeoplevcard"
+license=(LGPL-2.1-or-later)
+depends=(kpeople kcontacts ki18n kcoreaddons)
+makedepends=(git extra-cmake-modules cmake qt6-base)
+provides=(kpeoplevcard)
+conflicts=(kpeoplevcard)
+source=("git+https://invent.kde.org/pim/kpeoplevcard.git")
+sha256sums=('SKIP')
+
+build() {
+  cmake -B build -S kpeoplevcard \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DQT_MAJOR_VERSION=6 \
+    -DBUILD_WITH_QT6=ON
+  cmake --build build
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+}
