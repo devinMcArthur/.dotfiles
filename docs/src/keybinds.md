@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-26T07:42:07-06:00_
+_Generated 2026-08-26T16:02:54-06:00_
 
 ## Hyprland — window manager
 

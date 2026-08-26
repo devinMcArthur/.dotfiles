@@ -80,6 +80,10 @@ exec-once = systemctl --user start soteria.service
 # enabled unit sits dead until kicked.
 exec-once = systemctl --user start voxtype.service
 
+# Ends a dictation after ~2s of silence (so a spoken "submit" sends
+# itself — no second Super+X). Disable: voxtype-autostop off
+exec-once = $HOME/.local/bin/voxtype-autostop
+
 # --- Desktop shell: DankMaterialShell TRIAL (Quickshell) --------------------
 # One process replaces the waybar+swaync+swayosd federation: bar with real
 # interactive panels (network Wi-Fi toggle, bluetooth, audio), control

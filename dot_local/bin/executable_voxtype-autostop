@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""voxtype-autostop — end a dictation when you stop talking.
+
+voxtype records until something calls `voxtype record stop`; this watcher
+makes that automatic after a stretch of silence, so a dictation ending in
+the word "submit" (smart_auto_submit) sends itself with no second Super+X.
+
+  voxtype-autostop            # daemon (hyprland exec-once)
+  voxtype-autostop on|off     # enable/disable without restarting
+  voxtype-autostop status     # enabled? current silence window?
+  voxtype-autostop secs <n>   # set the silence window (default 2.0)
+
+How: polls voxtype's state file and, while state is "recording", reads a
+second PipeWire capture stream of the same mic. Frames are high-passed
+(np.diff) before measuring RMS — this laptop's fan sits at a high but
+LOW-FREQUENCY noise floor that swamps a raw energy threshold, while
+speech survives the filter. The floor is tracked adaptively (drops fast,
+rises slowly), so the trigger follows changing room noise instead of a
+brittle constant. Stopping only arms after real speech has been heard, so
+a recording started in silence waits for you rather than dying instantly.
+"""
+
+import os
+import subprocess
+import sys
+import time
+
+import numpy as np
+
+RUNTIME = os.environ.get("XDG_RUNTIME_DIR", "/run/user/%d" % os.getuid())
+STATE_FILE = os.path.join(RUNTIME, "voxtype", "state")
+STATE_DIR = os.path.expanduser("~/.local/state/voxtype-autostop")
+OFF_FLAG = os.path.join(STATE_DIR, "off")
+SECS_FILE = os.path.join(STATE_DIR, "silence-secs")
+
+RATE = 16000
+FRAME = 1600                  # 100ms
+FRAME_BYTES = FRAME * 2       # s16 mono
+ARM_MS = 400                  # speech needed before auto-stop is allowed
+MIN_THRESHOLD = 400.0         # absolute floor for the high-passed RMS
+THRESHOLD_MULT = 2.5          # speech = this much above the tracked floor
+DEFAULT_SECS = 2.0
+
+
+def silence_secs() -> float:
+    try:
+        return max(0.5, float(open(SECS_FILE).read().strip()))
+    except Exception:
+        return DEFAULT_SECS
+
+
+def state() -> str:
+    try:
+        return open(STATE_FILE).read().strip()
+    except OSError:
+        return "unknown"
+
+
+def watch_recording() -> None:
+    """One recording: listen until silence (or the user stops it)."""
+    cap = subprocess.Popen(
+        ["pw-cat", "-r", "--raw", "--rate", str(RATE),
+         "--channels", "1", "--format", "s16", "-"],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    limit = silence_secs() * 1000
+    floor = None
+    speech_ms = silent_ms = 0
+    armed = False
+    try:
+        while state() == "recording":
+            buf = cap.stdout.read(FRAME_BYTES)
+            if not buf or len(buf) < FRAME_BYTES:
+                return
+            samples = np.frombuffer(buf, dtype=np.int16).astype(np.float32)
+            hp = np.diff(samples)
+            rms = float(np.sqrt(np.mean(hp * hp))) if hp.size else 0.0
+
+            if floor is None:
+                floor = rms
+            elif rms < floor:
+                floor = 0.7 * floor + 0.3 * rms      # drop fast
+            else:
+                floor = 0.995 * floor + 0.005 * rms  # rise slowly
+
+            if rms > max(floor * THRESHOLD_MULT, MIN_THRESHOLD):
+                speech_ms += 100
+                silent_ms = 0
+                if speech_ms >= ARM_MS:
+                    armed = True
+            elif armed:
+                silent_ms += 100
+                if silent_ms >= limit:
+                    subprocess.run(["voxtype", "record", "stop"],
+                                   stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL)
+                    return
+    finally:
+        cap.terminate()
+        try:
+            cap.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            cap.kill()
+
+
+def daemon() -> int:
+    os.makedirs(STATE_DIR, exist_ok=True)
+    while True:
+        if state() == "recording" and not os.path.exists(OFF_FLAG):
+            try:
+                watch_recording()
+            except Exception:
+                time.sleep(1)   # mic busy / pw-cat missing: never die
+            # don't re-arm until this recording is fully over
+            while state() == "recording":
+                time.sleep(0.15)
+        else:
+            time.sleep(0.15)
+
+
+def main() -> int:
+    os.makedirs(STATE_DIR, exist_ok=True)
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "daemon"
+    if cmd == "daemon":
+        return daemon()
+    if cmd == "on":
+        if os.path.exists(OFF_FLAG):
+            os.remove(OFF_FLAG)
+        print("voxtype-autostop: enabled")
+    elif cmd == "off":
+        open(OFF_FLAG, "w").close()
+        print("voxtype-autostop: disabled (Super+X stops dictation as before)")
+    elif cmd == "secs":
+        open(SECS_FILE, "w").write(sys.argv[2])
+        print("silence window: %.1fs" % silence_secs())
+    elif cmd == "status":
+        print("auto-stop: %s" % ("disabled" if os.path.exists(OFF_FLAG) else "enabled"))
+        print("silence:   %.1fs" % silence_secs())
+        print("voxtype:   %s" % state())
+    else:
+        print(__doc__.strip())
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
