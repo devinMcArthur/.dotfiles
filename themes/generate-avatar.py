@@ -101,11 +101,14 @@ noise = Image.effect_noise((S, S), 10).convert("L")
 img = Image.composite(img, Image.merge("RGB", (noise,) * 3), Image.new("L", (S, S), 250))
 d = ImageDraw.Draw(img)
 
-# ── six-theme ring ─────────────────────────────────────────────────────────
-seg = 360 / len(RING)
-for k, col in enumerate(RING):
-    d.arc([26, 26, S - 26, S - 26], start=k * seg - 90 + 3, end=(k + 1) * seg - 90 - 3,
-          fill=rgb(col), width=16)
+# ── signature gradient ring: yellow at the sky, peach at the road ──────────
+# (was a six-theme multicolor ring — too many colors fighting the sunset)
+steps = 240
+for k in range(steps):
+    a0 = -90 + k * (360 / steps)
+    vpos = (1 - __import__("math").cos(__import__("math").radians(a0 + 90))) / 2
+    d.arc([26, 26, S - 26, S - 26], start=a0, end=a0 + 360 / steps + 0.6,
+          fill=lerp(rgb(YELLOW), rgb(PEACH), vpos), width=16)
 
 img.save(f"{OUT}/avatar-road-v2.png")
 
