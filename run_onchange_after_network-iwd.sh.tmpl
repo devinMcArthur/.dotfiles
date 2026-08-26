@@ -36,11 +36,27 @@ set -euo pipefail
 # Single-user laptop: grant this user read via ACLs — the default ACL covers
 # .psk files iwd creates for networks joined later. Runs before the main
 # guard so it applies even when the stack itself is already configured.
-if ! getfacl -p /var/lib/iwd 2>/dev/null | grep -q "^user:$USER:r-x"; then
-  echo "==> Granting $USER read access to /var/lib/iwd (Wi-Fi QR codes)..."
-  sudo sh -c "setfacl -m 'u:$USER:rX' /var/lib/iwd \
-    && setfacl -d -m 'u:$USER:rX' /var/lib/iwd \
-    && { setfacl -m 'u:$USER:r' /var/lib/iwd/*.psk 2>/dev/null || true; }"
+# GOTCHA (2026-08-25): a one-shot setfacl gets neutered on every boot —
+# systemd re-chmods iwd's state dir at service start, recalculating the
+# ACL mask to '---' (entry present, effective nothing). The grant must be
+# re-applied after every iwd start: systemd drop-in with ExecStartPost.
+DROPIN=/etc/systemd/system/iwd.service.d/psk-read-acl.conf
+if ! grep -qs "u:$USER:rX" "$DROPIN" \
+   || [ "$(getfacl -p /var/lib/iwd 2>/dev/null | sed -n 's/^user:'"$USER"':r-x\s*#effective:\(.*\)$/\1/p')" = "---" ] \
+   || ! getfacl -p /var/lib/iwd 2>/dev/null | grep -q "^user:$USER:r-x"; then
+  echo "==> Granting $USER persistent read access to /var/lib/iwd (Wi-Fi QR codes)..."
+  sudo sh -c "
+    mkdir -p /etc/systemd/system/iwd.service.d
+    cat > '$DROPIN' <<DROP
+[Service]
+# Re-grant $USER read on the PSK store after every start — iwd/systemd
+# chmod the dir on startup, which zeroes the ACL mask (see chezmoi
+# run_onchange_after_network-iwd.sh).
+ExecStartPost=/usr/bin/setfacl -R -m u:$USER:rX,d:u:$USER:rX,mask::rx,d:mask::rx /var/lib/iwd
+DROP
+    systemctl daemon-reload
+    setfacl -R -m 'u:$USER:rX,d:u:$USER:rX,mask::rx,d:mask::rx' /var/lib/iwd
+  "
 fi
 
 # Idempotence guard: skip when the full stack is already in place.
