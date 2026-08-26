@@ -1,29 +1,39 @@
 #!/usr/bin/env python3
-"""voxtype-autostop — end a dictation when you stop talking.
+"""voxtype-autostop — end a dictation when you say "submit".
 
-voxtype records until something calls `voxtype record stop`; this watcher
-makes that automatic after a stretch of silence, so a dictation ending in
-the word "submit" (smart_auto_submit) sends itself with no second Super+X.
+voxtype records until something calls `voxtype record stop`, and
+smart_auto_submit only presses Enter after that stop — so without this,
+"submit" still needed a second Super+X. This watcher supplies the stop.
 
   voxtype-autostop            # daemon (hyprland exec-once)
   voxtype-autostop on|off     # enable/disable without restarting
-  voxtype-autostop status     # enabled? current silence window?
-  voxtype-autostop secs <n>   # set the silence window (default 2.0)
+  voxtype-autostop status     # enabled? windows? word?
+  voxtype-autostop secs <n>   # walk-away silence limit (default 20)
+  voxtype-autostop word <w>   # trigger word (default "submit")
 
 How: polls voxtype's state file and, while state is "recording", reads a
-second PipeWire capture stream of the same mic. Frames are high-passed
-(np.diff) before measuring RMS — this laptop's fan sits at a high but
-LOW-FREQUENCY noise floor that swamps a raw energy threshold, while
-speech survives the filter. The floor is tracked adaptively (drops fast,
-rises slowly), so the trigger follows changing room noise instead of a
-brittle constant. Stopping only arms after real speech has been heard, so
-a recording started in silence waits for you rather than dying instantly.
+parallel PipeWire capture of the mic into a rolling buffer. When you go
+quiet for ~1s, it transcribes JUST the tail of that buffer with whisper
+tiny.en and stops the recording only if you actually ended on the
+trigger word. Thinking pauses are therefore free: a pause that isn't
+followed by the word costs one cheap check and nothing else (the buffer
+can't change while you're silent, so it never re-checks until you speak
+again). A long silence still stops eventually, for walking away
+mid-recording.
+
+Frames are high-passed before measuring RMS: this laptop's fan sits at a
+loud but low-frequency noise floor that would swamp a plain energy
+threshold, while speech survives the filter. The floor is tracked
+adaptively (falls fast, rises slowly).
 """
 
 import os
+import re
 import subprocess
 import sys
+import threading
 import time
+import wave
 
 import numpy as np
 
@@ -32,21 +42,40 @@ STATE_FILE = os.path.join(RUNTIME, "voxtype", "state")
 STATE_DIR = os.path.expanduser("~/.local/state/voxtype-autostop")
 OFF_FLAG = os.path.join(STATE_DIR, "off")
 SECS_FILE = os.path.join(STATE_DIR, "silence-secs")
+WORD_FILE = os.path.join(STATE_DIR, "word")
+TMP_WAV = os.path.join(RUNTIME, "voxtype-autostop-tail.wav")
+MODEL = os.path.expanduser("~/.local/share/voxtype/models/ggml-tiny.en.bin")
 
 RATE = 16000
 FRAME = 1600                  # 100ms
 FRAME_BYTES = FRAME * 2       # s16 mono
-ARM_MS = 400                  # speech needed before auto-stop is allowed
+ARM_MS = 400                  # speech needed before any stop is allowed
+CHECK_MS = 1000               # silence before we listen for the word
+TAIL_SEC = 4                  # how much audio the word-check transcribes
 MIN_THRESHOLD = 400.0         # absolute floor for the high-passed RMS
 THRESHOLD_MULT = 2.5          # speech = this much above the tracked floor
-DEFAULT_SECS = 2.0
+DEFAULT_SECS = 20.0           # walk-away stop
+DEFAULT_WORD = "submit"
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def _read(path, default):
+    try:
+        v = open(path).read().strip()
+        return v or default
+    except OSError:
+        return default
 
 
 def silence_secs() -> float:
     try:
-        return max(0.5, float(open(SECS_FILE).read().strip()))
-    except Exception:
+        return max(3.0, float(_read(SECS_FILE, DEFAULT_SECS)))
+    except ValueError:
         return DEFAULT_SECS
+
+
+def trigger_word() -> str:
+    return _read(WORD_FILE, DEFAULT_WORD).lower()
 
 
 def state() -> str:
@@ -56,23 +85,74 @@ def state() -> str:
         return "unknown"
 
 
+def stop_recording() -> None:
+    subprocess.run(["voxtype", "record", "stop"],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def tail_says_word(frames, word) -> bool:
+    """Transcribe the tail of the buffer; True if it ends on the word."""
+    if not os.path.exists(MODEL):
+        return False
+    pcm = b"".join(frames)
+    try:
+        with wave.open(TMP_WAV, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(RATE)
+            w.writeframes(pcm)
+        out = subprocess.run(
+            ["voxtype", "--quiet", "--model", MODEL, "transcribe", TMP_WAV],
+            capture_output=True, text=True, timeout=15,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+    lines = [ANSI.sub("", ln).strip() for ln in out.splitlines()]
+    lines = [ln for ln in lines if ln and not ln.startswith(("Loading", "Audio format",
+                                                            "Processing", "whisper_",
+                                                            "ggml_", "main:"))]
+    if not lines:
+        return False
+    # Last few words only: "submit" mid-sentence must not end the recording.
+    words = re.findall(r"[a-z']+", lines[-1].lower())
+    return bool(words) and word in words[-2:]
+
+
 def watch_recording() -> None:
-    """One recording: listen until silence (or the user stops it)."""
+    """One recording: stop it on the trigger word, or on a long silence."""
     cap = subprocess.Popen(
         ["pw-cat", "-r", "--raw", "--rate", str(RATE),
          "--channels", "1", "--format", "s16", "-"],
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
     )
-    limit = silence_secs() * 1000
+    word = trigger_word()
+    hard_limit = silence_secs() * 1000
+    tail_frames = TAIL_SEC * 10
+    buf: list = []
     floor = None
     speech_ms = silent_ms = 0
     armed = False
+    checked = False              # one word-check per silence stretch
+    pending = {"gen": -1, "hit": False}
+    gen = 0                      # bumps on new speech; stales old checks
+
+    def check(frames, my_gen):
+        hit = tail_says_word(frames, word)
+        if hit and my_gen == pending["gen"]:
+            pending["hit"] = True
+
     try:
         while state() == "recording":
-            buf = cap.stdout.read(FRAME_BYTES)
-            if not buf or len(buf) < FRAME_BYTES:
+            if pending["hit"]:
+                stop_recording()
                 return
-            samples = np.frombuffer(buf, dtype=np.int16).astype(np.float32)
+            raw = cap.stdout.read(FRAME_BYTES)
+            if not raw or len(raw) < FRAME_BYTES:
+                return
+            buf.append(raw)
+            del buf[:-tail_frames]
+
+            samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
             hp = np.diff(samples)
             rms = float(np.sqrt(np.mean(hp * hp))) if hp.size else 0.0
 
@@ -86,15 +166,23 @@ def watch_recording() -> None:
             if rms > max(floor * THRESHOLD_MULT, MIN_THRESHOLD):
                 speech_ms += 100
                 silent_ms = 0
+                checked = False
+                gen += 1
                 if speech_ms >= ARM_MS:
                     armed = True
             elif armed:
                 silent_ms += 100
-                if silent_ms >= limit:
-                    subprocess.run(["voxtype", "record", "stop"],
-                                   stdout=subprocess.DEVNULL,
-                                   stderr=subprocess.DEVNULL)
+                if silent_ms >= hard_limit:
+                    stop_recording()
                     return
+                if not checked and silent_ms >= CHECK_MS:
+                    # One check per pause: nothing new enters the buffer
+                    # while silent, so re-running it would find the same
+                    # answer. Threaded so the capture keeps draining.
+                    checked = True
+                    pending["gen"] = gen
+                    threading.Thread(target=check, args=(list(buf), gen),
+                                     daemon=True).start()
     finally:
         cap.terminate()
         try:
@@ -111,7 +199,6 @@ def daemon() -> int:
                 watch_recording()
             except Exception:
                 time.sleep(1)   # mic busy / pw-cat missing: never die
-            # don't re-arm until this recording is fully over
             while state() == "recording":
                 time.sleep(0.15)
         else:
@@ -132,10 +219,16 @@ def main() -> int:
         print("voxtype-autostop: disabled (Super+X stops dictation as before)")
     elif cmd == "secs":
         open(SECS_FILE, "w").write(sys.argv[2])
-        print("silence window: %.1fs" % silence_secs())
+        print("walk-away silence limit: %.0fs" % silence_secs())
+    elif cmd == "word":
+        open(WORD_FILE, "w").write(sys.argv[2])
+        print("trigger word: %s" % trigger_word())
     elif cmd == "status":
         print("auto-stop: %s" % ("disabled" if os.path.exists(OFF_FLAG) else "enabled"))
-        print("silence:   %.1fs" % silence_secs())
+        print("trigger:   say \"%s\" (checked %.1fs after you go quiet)"
+              % (trigger_word(), CHECK_MS / 1000))
+        print("walk-away: %.0fs of silence" % silence_secs())
+        print("model:     %s" % ("tiny.en" if os.path.exists(MODEL) else "MISSING — word check disabled"))
         print("voxtype:   %s" % state())
     else:
         print(__doc__.strip())
