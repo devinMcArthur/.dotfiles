@@ -1,7 +1,10 @@
 {{ if eq .chezmoi.os "linux" -}}
 #!/usr/bin/env bash
-# hibernate-setup v2 — suspend-then-hibernate for lid close.
-# (v2: dropped the live logind restart — it froze the session; see below.)
+# hibernate-setup v3 — suspend-then-hibernate for lid close.
+# (v2: dropped the live logind restart — it froze the session; see below.
+#  v3: sudo-free fast path when configured + refuse headless sudo — a
+#  re-triggered run under `theme set`'s apply parked sudo on an invisible
+#  tty1 prompt, holding chezmoi's state lock and blocking theme switching.)
 #
 # Lid close stays instant s2idle; after HibernateDelaySec asleep, systemd
 # wakes briefly, snapshots RAM to a disk swapfile, and powers off — zero
@@ -37,6 +40,30 @@ echo "==> Hibernate setup (suspend-then-hibernate on lid close)..."
 if [ "$(findmnt -no FSTYPE /)" != "btrfs" ]; then
   echo "    root is not btrfs — skipping hibernate setup"
   exit 0
+fi
+
+# Fast path, NO sudo — every stage already landed. This is the normal case:
+# theme switches run `chezmoi apply` headless on every unlock, and this
+# script re-triggers whenever its content changes; those runs must never
+# touch sudo.
+if swapon --show=NAME --noheadings | grep -qx /swap/swapfile \
+   && grep -q "subvol=/@swap" /etc/fstab \
+   && grep -q "resume_offset=" /etc/default/grub \
+   && grep -q "resume=" /boot/grub/grub.cfg 2>/dev/null \
+   && grep -qE '^HOOKS=.* resume ' /etc/mkinitcpio.conf \
+   && [ -f /etc/systemd/logind.conf.d/50-lid-hibernate.conf ] \
+   && [ -f /etc/systemd/sleep.conf.d/50-suspend-then-hibernate.conf ]; then
+  echo "    already configured (swap active, resume armed) — nothing to do"
+  exit 0
+fi
+
+# Real work needed -> sudo. A headless apply (theme random on unlock, boot
+# exec-once) must fail LOUDLY here rather than park sudo on an invisible VT
+# password prompt while holding chezmoi's state lock — that deadlocked all
+# theme switching once (2026-08-26).
+if [ ! -t 0 ]; then
+  echo "ERROR: hibernate-setup needs sudo — run 'chezmoi apply' in a terminal" >&2
+  exit 1
 fi
 
 sudo bash <<'ROOT'
