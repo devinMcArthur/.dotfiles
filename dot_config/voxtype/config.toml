@@ -212,14 +212,15 @@ on_transcription = true
 # Pipe transcribed text through an external command for cleanup before output.
 # On any failure (timeout, error), falls back to original transcription.
 #
-# Comma-debris cleanup for dictated line breaks: whisper auto-punctuates
-# the spoken phrase as an aside ("First line, new line, second line"), so
-# after the [text] replacement swaps the phrase for \n, orphaned commas
-# hug the break (", \n,"). The sed passes also convert any phrase the
-# replacement stage missed, then strip comma/space debris on either side
-# of a break — input may arrive single-line (pre-replacement) or
-# multi-line, both are handled.
-command = "sed -E -e 's/(, *)?[Nn]ew [Pp]aragraph[.,]? */\\n\\n/g' -e 's/(, *)?[Nn]ew ?[Ll]ine[.,]? */\\n/g' -e 's/ *, *\\n/\\n/g' -e 's/\\n *, */\\n/g' -e 's/^ *, *//' -e 's/ *,+ *$//'"
+# Dictated line breaks: "new line" -> \n, "new paragraph" -> blank line.
+# Whisper brackets the spoken phrase with invented punctuation (", new
+# line," or ". New line.") — the phrase rules swallow a leading comma and
+# the phrase's own trailing punctuation in the same match. A period
+# BEFORE the phrase is kept deliberately: it belongs to the dictated
+# sentence ("Do the thing. New line next item" -> "Do the thing.\nnext
+# item"). Remaining rules sweep stray comma/space before breaks and
+# punctuation debris after them.
+command = "sed -E -e 's/,? *[Nn]ew [Pp]aragraph[.,;:]? */\\n\\n/g' -e 's/,? *[Nn]ew ?[Ll]ine[.,;:]? */\\n/g' -e 's/\\n[.,;: ]+/\\n/g' -e 's/^[.,;: ]+//' -e 's/[, ]+\\n/\\n/g' -e 's/[, ]+$//'"
 timeout_ms = 2000
 
 [text]
@@ -230,14 +231,13 @@ timeout_ms = 2000
 # hijack those words in normal speech.
 # spoken_punctuation = false
 #
-# Newline only, via replacements: say "new line" for a line break
-# ("new paragraph" for a blank line between). With [output]
-# shift_enter_newlines these type as Shift+Enter, so in chat-style inputs
-# (Claude Code prompt) they insert a line break WITHOUT submitting.
-# NOTE: replacements/smart-submit run in the daemon's OUTPUT stage —
-# `voxtype transcribe <wav>` prints raw text and won't show them.
-# "vox type" fixes whisper's favorite mishearing of the name.
-replacements = { "new line" = "\n", "newline" = "\n", "new paragraph" = "\n\n", "vox type" = "voxtype" }
+# Spoken line breaks live in [output.post_process] (sed), NOT here:
+# replacements run before post_process, and whisper brackets the spoken
+# phrase with punctuation it invents (", new line," one run, ". New
+# line." the next) — only a regex that still SEES the phrase can swallow
+# that debris in the same match. "vox type" fixes whisper's favorite
+# mishearing of the name.
+replacements = { "vox type" = "voxtype" }
 
 # Say "submit" at the END of a dictation: voxtype strips the word and
 # presses Enter — the spoken send button for Claude Code / chats. Mid-
