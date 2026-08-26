@@ -4,8 +4,9 @@
 #
 #   claude-tts             # hook mode: reads Claude Code Stop-hook JSON on
 #                          # stdin (registered in ~/.claude/settings.json)
-#   claude-tts progress    # PreToolUse-hook mode: speak the interim text
-#                          # written just before a tool call
+#   claude-tts progress    # MessageDisplay/PreToolUse hook: speak interim
+#                          # text written between tool calls
+#   claude-tts notify      # Notification hook: "needs your permission" etc.
 #   claude-tts on|off      # enable / disable speech (default: on)
 #   claude-tts toggle      # flip + notify (Super+Ctrl+V, bar pill syncs)
 #   claude-tts stop        # shut up — kill the current playback
@@ -49,15 +50,24 @@ if [ "$(engine)" = piper ] && [ ! -f "$MODEL" ]; then
   VOICE="$DEFAULT_VOICE"; MODEL="$VOICES/$DEFAULT_VOICE.onnx"
 fi
 
-# Kill any in-flight speech. Bracket trick keeps pkill from matching this
-# script's own cmdline (the voxtype/screensaver lesson). Both patterns key
-# on the claude-tts model dir so no other piper/pw-cat use gets caught.
 # Is audio playing right now? (pw-cat -p is playback; voxtype-autostop's
 # capture is pw-cat -r, so it can't be mistaken for speech.)
 speaking() {
   pgrep -f "pw-cat -p --raw" >/dev/null 2>&1
 }
 
+# One line per hook invocation: which event fired and what it did.
+# Bounded to the last 200 lines. This is how we tell whether
+# MessageDisplay or PreToolUse is actually carrying the interim text.
+hooklog() {   # event outcome id
+  printf '%s %-14s %-8s %s\n' "$(date +%T)" "$1" "$2" "${3:0:8}" >> "$STATE/hook.log"
+  tail -n 200 "$STATE/hook.log" > "$STATE/hook.log.tmp" 2>/dev/null \
+    && mv -f "$STATE/hook.log.tmp" "$STATE/hook.log"
+}
+
+# Kill any in-flight speech. Bracket trick keeps pkill from matching this
+# script's own cmdline (the voxtype/screensaver lesson). Both patterns key
+# on the claude-tts model dir so no other piper/pw-cat use gets caught.
 hush() {
   pkill -f "claude[-]tts/en_US" 2>/dev/null || true
   # Full deployed path only: a bare "kokoro-say" pattern once matched an
@@ -126,16 +136,7 @@ case "${1:-hook}" in
     # reach megabytes — whole-file jq would tax each one. JSONL is one
     # entry per line, so a tail can't split an entry. fromjson? tolerates
     # partial/non-JSON lines; the format is version-prone, so fail silent.
-    # Which hook fired, and did it speak? MessageDisplay's payload isn't
-    # documented; this log is how we learn whether it (rather than
-    # PreToolUse) is carrying the interim text, so the other can be
-    # dropped. Bounded to the last 200 lines.
     ev="$(jq -r '.hook_event_name // "?"' <<<"$input" 2>/dev/null)"
-    hooklog() {
-      printf '%s %-14s %-8s %s\n' "$(date +%T)" "$ev" "$1" "${2:0:8}" >> "$STATE/hook.log"
-      tail -n 200 "$STATE/hook.log" > "$STATE/hook.log.tmp" 2>/dev/null \
-        && mv -f "$STATE/hook.log.tmp" "$STATE/hook.log"
-    }
     entry="$(tail -n 400 "$tp" 2>/dev/null | jq -rRs '
       [ split("\n")[] | fromjson?
         | select(.type=="assistant") | select(.isSidechain != true)
@@ -150,18 +151,50 @@ case "${1:-hook}" in
     # Already read this message aloud? (A batch of parallel tool calls
     # fires one PreToolUse each, all pointing at the same interim text.)
     if [ "$uuid" = "$(cat "$STATE/last-uuid" 2>/dev/null)" ]; then
-      hooklog dup "$uuid"; exit 0
+      hooklog "$ev" dup "$uuid"; exit 0
     fi
     # Interim text yields to speech already in flight — chopping every
     # update off mid-word is worse than missing one. The final message
     # (Stop) always interrupts, because it's the one that matters.
     if [ "$mode" = progress ] && speaking; then
-      hooklog busy "$uuid"   # deliberately NOT recorded: Stop may still voice it
+      hooklog "$ev" busy "$uuid"   # deliberately NOT recorded: Stop may still voice it
       exit 0
     fi
     printf '%s' "$uuid" > "$STATE/last-uuid"
-    hooklog spoke "$uuid"
+    hooklog "$ev" spoke "$uuid"
     say_text "$text"
+    ;;
+  notify)
+    # Notification-hook mode: say what Claude is waiting for when you have
+    # looked away. Fires ~6s into a permission prompt, ~60s after an idle
+    # finish. Speaks over anything in flight — needing input outranks
+    # narration.
+    input="$(cat)"
+    [ -e "$OFF" ] && exit 0
+    ev="$(jq -r '.hook_event_name // "Notification"' <<<"$input" 2>/dev/null)"
+    kind="$(jq -r '.matcher // .notification_type // .type // empty' <<<"$input" 2>/dev/null)"
+    msg="$(jq -r '.message // .title // empty' <<<"$input" 2>/dev/null)"
+    case "$kind" in
+      permission_prompt)       say="${msg:-Claude needs your permission.}" ;;
+      idle_prompt)             say="Claude is waiting for you." ;;
+      agent_needs_input)       say="A background session needs your input." ;;
+      agent_completed)         say="A background session finished." ;;
+      quota_auto_resume_fired) say="Usage limit reset. Continuing." ;;
+      auth_success)            say="" ;;   # nothing to act on
+      *)                       say="${msg:-}" ;;
+    esac
+    [ -n "${say//[[:space:]]/}" ] || exit 0
+    # The same notification can fire repeatedly while you stay away.
+    h="$(printf '%s' "$say" | cksum | cut -d\  -f1)"
+    now="$(date +%s)"; prev_h=""; prev_t=0
+    [ -f "$STATE/last-notify" ] && read -r prev_h prev_t < "$STATE/last-notify"
+    case "$prev_t" in (*[!0-9]*|"") prev_t=0 ;; esac
+    if [ "$prev_h" = "$h" ] && [ "$(( now - prev_t ))" -lt 120 ]; then
+      hooklog "$ev" dup "$h"; exit 0
+    fi
+    printf '%s %s' "$h" "$now" > "$STATE/last-notify"
+    hooklog "$ev" spoke "$h"
+    say_text "$(printf '%s' "$say" | clean_md)"
     ;;
   on)     rm -f "$OFF"; echo "claude-tts: enabled" ;;
   off)    touch "$OFF"; hush; echo "claude-tts: disabled" ;;
