@@ -122,6 +122,20 @@ clean_md() {
       -e 's/✓/ check /g; s/[✗✘]/ fail /g; s/→/ to /g; s/·/, /g'
 }
 
+# Newest non-sidechain assistant entry: "uuid<TAB>timestamp<TAB>text".
+# Only the tail is parsed — this session's transcript is 40MB and JSONL is
+# one entry per line, so a tail can't split an entry. fromjson? tolerates
+# partial lines; the format is version-prone, so fail silent, not loud.
+last_entry() {
+  tail -n 400 "$1" 2>/dev/null | jq -rRs '
+    [ split("\n")[] | fromjson?
+      | select(.type=="assistant") | select(.isSidechain != true)
+      | { u: (.uuid // ""), ts: (.timestamp // ""),
+          t: ((.message.content // []) | map(select(.type=="text") | .text) | join("\n")) }
+      | select(.t | length > 0)
+    ] | last // empty | "\(.u)\t\(.ts)\t\(.t)"' 2>/dev/null
+}
+
 case "${1:-hook}" in
   hook|progress)
     mode="${1:-hook}"
@@ -131,41 +145,52 @@ case "${1:-hook}" in
     [ "$(jq -r '.stop_hook_active // false' <<<"$input")" = "true" ] && exit 0
     tp="$(jq -r '.transcript_path // empty' <<<"$input")"
     [ -n "$tp" ] && [ -f "$tp" ] || exit 0
-    # Last assistant entry with any text content, plus its uuid. Only the
-    # tail is parsed: PreToolUse fires on EVERY tool call, and transcripts
-    # reach megabytes — whole-file jq would tax each one. JSONL is one
-    # entry per line, so a tail can't split an entry. fromjson? tolerates
-    # partial/non-JSON lines; the format is version-prone, so fail silent.
     ev="$(jq -r '.hook_event_name // "?"' <<<"$input" 2>/dev/null)"
-    entry="$(tail -n 400 "$tp" 2>/dev/null | jq -rRs '
-      [ split("\n")[] | fromjson?
-        | select(.type=="assistant") | select(.isSidechain != true)
-        | { u: (.uuid // ""),
-            t: ((.message.content // []) | map(select(.type=="text") | .text) | join("\n")) }
-        | select(.t | length > 0)
-      ] | last // empty | "\(.u)\t\(.t)"' 2>/dev/null)"
-    [ -n "$entry" ] || exit 0
-    uuid="${entry%%$'\t'*}"
-    text="$(printf '%s' "${entry#*$'\t'}" | clean_md)"
-    [ -n "${text//[[:space:]]/}" ] || exit 0
-    # Dedupe INTERIM text only (a batch of parallel tool calls fires one
-    # PreToolUse each, all pointing at the same text). The final message
-    # never dedupes: MessageDisplay fires repeatedly while a message is
-    # still streaming, so a fragment of it may already be voiced under
-    # this same uuid — Stop skipping that left the answer half-read.
-    if [ "$mode" = progress ] && [ "$uuid" = "$(cat "$STATE/last-uuid" 2>/dev/null)" ]; then
-      hooklog "$ev" dup "$uuid"; exit 0
-    fi
-    # Interim text yields to speech already in flight — chopping every
-    # update off mid-word is worse than missing one. The final message
-    # (Stop) always interrupts, because it's the one that matters.
-    if [ "$mode" = progress ] && speaking; then
-      hooklog "$ev" busy "$uuid"   # deliberately NOT recorded: Stop may still voice it
-      exit 0
-    fi
-    printf '%s' "$uuid" > "$STATE/last-uuid"
-    hooklog "$ev" spoke "$uuid"
-    say_text "$text"
+    # Do NOT read the transcript here: the entry for the message that just
+    # ended has not been written yet (measured — a message carrying a tool
+    # call lands only after PreToolUse fires, and Stop beat the final
+    # message's line by ~1s). Reading now returns the PREVIOUS message,
+    # which is exactly the "speaking one message behind" bug. Hand off to
+    # a detached waiter and return instantly so nothing blocks.
+    hooklog "$ev" queued ""
+    setsid -f "$0" _wait "$ev" "$tp" >/dev/null 2>&1 </dev/null
+    ;;
+  _wait)
+    # Detached: wait for an entry NEWER than the last one spoken, then
+    # read it. Monotonic on timestamp, so speech can never go backwards
+    # into an already-voiced message. Messages queue rather than chop each
+    # other off; the lock keeps two waiters from talking over each other.
+    ev="$2"; tp="$3"
+    deadline=$(( $(date +%s) + 60 ))
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+      entry="$(last_entry "$tp")"
+      if [ -n "$entry" ]; then
+        uuid="${entry%%$'\t'*}"; rest="${entry#*$'\t'}"
+        ts="${rest%%$'\t'*}"; text="${rest#*$'\t'}"
+        prev_uuid="$(cat "$STATE/last-uuid" 2>/dev/null)"
+        prev_ts="$(cat "$STATE/last-ts" 2>/dev/null)"
+        if [ "$uuid" != "$prev_uuid" ] && { [ -z "$prev_ts" ] || [[ "$ts" > "$prev_ts" ]]; }; then
+          (
+            flock 9
+            # Re-check under the lock: another waiter may have claimed it.
+            if [ "$uuid" != "$(cat "$STATE/last-uuid" 2>/dev/null)" ]; then
+              printf '%s' "$uuid" > "$STATE/last-uuid"
+              printf '%s' "$ts" > "$STATE/last-ts"
+              spoken="$(printf '%s' "$text" | clean_md)"
+              if [ -n "${spoken//[[:space:]]/}" ]; then
+                w=0
+                while speaking && [ "$w" -lt 120 ]; do sleep 0.5; w=$((w+1)); done
+                hooklog "$ev" spoke "$uuid"
+                say_text "$spoken"
+              fi
+            fi
+          ) 9>"$STATE/claim.lock"
+          exit 0
+        fi
+      fi
+      sleep 0.3
+    done
+    hooklog "$ev" timeout ""
     ;;
   notify)
     # Notification-hook mode: say what Claude is waiting for when you have
