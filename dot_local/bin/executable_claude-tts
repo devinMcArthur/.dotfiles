@@ -4,8 +4,8 @@
 #
 #   claude-tts             # hook mode: reads Claude Code Stop-hook JSON on
 #                          # stdin (registered in ~/.claude/settings.json)
-#   claude-tts progress    # MessageDisplay/PreToolUse hook: speak interim
-#                          # text written between tool calls
+#   claude-tts progress    # PreToolUse hook: speak the interim text
+#                          # written just before a tool call
 #   claude-tts notify      # Notification hook: "needs your permission" etc.
 #   claude-tts on|off      # enable / disable speech (default: on)
 #   claude-tts toggle      # flip + notify (Super+Ctrl+V, bar pill syncs)
@@ -148,9 +148,12 @@ case "${1:-hook}" in
     uuid="${entry%%$'\t'*}"
     text="$(printf '%s' "${entry#*$'\t'}" | clean_md)"
     [ -n "${text//[[:space:]]/}" ] || exit 0
-    # Already read this message aloud? (A batch of parallel tool calls
-    # fires one PreToolUse each, all pointing at the same interim text.)
-    if [ "$uuid" = "$(cat "$STATE/last-uuid" 2>/dev/null)" ]; then
+    # Dedupe INTERIM text only (a batch of parallel tool calls fires one
+    # PreToolUse each, all pointing at the same text). The final message
+    # never dedupes: MessageDisplay fires repeatedly while a message is
+    # still streaming, so a fragment of it may already be voiced under
+    # this same uuid — Stop skipping that left the answer half-read.
+    if [ "$mode" = progress ] && [ "$uuid" = "$(cat "$STATE/last-uuid" 2>/dev/null)" ]; then
       hooklog "$ev" dup "$uuid"; exit 0
     fi
     # Interim text yields to speech already in flight — chopping every
