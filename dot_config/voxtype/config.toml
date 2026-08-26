@@ -208,14 +208,19 @@ on_recording_stop = false
 # Show notification with transcribed text after transcription completes
 on_transcription = true
 
-# [output.post_process]
+[output.post_process]
 # Pipe transcribed text through an external command for cleanup before output.
-# The command receives text on stdin and outputs processed text on stdout.
-# Useful for LLM-based text cleanup, grammar correction, filler word removal.
 # On any failure (timeout, error), falls back to original transcription.
 #
-# command = "ollama run llama3.2:1b 'Clean up this dictation. Fix grammar, remove filler words. Output only the cleaned text:'"
-# timeout_ms = 30000  # 30 second timeout (generous for LLM)
+# Comma-debris cleanup for dictated line breaks: whisper auto-punctuates
+# the spoken phrase as an aside ("First line, new line, second line"), so
+# after the [text] replacement swaps the phrase for \n, orphaned commas
+# hug the break (", \n,"). The sed passes also convert any phrase the
+# replacement stage missed, then strip comma/space debris on either side
+# of a break — input may arrive single-line (pre-replacement) or
+# multi-line, both are handled.
+command = "sed -E -e 's/(, *)?[Nn]ew [Pp]aragraph[.,]? */\\n\\n/g' -e 's/(, *)?[Nn]ew ?[Ll]ine[.,]? */\\n/g' -e 's/ *, *\\n/\\n/g' -e 's/\\n *, */\\n/g' -e 's/^ *, *//' -e 's/ *,+ *$//'"
+timeout_ms = 2000
 
 [text]
 # Text processing options (word replacements, spoken punctuation)
