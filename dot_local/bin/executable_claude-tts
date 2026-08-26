@@ -4,6 +4,8 @@
 #
 #   claude-tts             # hook mode: reads Claude Code Stop-hook JSON on
 #                          # stdin (registered in ~/.claude/settings.json)
+#   claude-tts progress    # PreToolUse-hook mode: speak the interim text
+#                          # written just before a tool call
 #   claude-tts on|off      # enable / disable speech (default: on)
 #   claude-tts toggle      # flip + notify (Super+Ctrl+V, bar pill syncs)
 #   claude-tts stop        # shut up — kill the current playback
@@ -50,6 +52,12 @@ fi
 # Kill any in-flight speech. Bracket trick keeps pkill from matching this
 # script's own cmdline (the voxtype/screensaver lesson). Both patterns key
 # on the claude-tts model dir so no other piper/pw-cat use gets caught.
+# Is audio playing right now? (pw-cat -p is playback; voxtype-autostop's
+# capture is pw-cat -r, so it can't be mistaken for speech.)
+speaking() {
+  pgrep -f "pw-cat -p --raw" >/dev/null 2>&1
+}
+
 hush() {
   pkill -f "claude[-]tts/en_US" 2>/dev/null || true
   # Full deployed path only: a bare "kokoro-say" pattern once matched an
@@ -105,22 +113,40 @@ clean_md() {
 }
 
 case "${1:-hook}" in
-  hook)
+  hook|progress)
+    mode="${1:-hook}"
     input="$(cat)"
     [ -e "$OFF" ] && exit 0
     # Loop guard: never speak from a re-entrant Stop hook.
     [ "$(jq -r '.stop_hook_active // false' <<<"$input")" = "true" ] && exit 0
     tp="$(jq -r '.transcript_path // empty' <<<"$input")"
     [ -n "$tp" ] && [ -f "$tp" ] || exit 0
-    # Last assistant entry with any text content. fromjson? tolerates the
-    # occasional non-JSON/partial line; the entry format is version-prone,
-    # so fail silent rather than loud.
-    text="$(jq -rRs '
-      [ split("\n")[] | fromjson? | select(.type=="assistant")
-        | .message.content // [] | map(select(.type=="text") | .text)
-        | join("\n") | select(length>0)
-      ] | last // ""' "$tp" 2>/dev/null | clean_md)"
+    # Last assistant entry with any text content, plus its uuid. Only the
+    # tail is parsed: PreToolUse fires on EVERY tool call, and transcripts
+    # reach megabytes — whole-file jq would tax each one. JSONL is one
+    # entry per line, so a tail can't split an entry. fromjson? tolerates
+    # partial/non-JSON lines; the format is version-prone, so fail silent.
+    entry="$(tail -n 400 "$tp" 2>/dev/null | jq -rRs '
+      [ split("\n")[] | fromjson?
+        | select(.type=="assistant") | select(.isSidechain != true)
+        | { u: (.uuid // ""),
+            t: ((.message.content // []) | map(select(.type=="text") | .text) | join("\n")) }
+        | select(.t | length > 0)
+      ] | last // empty | "\(.u)\t\(.t)"' 2>/dev/null)"
+    [ -n "$entry" ] || exit 0
+    uuid="${entry%%$'\t'*}"
+    text="$(printf '%s' "${entry#*$'\t'}" | clean_md)"
     [ -n "${text//[[:space:]]/}" ] || exit 0
+    # Already read this message aloud? (A batch of parallel tool calls
+    # fires one PreToolUse each, all pointing at the same interim text.)
+    [ "$uuid" = "$(cat "$STATE/last-uuid" 2>/dev/null)" ] && exit 0
+    # Interim text yields to speech already in flight — chopping every
+    # update off mid-word is worse than missing one. The final message
+    # (Stop) always interrupts, because it's the one that matters.
+    if [ "$mode" = progress ] && speaking; then
+      exit 0   # deliberately NOT recorded: Stop may still voice it
+    fi
+    printf '%s' "$uuid" > "$STATE/last-uuid"
     say_text "$text"
     ;;
   on)     rm -f "$OFF"; echo "claude-tts: enabled" ;;
