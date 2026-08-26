@@ -126,6 +126,16 @@ case "${1:-hook}" in
     # reach megabytes — whole-file jq would tax each one. JSONL is one
     # entry per line, so a tail can't split an entry. fromjson? tolerates
     # partial/non-JSON lines; the format is version-prone, so fail silent.
+    # Which hook fired, and did it speak? MessageDisplay's payload isn't
+    # documented; this log is how we learn whether it (rather than
+    # PreToolUse) is carrying the interim text, so the other can be
+    # dropped. Bounded to the last 200 lines.
+    ev="$(jq -r '.hook_event_name // "?"' <<<"$input" 2>/dev/null)"
+    hooklog() {
+      printf '%s %-14s %-8s %s\n' "$(date +%T)" "$ev" "$1" "${2:0:8}" >> "$STATE/hook.log"
+      tail -n 200 "$STATE/hook.log" > "$STATE/hook.log.tmp" 2>/dev/null \
+        && mv -f "$STATE/hook.log.tmp" "$STATE/hook.log"
+    }
     entry="$(tail -n 400 "$tp" 2>/dev/null | jq -rRs '
       [ split("\n")[] | fromjson?
         | select(.type=="assistant") | select(.isSidechain != true)
@@ -139,14 +149,18 @@ case "${1:-hook}" in
     [ -n "${text//[[:space:]]/}" ] || exit 0
     # Already read this message aloud? (A batch of parallel tool calls
     # fires one PreToolUse each, all pointing at the same interim text.)
-    [ "$uuid" = "$(cat "$STATE/last-uuid" 2>/dev/null)" ] && exit 0
+    if [ "$uuid" = "$(cat "$STATE/last-uuid" 2>/dev/null)" ]; then
+      hooklog dup "$uuid"; exit 0
+    fi
     # Interim text yields to speech already in flight — chopping every
     # update off mid-word is worse than missing one. The final message
     # (Stop) always interrupts, because it's the one that matters.
     if [ "$mode" = progress ] && speaking; then
-      exit 0   # deliberately NOT recorded: Stop may still voice it
+      hooklog busy "$uuid"   # deliberately NOT recorded: Stop may still voice it
+      exit 0
     fi
     printf '%s' "$uuid" > "$STATE/last-uuid"
+    hooklog spoke "$uuid"
     say_text "$text"
     ;;
   on)     rm -f "$OFF"; echo "claude-tts: enabled" ;;
