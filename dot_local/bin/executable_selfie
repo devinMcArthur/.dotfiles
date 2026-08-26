@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# selfie — take your own profile picture with the webcam.
+#
+# Flow: a live mirror window opens (ffplay) — pose, then press Q in it.
+# A 3-2-1 countdown follows and the webcam takes the shot. The picture is
+# square-cropped to 512px, saved as ~/.face, and pushed to AccountsService
+# (what the DMS user card, greeters, etc. read). Originals are kept in
+# ~/Pictures/selfies/. Run again anytime to retake.
+#
+# NOTE: needs the Framework's hardware camera switch ON.
+# ~/.face is deliberately NOT chezmoi-managed — the dotfiles repo is
+# public, and your face doesn't belong in it.
+
+set -euo pipefail
+
+DEV="${1:-/dev/video0}"
+KEEP="$HOME/Pictures/selfies"
+mkdir -p "$KEEP"
+shot="$KEEP/selfie-$(date +%Y%m%d-%H%M%S).png"
+
+if [ ! -e "$DEV" ]; then
+  echo "no webcam at $DEV — is the hardware privacy switch on?" >&2
+  exit 1
+fi
+
+echo "Mirror opening — frame yourself, then press Q in the mirror window."
+ffplay -f v4l2 -video_size 1280x720 -i "$DEV" \
+  -window_title "mirror — press Q when you're ready" -loglevel error
+
+for n in 3 2 1; do
+  printf '  %s...\n' "$n"
+  sleep 1
+done
+echo "  *click*"
+
+# -ss 1 discards the first second so auto-exposure settles.
+ffmpeg -f v4l2 -video_size 1280x720 -i "$DEV" -ss 1 -frames:v 1 -y \
+  -loglevel error "$shot"
+
+magick "$shot" -resize 512x512^ -gravity center -extent 512x512 "$HOME/.face"
+
+# Point AccountsService at it (own-user change: no auth prompt expected).
+busctl call org.freedesktop.Accounts "/org/freedesktop/Accounts/User$(id -u)" \
+  org.freedesktop.Accounts.User SetIconFile s "$HOME/.face" \
+  || echo "WARN: AccountsService update failed — avatar file still at ~/.face"
+
+echo "Done: $shot"
+echo "Avatar set from ~/.face — check the control center user card."
+echo "Not feeling it? Just run selfie again."
+xdg-open "$HOME/.face" >/dev/null 2>&1 || true
