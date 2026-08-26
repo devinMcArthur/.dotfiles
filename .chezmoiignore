@@ -2,8 +2,17 @@
 # Paths are relative to the target ($HOME).
 # See: https://www.chezmoi.io/reference/special-files/chezmoiignore/
 
-# Caches, runtime, and ephemeral state
-.cache
+# Caches, runtime, and ephemeral state. .cache needs the glob + full
+# exception chain (not bare `.cache`): chezmoi prunes an ignored directory
+# without consulting deeper `!` exceptions, so every level down to the one
+# managed file must be un-ignored explicitly.
+.cache/**
+!.cache
+!.cache/wal
+# The Pywalfox palette: pywal-format colors.json rendered from theme
+# tokens (dot_cache/wal/ in source). Pywalfox hardcodes this path; nothing
+# else on the system writes ~/.cache/wal (pywal isn't installed).
+!.cache/wal/colors.json
 .local/state
 .local/share/Trash
 
