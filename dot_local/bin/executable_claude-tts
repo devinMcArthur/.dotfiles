@@ -52,7 +52,10 @@ fi
 # on the claude-tts model dir so no other piper/pw-cat use gets caught.
 hush() {
   pkill -f "claude[-]tts/en_US" 2>/dev/null || true
-  pkill -f "kokoro[-]say" 2>/dev/null || true
+  # Full deployed path only: a bare "kokoro-say" pattern once matched an
+  # interactive shell whose command STRING mentioned the script (exit 144,
+  # the dms-run pkill lesson all over again).
+  pkill -f "claude[-]tts/kokoro/kokoro-say" 2>/dev/null || true
   pkill -f "pw-cat -p --raw" 2>/dev/null || true
 }
 
