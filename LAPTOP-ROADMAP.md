@@ -101,8 +101,9 @@ Cloudflare account already exists. `laptop-backup` script
 prune, weekly `restic check`. First full backup 2026-08-25 (~1.5h);
 docs in `docs/src/snapshots-backups.md`.
 
-Remaining: **restore drill** (pull a real file back, diff it) —
-needs 1Password approval at the keyboard.
+Restore drill passed 2026-08-26: two files (config + binary PNG)
+pulled back from R2 out of snapshot 69e1b691, byte-identical to the
+originals (cmp + sha256). Phase 4 fully closed.
 
 ---
 
