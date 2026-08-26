@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-25T20:20:05-06:00_
+_Generated 2026-08-25T22:24:53-06:00_
 
 ## Hyprland — window manager
 
@@ -53,7 +53,7 @@ _Generated 2026-08-25T20:20:05-06:00_
 | `SUPER + j` | `movefocus` | d |
 | `SUPER + k` | `movefocus` | u |
 | `SUPER + l` | `movefocus` | r |
-| `SUPER + M` | `exec` | wlogout --protocol layer-shell # show the logout window |
+| `SUPER + M` | `exec` | dms ipc call powermenu toggle # power menu (DMS; wlogout remains as the waybar-federation revert path) |
 | `SUPER + mouse_down` | `workspace` | e+1 |
 | `SUPER + mouse_up` | `workspace` | e-1 |
 | `SUPER + N` | `exec` | $HOME/.local/bin/hypr-notes # quick notes scratchpad (dropdown nvim) |
