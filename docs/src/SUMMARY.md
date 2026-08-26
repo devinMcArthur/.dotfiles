@@ -21,7 +21,7 @@
 
 # Reliability
 
-- [Snapshots & rollback](./snapshots-backups.md)
+- [Snapshots & backups](./snapshots-backups.md)
 
 # Virtualization
 

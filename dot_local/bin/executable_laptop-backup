@@ -52,23 +52,44 @@ case "${1:-run}" in
     if ! load_env; then
       echo "skipped $(date -Is): vault locked or tooling missing" >> "$STATE/log"
       touch "$STATE/last-skip"
+      printf 'STATUS:idle\n' > "$STATE/progress"
       exit 0   # clean exit: skips are surfaced via status, not failed units
     fi
     echo "backup start $(date -Is)" >> "$STATE/log"
+    # Progress feed for the DMS dankBackup widget: restic's --json status
+    # stream (percent / bytes / ETA), throttled to one atomic write per 2s.
+    # The widget cross-checks the unit is actually active, so a crashed run
+    # can't leave a lying "running" file behind.
+    progress_sink() {
+      jq --unbuffered -r 'select(.message_type=="status")
+          | "\(.percent_done // 0) \(.bytes_done // 0) \(.total_bytes // 0) \(.seconds_remaining // -1)"' \
+      | { local last=0 pct bytes total eta
+          while read -r pct bytes total eta; do
+            [ $(( EPOCHSECONDS - last )) -ge 2 ] || continue
+            last=$EPOCHSECONDS
+            printf 'STATUS:running\nPCT:%s\nDONE:%s\nTOTAL:%s\nETA:%s\n' \
+              "$pct" "$bytes" "$total" "$eta" > "$STATE/progress.tmp" \
+              && mv -f "$STATE/progress.tmp" "$STATE/progress"
+          done; }
+    }
     if restic backup "$HOME" \
         --exclude-file="$EXCL" --exclude-caches \
-        --quiet; then
+        --json | progress_sink; then
       touch "$STATE/last-success"
+      printf 'STATUS:pruning\n' > "$STATE/progress"
       restic forget --keep-daily 7 --keep-weekly 5 --keep-monthly 12 \
         --prune --quiet || echo "prune failed $(date -Is)" >> "$STATE/log"
       # weekly metadata integrity check
       if [ ! -f "$STATE/last-check" ] \
          || [ "$(( $(date +%s) - $(stat -c %Y "$STATE/last-check") ))" -gt 604800 ]; then
+        printf 'STATUS:checking\n' > "$STATE/progress"
         restic check --quiet && touch "$STATE/last-check" \
           || echo "check FAILED $(date -Is)" >> "$STATE/log"
       fi
+      printf 'STATUS:idle\n' > "$STATE/progress"
       echo "backup ok $(date -Is)" >> "$STATE/log"
     else
+      printf 'STATUS:error\n' > "$STATE/progress"
       echo "backup FAILED $(date -Is)" >> "$STATE/log"
       notify-send -u critical -a "Backup" "laptop-backup failed" \
         "journalctl --user -u laptop-backup for details" 2>/dev/null || true

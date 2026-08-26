@@ -1,15 +1,16 @@
-# Snapshots & rollback
+# Snapshots & backups
 
-Rolling-release safety net for an Arch system. Snapper takes
-filesystem snapshots; snap-pac auto-creates pre/post snapshots
-around every pacman transaction; grub-btrfs adds a "boot into
-snapshot" menu under GRUB. The LTS kernel is installed as a
-fallback boot option.
+Two independent layers:
 
-**This is NOT a backup strategy.** Snapshots only protect against
-filesystem corruption on the same disk. For off-disk durability, see
-`LAPTOP-ROADMAP.md` → Phase 4 (Backups), which is queued but not yet
-implemented (borg/borgmatic to a remote).
+1. **Snapshots (same disk):** Snapper takes filesystem snapshots;
+   snap-pac auto-creates pre/post snapshots around every pacman
+   transaction; grub-btrfs adds a "boot into snapshot" menu under
+   GRUB. The LTS kernel is installed as a fallback boot option.
+   Protects against *bad changes* — not disk loss.
+2. **Offsite backup (off disk):** daily encrypted `restic` backup of
+   `/home` to Cloudflare R2. Protects against *disk death, theft,
+   fire*. See [Offsite backup](#offsite-backup--restic--cloudflare-r2)
+   below.
 
 ## Snapper
 
@@ -31,7 +32,7 @@ sudo snapper -c root diff <pre>..<post>    # what a pacman txn changed
 ```
 
 **`/home` is deliberately NOT under snapper.** Rolling back home
-would nuke active work. Home goes in the (future) borg backup
+would nuke active work. Home is covered by the offsite restic backup
 instead. Codified decision.
 
 ## snap-pac — wraps pacman transactions
@@ -77,6 +78,65 @@ suspend issue), reboot, pick LTS from the menu, and the system works.
 LTS receives security updates separately from mainline — leave it
 installed permanently.
 
+## Offsite backup — restic → Cloudflare R2
+
+Daily client-side-encrypted backup of `/home` to the R2 bucket
+`turing-backup` (Standard storage class). First full backup:
+2026-08-25, ~1.5h. Incrementals are minutes.
+
+**Why this shape:** R2 because the Cloudflare account/billing already
+exists (a service used *only* for backup gets forgotten); restic
+because it encrypts client-side (Cloudflare never sees plaintext),
+dedups/compresses, and speaks S3 natively.
+
+### Pieces
+
+| File | Role |
+|---|---|
+| `~/.local/bin/laptop-backup` | run / status / list / init / restore |
+| `~/.config/op-backup.env` | `op://` secret refs (R2 keys, restic password, endpoint) — resolved per-run, never on disk in plaintext |
+| `~/.config/restic/excludes.txt` | caches, node_modules, build dirs, VMs (~130G excluded of 251G) |
+| `laptop-backup.timer` (user) | daily, `Persistent=true`, 20min jitter |
+| `laptop-backup.service` (user) | oneshot, `Nice=10`, idle IO, 6h timeout |
+| `~/.local/state/laptop-backup/` | log, last-success, last-check, last-skip |
+
+Secrets live in 1Password (`Dev Secrets` → `cloudflare-turing-backup`).
+They are deliberately in `op-backup.env`, **not** `op-dev.env` — the
+R2 keys and restic password must never enter claude/pi agent
+environments. If the vault is locked at run time, the backup **skips
+cleanly** (touches `last-skip`, exits 0) and the next unlocked run
+catches up (`Persistent=true`).
+
+### Retention & integrity
+
+After every backup: `restic forget --keep-daily 7 --keep-weekly 5
+--keep-monthly 12 --prune`. Weekly (state-gated): `restic check` on
+repo metadata.
+
+### Commands
+
+```bash
+laptop-backup status          # last success/check; warns if >3 days stale
+laptop-backup list            # snapshots
+laptop-backup run             # manual backup now
+laptop-backup restore <snapshot> <path> <dest>   # e.g. latest ~/foo /tmp/r
+journalctl --user -u laptop-backup -n 20         # recent run output
+```
+
+`laptop-update` also prints backup age as one of its steps.
+
+### Disaster recovery (new machine / dead disk)
+
+1. Install restic; unlock 1Password (`Dev Secrets` vault).
+2. `chezmoi apply` deploys `laptop-backup` + `op-backup.env` — or
+   copy the two files by hand; nothing else is required.
+3. `laptop-backup list` to confirm access, then
+   `laptop-backup restore latest / /mnt/recover` (or a subpath).
+
+Everything needed to decrypt lives in 1Password — losing the laptop
+loses nothing. Losing the 1Password account **loses the backup**
+(restic password is the only key; there is no recovery without it).
+
 ## reflector.timer — weekly mirrorlist refresh
 
 `reflector.service` (timed weekly) regenerates `/etc/pacman.d/mirrorlist`
@@ -106,7 +166,10 @@ story.
   Same rule applies to btrfs subvolume mountpoints, snapshot indexes,
   etc. — those are filesystem state, not config.
 - **Snapshots are not durability.** Disk dies = snapshots die with
-  it. The Phase 4 borg work is the real-durability story.
+  it. The restic → R2 backup is the real-durability story.
+- **Backup secrets get their own env file.** `op-backup.env` is
+  separate from `op-dev.env` so R2/restic credentials never leak
+  into agent (claude/pi) environments via `with-secrets`.
 
 ## Recovery cheat sheet
 
@@ -116,11 +179,13 @@ story.
 | Package broke userland but boots | `snapper -c root list`, find pre-snapshot of offending txn, `snapper rollback <id>` |
 | Both kernels fail | GRUB → boot into snapshot, then `snapper rollback` from within |
 | Sudo locked out | Wait 60s, OR `faillock --reset` from a recovery shell |
+| Deleted/corrupted a file in `~` | `laptop-backup restore latest ~/path /tmp/recover` (unlock 1Password first) |
+| Disk dead / laptop gone | New machine → unlock 1Password → `laptop-backup restore` (see Disaster recovery above) |
 
 ## See also
 
 - [Power & battery](./power.md) — also touches reliability
-- `LAPTOP-ROADMAP.md` → Phase 4 — backups (queued)
+- [Secrets](./secrets.md) — the 1Password / `with-secrets` machinery
 
 ## Editing this page
 

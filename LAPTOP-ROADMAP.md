@@ -92,26 +92,17 @@ chezmoi repo context.
 
 ## Planned 🟡
 
-### Phase 4 — Backups (next big item)
-Goal: offsite encrypted backup of `~/work/`, `~/personal/`, dotfiles
-state not in git, browser profiles, ~/.ssh.
+### Phase 4 — Backups ✅ DONE (2026-08-25, restic → Cloudflare R2)
+Shipped as restic (not borg — S3-native, client-side encryption) to
+R2 bucket `turing-backup`, chosen over Hetzner/B2 because the
+Cloudflare account already exists. `laptop-backup` script
+(run/status/list/restore), `op-backup.env` secret refs (vault locked
+= clean skip), daily persistent user timer, retention 7d/5w/12m +
+prune, weekly `restic check`. First full backup 2026-08-25 (~1.5h);
+docs in `docs/src/snapshots-backups.md`.
 
-Steps:
-1. Pick a remote. Candidates:
-   - Hetzner Storage Box (~$3/mo for 1TB, EU, SSH+SFTP+borg)
-   - Borgbase (purpose-built for borg, ~$2/mo for 250GB, US/EU)
-   - rsync.net (~$3/mo for 800GB, US, "borg-friendly")
-   - Backblaze B2 (~$5/mo for 1TB, S3-API, need rclone bridge)
-2. Install borg + borgmatic
-3. Initial encrypted repo init on remote
-4. Define exclude list (node_modules, build artifacts, caches)
-5. Initial backup — runs hours for ~223G; do overnight on AC
-6. systemd timer for nightly incremental
-7. **Restore drill** — actually pull a file back, verify
-8. Codify in chezmoi (`run_onchange_after_borg-setup.sh.tmpl`)
-
-Stake: only insurance against disk death / catastrophic corruption.
-Snapshots don't cover this.
+Remaining: **restore drill** (pull a real file back, diff it) —
+needs 1Password approval at the keyboard.
 
 ---
 

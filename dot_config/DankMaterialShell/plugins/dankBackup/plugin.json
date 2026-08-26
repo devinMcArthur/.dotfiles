@@ -1,0 +1,13 @@
+{
+    "id": "dankBackup",
+    "name": "Backup",
+    "description": "Offsite backup status (restic → Cloudflare R2) in the Control Center",
+    "version": "1.0.0",
+    "author": "devin + claude",
+    "icon": "cloud_done",
+    "type": "widget",
+    "component": "./DankBackup.qml",
+    "capabilities": ["control-center"],
+    "permissions": ["process"],
+    "requires_dms": ">=1.4.6"
+}
