@@ -202,13 +202,19 @@ case "${1:-hook}" in
     ev="$(jq -r '.hook_event_name // "Notification"' <<<"$input" 2>/dev/null)"
     kind="$(jq -r '.matcher // .notification_type // .type // empty' <<<"$input" 2>/dev/null)"
     msg="$(jq -r '.message // .title // empty' <<<"$input" 2>/dev/null)"
+    # urgent = worth cutting the narration off for. Everything else waits
+    # its turn, and some events say nothing at all.
+    urgent=0
     case "$kind" in
-      permission_prompt)       say="${msg:-Claude needs your permission.}" ;;
-      idle_prompt)             say="Claude is waiting for you." ;;
-      agent_needs_input)       say="A background session needs your input." ;;
+      permission_prompt)       say="${msg:-Claude needs your permission.}"; urgent=1 ;;
+      agent_needs_input)       say="A background session needs your input."; urgent=1 ;;
       agent_completed)         say="A background session finished." ;;
       quota_auto_resume_fired) say="Usage limit reset. Continuing." ;;
-      auth_success)            say="" ;;   # nothing to act on
+      # Silent: idle_prompt fires ~60s after a turn ends, which is often
+      # WHILE the answer is still being read aloud — it cut the reply off
+      # to announce a wait that had not started. The final message already
+      # tells you the turn is done. auth_success has nothing to act on.
+      idle_prompt|auth_success) say="" ;;
       *)                       say="${msg:-}" ;;
     esac
     [ -n "${say//[[:space:]]/}" ] || exit 0
@@ -221,6 +227,13 @@ case "${1:-hook}" in
       hooklog "$ev" dup "$h"; exit 0
     fi
     printf '%s %s' "$h" "$now" > "$STATE/last-notify"
+    if [ "$urgent" = 0 ]; then
+      # Queue behind whatever is being read, like message speech does.
+      ( w=0; while speaking && [ "$w" -lt 120 ]; do sleep 0.5; w=$((w+1)); done
+        hooklog "$ev" spoke "$h"
+        say_text "$(printf '%s' "$say" | clean_md)" ) &
+      exit 0
+    fi
     hooklog "$ev" spoke "$h"
     say_text "$(printf '%s' "$say" | clean_md)"
     ;;
