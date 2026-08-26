@@ -22,6 +22,11 @@
 #   sudo net-rollback              # restore the pre-change snapshot
 #   sudo net-rollback --classic    # break-glass: stock NetworkManager, no
 #                                  # snapshot needed; connect with nmtui
+#
+# KNOWN WEDGE (2026-08-25): after an AP-side deauth mid-roam (mesh networks),
+# iwd can stick in `autoconnect_quick` for hours — connect attempts from any
+# client (DMS panel, impala) hang against it. NO REBOOT NEEDED:
+#   sudo systemctl restart iwd     # ~3s blip, clears the state machine
 
 set -euo pipefail
 
