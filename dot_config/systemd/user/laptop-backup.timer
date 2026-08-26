@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily /home backup (laptop-backup)
+
+[Timer]
+OnCalendar=daily
+# Catch up if the machine was off/asleep at the scheduled time.
+Persistent=true
+RandomizedDelaySec=20m
+
+[Install]
+WantedBy=timers.target

@@ -77,6 +77,15 @@ PACMAN_PKGS=(
   # $fileManager in hyprland.conf, firefox also default http/https handler)
   firefox thunar
 
+  # PDF stack (open-source stand-in for Bluebeam Revu's markup/management
+  # side). okular = daily viewer + review annotations that save INTO the
+  # PDF (round-trips with Acrobat/Revu users); default application/pdf
+  # handler via mimeapps.list. xournalpp = heavier freehand/shape/text
+  # markup with layers. pdfarranger = merge/split/rotate/reorder pages.
+  # The missing Revu piece (scaled measurement/takeoff) has no FOSS
+  # equivalent yet — QGIS georeferencing is the workaround if needed.
+  okular xournalpp pdfarranger
+
   # Login / display manager (regreet = GTK4 greeter, cage = embedded
   # Wayland kiosk compositor that hosts it; tuigreet kept as fallback)
   greetd greetd-regreet cage greetd-tuigreet
@@ -102,6 +111,10 @@ PACMAN_PKGS=(
 
   # Btrfs snapshots + auto pre/post around pacman + grub boot-into-snapshot
   snapper snap-pac grub-btrfs inotify-tools
+
+  # Offsite /home backups: restic -> Cloudflare R2 (encrypted client-side;
+  # secrets via 1Password — see laptop-backup + op-backup.env)
+  restic
 
   # fsck for the FAT32 ESP (/boot). fstab already has passno 2, but the
   # boot-time systemd-fsck was silently a no-op without fsck.fat — a hard
@@ -217,6 +230,15 @@ AUR_PKGS=(
   # deps for Linux only, then builds --frozen and trips over a macOS-only
   # crate (core-foundation) in the lockfile.
   voxtype-bin
+
+  # Firefox follows the laptop theme: Pywalfox native daemon feeds the
+  # browser chrome colors from ~/.cache/wal/colors.json (rendered from
+  # theme tokens by chezmoi); `theme set` re-themes open windows live via
+  # `pywalfox update`. The native-messaging manifest ships system-wide
+  # (/usr/lib/mozilla/native-messaging-hosts) so no `pywalfox install`
+  # step. The extension half must be added once from AMO:
+  # https://addons.mozilla.org/firefox/addon/pywalfox
+  python-pywalfox
 )
 
 echo "==> Installing pacman packages..."

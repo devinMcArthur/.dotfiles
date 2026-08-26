@@ -1,0 +1,43 @@
+{{- /* Pywal-format palette consumed by Pywalfox (Firefox theming daemon,
+     python-pywalfox). Nothing else writes ~/.cache/wal here — pywal itself
+     isn't installed; this file exists solely so Firefox follows the laptop
+     theme. `theme set` re-renders it via chezmoi apply, then pokes the
+     daemon with `pywalfox update` for a live re-theme (no restart).
+
+     Index mapping targets the extension's DEFAULT dark palette template
+     (src/config/default-themes.ts in Frewacom/pywalfox):
+       color0  -> background        (base)
+       color10 -> accentPrimary    (accent)
+       color13 -> accentSecondary  (accent2)
+       color15 -> text             (text)
+     backgroundLight/Extra are auto-derived from color0 by the extension
+     (lightened 1.25x / 1.85x); color7 seeds the light-mode background.
+     Remaining slots follow pywal's ANSI-ish convention so remapping in
+     the extension's settings page still finds sensible colors. */ -}}
+{{- $c := .theme.colors -}}
+{
+  "wallpaper": "{{ .chezmoi.homeDir }}/Pictures/wallpapers/{{ .theme.wallpaper }}",
+  "special": {
+    "background": "#{{ $c.base }}",
+    "foreground": "#{{ $c.text }}",
+    "cursor": "#{{ $c.accent }}"
+  },
+  "colors": {
+    "color0": "#{{ $c.base }}",
+    "color1": "#{{ $c.red }}",
+    "color2": "#{{ $c.green }}",
+    "color3": "#{{ $c.yellow }}",
+    "color4": "#{{ $c.blue }}",
+    "color5": "#{{ $c.mauve }}",
+    "color6": "#{{ $c.teal }}",
+    "color7": "#{{ $c.subtext1 }}",
+    "color8": "#{{ $c.surface2 }}",
+    "color9": "#{{ $c.maroon }}",
+    "color10": "#{{ $c.accent }}",
+    "color11": "#{{ $c.peach }}",
+    "color12": "#{{ $c.sapphire }}",
+    "color13": "#{{ $c.accent2 }}",
+    "color14": "#{{ $c.sky }}",
+    "color15": "#{{ $c.text }}"
+  }
+}

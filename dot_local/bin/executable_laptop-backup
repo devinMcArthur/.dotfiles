@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# laptop-backup — encrypted /home backups to Cloudflare R2 via restic.
+#
+#   laptop-backup            # run a backup now (what the daily timer calls)
+#   laptop-backup status     # last success age + latest snapshot
+#   laptop-backup list       # recent snapshots
+#   laptop-backup init       # one-time repository initialization
+#   laptop-backup restore <snapshot> <path> <dest>   # restore a path
+#
+# Secrets: op:// refs in ~/.config/op-backup.env, resolved per-run via the
+# 1Password CLI — nothing at rest. If the vault is locked (timer fired
+# while 1P closed), the run records a skip and exits clean; `status` (and
+# the laptop-update stage) surface staleness beyond 3 days.
+# Retention: 7 daily / 5 weekly / 12 monthly, pruned after each run.
+# Integrity: metadata `restic check` weekly (state-gated).
+# Client-side encrypted: R2 only ever holds ciphertext.
+
+set -uo pipefail
+
+ENVF="$HOME/.config/op-backup.env"
+EXCL="$HOME/.config/restic/excludes.txt"
+STATE="$HOME/.local/state/laptop-backup"
+mkdir -p "$STATE"
+
+load_env() {
+  command -v op >/dev/null 2>&1 || return 1
+  command -v restic >/dev/null 2>&1 || { echo "restic not installed (chezmoi apply)"; return 1; }
+  local key ref val
+  while IFS='=' read -r key ref; do
+    [[ "$key" =~ ^[A-Z_][A-Z0-9_]*$ ]] || continue
+    ref=${ref#\"}; ref=${ref%\"}
+    if [[ "$ref" == op://* ]]; then
+      val="$(op read "$ref" 2>/dev/null)" || return 1
+      export "$key=$val"
+    else
+      export "$key=$ref"
+    fi
+  done < "$ENVF"
+  export RESTIC_REPOSITORY="s3:${R2_ENDPOINT}"
+}
+
+age_of() {  # humanized age of a timestamp file
+  [ -f "$1" ] || { echo "never"; return; }
+  local s=$(( $(date +%s) - $(stat -c %Y "$1") ))
+  if [ "$s" -lt 7200 ]; then echo "$(( s / 60 ))m ago"
+  elif [ "$s" -lt 172800 ]; then echo "$(( s / 3600 ))h ago"
+  else echo "$(( s / 86400 ))d ago"; fi
+}
+
+case "${1:-run}" in
+  run)
+    if ! load_env; then
+      echo "skipped $(date -Is): vault locked or tooling missing" >> "$STATE/log"
+      touch "$STATE/last-skip"
+      exit 0   # clean exit: skips are surfaced via status, not failed units
+    fi
+    echo "backup start $(date -Is)" >> "$STATE/log"
+    if restic backup "$HOME" \
+        --exclude-file="$EXCL" --exclude-caches \
+        --quiet; then
+      touch "$STATE/last-success"
+      restic forget --keep-daily 7 --keep-weekly 5 --keep-monthly 12 \
+        --prune --quiet || echo "prune failed $(date -Is)" >> "$STATE/log"
+      # weekly metadata integrity check
+      if [ ! -f "$STATE/last-check" ] \
+         || [ "$(( $(date +%s) - $(stat -c %Y "$STATE/last-check") ))" -gt 604800 ]; then
+        restic check --quiet && touch "$STATE/last-check" \
+          || echo "check FAILED $(date -Is)" >> "$STATE/log"
+      fi
+      echo "backup ok $(date -Is)" >> "$STATE/log"
+    else
+      echo "backup FAILED $(date -Is)" >> "$STATE/log"
+      notify-send -u critical -a "Backup" "laptop-backup failed" \
+        "journalctl --user -u laptop-backup for details" 2>/dev/null || true
+      exit 1
+    fi
+    ;;
+  status)
+    echo "last success: $(age_of "$STATE/last-success")"
+    echo "last check:   $(age_of "$STATE/last-check")"
+    [ -f "$STATE/last-skip" ] && echo "last skip:    $(age_of "$STATE/last-skip") (vault locked)"
+    if [ ! -f "$STATE/last-success" ] \
+       || [ "$(( $(date +%s) - $(stat -c %Y "$STATE/last-success") ))" -gt 259200 ]; then
+      echo "!! backups stale (>3 days) — run: laptop-backup"
+    fi
+    if load_env 2>/dev/null; then
+      restic snapshots --latest 1 --compact 2>/dev/null | tail -3
+    fi
+    ;;
+  list)
+    load_env || { echo "vault locked"; exit 1; }
+    restic snapshots --compact | tail -15
+    ;;
+  init)
+    load_env || { echo "vault locked or restic missing"; exit 1; }
+    if restic cat config >/dev/null 2>&1; then
+      echo "repository already initialized: $RESTIC_REPOSITORY"
+    else
+      restic init
+    fi
+    ;;
+  restore)
+    shift
+    snap="${1:?usage: laptop-backup restore <snapshot|latest> <path> <dest>}"
+    path="${2:?path within the snapshot}"
+    dest="${3:?destination directory}"
+    load_env || { echo "vault locked"; exit 1; }
+    restic restore "$snap" --include "$path" --target "$dest"
+    ;;
+  *)
+    sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+    exit 2
+    ;;
+esac

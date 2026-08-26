@@ -11,9 +11,10 @@
 #
 # What reloads live: Hyprland borders/gaps, wallpaper, waybar, wofi (next
 # open), swaync, tmux statusline (all sessions), starship (next prompt),
-# fzf/zsh (new shells). What needs a restart: ghostty windows (Ctrl+Shift+,
-# reloads one in place), nvim, btop, lazygit. The login screen deliberately
-# stays Catppuccin Mocha (boot theming needs sudo; a theme switch shouldn't).
+# fzf/zsh (new shells), Firefox chrome (Pywalfox). What needs a restart:
+# ghostty windows (Ctrl+Shift+, reloads one in place), nvim, btop, lazygit.
+# The login screen deliberately stays Catppuccin Mocha (boot theming needs
+# sudo; a theme switch shouldn't).
 
 set -euo pipefail
 
@@ -139,6 +140,14 @@ case "${1:-}" in
     # ghostty (>=1.2) reloads config on SIGUSR2 — the ONLY safe signal
     # (anything else crashes it). Re-themes every open terminal in place.
     pkill -USR2 -x ghostty 2>/dev/null || true
+    # Firefox chrome (tabs/toolbar/URL bar): the Pywalfox extension
+    # refetches ~/.cache/wal/colors.json (just re-rendered by chezmoi from
+    # the theme tokens). The daemon only exists while Firefox runs — a
+    # dead-socket connect fails fast, but timeout-guard anyway (swaync
+    # lesson above: never let a reload step block the rest).
+    if command -v pywalfox >/dev/null 2>&1; then
+      timeout 5 pywalfox update >/dev/null 2>&1 || true
+    fi
 
     echo "==> Theme: $name"
     echo "    Live now: borders, wallpaper, bar, notifications, tmux, next prompt."

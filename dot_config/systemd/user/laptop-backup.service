@@ -1,0 +1,11 @@
+[Unit]
+Description=Encrypted /home backup to Cloudflare R2 (restic)
+# Needs the session's 1Password for secrets; runs as the user.
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/laptop-backup run
+Nice=10
+IOSchedulingClass=idle
+# First full upload can take hours; incrementals take minutes.
+TimeoutStartSec=6h

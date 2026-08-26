@@ -50,6 +50,9 @@ else
   echo "none"
 fi
 
+step "Offsite backup age (laptop-backup)"
+"$HOME/.local/bin/laptop-backup" status 2>/dev/null || echo "laptop-backup not set up"
+
 step "Summary"
 if [ ! -d "/lib/modules/$(uname -r)" ]; then
   echo "!! Kernel was upgraded: REBOOT before loading any new modules or"
