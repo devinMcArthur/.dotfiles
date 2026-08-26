@@ -8,7 +8,8 @@
 #   claude-tts toggle      # flip + notify (Super+Ctrl+V, bar pill syncs)
 #   claude-tts stop        # shut up — kill the current playback
 #   claude-tts status      # enabled? which voice?
-#   claude-tts voice [nm]  # list downloaded voices / switch voice
+#   claude-tts voice [nm]  # list voices (piper + kokoro) / switch
+#   claude-tts setup-kokoro # bootstrap engine two (venv + models, ~340MB)
 #   claude-tts test [txt]  # speak a test line
 #
 # Design: extraction runs inline (fast), playback is DETACHED (setsid -f)
@@ -20,20 +21,38 @@
 set -uo pipefail
 
 VOICES="$HOME/.local/share/claude-tts"
+KOKORO="$VOICES/kokoro"
 STATE="$HOME/.local/state/claude-tts"
 mkdir -p "$STATE"
 OFF="$STATE/off"
-# Active voice: basename in $STATE/voice (set via `claude-tts voice <name>`),
-# falling back to the default download.
+# Active voice: name in $STATE/voice (set via `claude-tts voice <name>`).
+# Two engines share the selector: piper voices are onnx basenames
+# (en_US-ryan-high); Kokoro-82M voices carry a kokoro- prefix
+# (kokoro-af_heart) and run via kokoro-say.py in the uv venv.
 DEFAULT_VOICE="en_US-lessac-medium"
-MODEL="$VOICES/$(cat "$STATE/voice" 2>/dev/null || echo "$DEFAULT_VOICE").onnx"
-[ -f "$MODEL" ] || MODEL="$VOICES/$DEFAULT_VOICE.onnx"
+VOICE="$(cat "$STATE/voice" 2>/dev/null || echo "$DEFAULT_VOICE")"
+# Curated Kokoro voices (voices-v1.0.bin holds 54; these are the strong
+# English ones): af_heart af_bella af_nicole am_michael am_fenrir bf_emma
+# bm_george — list via `claude-tts voice`.
+KOKORO_VOICES="af_heart af_bella af_nicole am_michael am_fenrir bf_emma bm_george"
+
+engine() { case "$VOICE" in kokoro-*) echo kokoro ;; *) echo piper ;; esac; }
+kokoro_ok() {
+  [ -x "$KOKORO/venv/bin/python" ] && [ -f "$KOKORO/kokoro-v1.0.onnx" ] \
+    && [ -f "$KOKORO/voices-v1.0.bin" ]
+}
+
+MODEL="$VOICES/$VOICE.onnx"
+if [ "$(engine)" = piper ] && [ ! -f "$MODEL" ]; then
+  VOICE="$DEFAULT_VOICE"; MODEL="$VOICES/$DEFAULT_VOICE.onnx"
+fi
 
 # Kill any in-flight speech. Bracket trick keeps pkill from matching this
 # script's own cmdline (the voxtype/screensaver lesson). Both patterns key
 # on the claude-tts model dir so no other piper/pw-cat use gets caught.
 hush() {
   pkill -f "claude[-]tts/en_US" 2>/dev/null || true
+  pkill -f "kokoro[-]say" 2>/dev/null || true
   pkill -f "pw-cat -p --raw" 2>/dev/null || true
 }
 
@@ -43,8 +62,17 @@ hush() {
 # comes from the voice's own config (a hardcoded rate chipmunks any voice
 # whose native rate differs). sentence_silence eases the pacing.
 say_text() {
-  [ -f "$MODEL" ] || return 0
   hush
+  if [ "$(engine)" = kokoro ]; then
+    kokoro_ok || return 0
+    setsid -f env TTS_TEXT="$1" TTS_VOICE="${VOICE#kokoro-}" KOKORO="$KOKORO" bash -c '
+      printf "%s" "$TTS_TEXT" \
+        | "$KOKORO/venv/bin/python" "$KOKORO/kokoro-say.py" "$TTS_VOICE" 2>/dev/null \
+        | pw-cat -p --raw --rate 24000 --channels 1 --format s16 - 2>/dev/null
+    ' >/dev/null 2>&1 </dev/null
+    return 0
+  fi
+  [ -f "$MODEL" ] || return 0
   rate="$(jq -r '.audio.sample_rate // 22050' "$MODEL.json" 2>/dev/null || echo 22050)"
   setsid -f env TTS_TEXT="$1" TTS_MODEL="$MODEL" TTS_RATE="$rate" bash -c '
     printf "%s" "$TTS_TEXT" \
@@ -108,30 +136,63 @@ case "${1:-hook}" in
   stop)   hush ;;
   status)
     [ -e "$OFF" ] && echo "speech: disabled" || echo "speech: enabled"
-    [ -f "$MODEL" ] && echo "voice:  $(basename "$MODEL" .onnx)" \
-      || echo "voice:  MISSING ($MODEL)"
+    if [ "$(engine)" = kokoro ]; then
+      kokoro_ok && echo "voice:  $VOICE (kokoro)" \
+        || echo "voice:  $VOICE — kokoro engine incomplete (claude-tts setup-kokoro)"
+    else
+      [ -f "$MODEL" ] && echo "voice:  $VOICE (piper)" \
+        || echo "voice:  MISSING ($MODEL)"
+    fi
     ;;
   voice)
     if [ -n "${2:-}" ]; then
-      if [ -f "$VOICES/$2.onnx" ]; then
+      ok=0
+      case "$2" in
+        kokoro-*)
+          kokoro_ok || { echo "kokoro engine not installed" >&2; exit 1; }
+          for k in $KOKORO_VOICES; do [ "kokoro-$k" = "$2" ] && ok=1; done
+          ;;
+        *) [ -f "$VOICES/$2.onnx" ] && ok=1 ;;
+      esac
+      if [ "$ok" = 1 ]; then
         echo "$2" > "$STATE/voice"
         echo "voice: $2"
       else
-        echo "no such voice: $2 (downloaded voices below)" >&2
-        for f in "$VOICES"/*.onnx; do basename "$f" .onnx; done >&2
+        echo "no such voice: $2 (available below)" >&2
+        "$0" voice >&2
         exit 1
       fi
     else
-      cur="$(basename "$MODEL" .onnx)"
       for f in "$VOICES"/*.onnx; do
         n="$(basename "$f" .onnx)"
-        [ "$n" = "$cur" ] && echo "* $n" || echo "  $n"
+        [ "$n" = "$VOICE" ] && echo "* $n  (piper)" || echo "  $n  (piper)"
       done
+      if kokoro_ok; then
+        for k in $KOKORO_VOICES; do
+          [ "kokoro-$k" = "$VOICE" ] && echo "* kokoro-$k" || echo "  kokoro-$k"
+        done
+      fi
     fi
     ;;
   test)
     shift || true
     say_text "${*:-Claude text to speech is working.}"
+    ;;
+  setup-kokoro)
+    # Engine two bootstrap (fresh machine): uv venv + kokoro-onnx + the
+    # model/voices files (~340MB, not in the repo — public git, big blobs).
+    command -v uv >/dev/null 2>&1 || { echo "uv required (chezmoi apply installs it)" >&2; exit 1; }
+    mkdir -p "$KOKORO"
+    if [ ! -x "$KOKORO/venv/bin/python" ]; then
+      uv venv "$KOKORO/venv" --quiet
+      uv pip install --python "$KOKORO/venv/bin/python" --quiet kokoro-onnx
+    fi
+    base="https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
+    for f in kokoro-v1.0.onnx voices-v1.0.bin; do
+      [ -f "$KOKORO/$f" ] || curl -sL -o "$KOKORO/$f" "$base/$f"
+    done
+    kokoro_ok && echo "kokoro engine ready (claude-tts voice kokoro-af_heart)" \
+      || { echo "setup incomplete" >&2; exit 1; }
     ;;
   *)
     sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
