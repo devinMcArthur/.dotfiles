@@ -34,32 +34,43 @@ MODEL="$VOICES/$(cat "$STATE/voice" 2>/dev/null || echo "$DEFAULT_VOICE").onnx"
 # on the claude-tts model dir so no other piper/pw-cat use gets caught.
 hush() {
   pkill -f "claude[-]tts/en_US" 2>/dev/null || true
-  pkill -f "pw-cat -p --raw --rate 22050" 2>/dev/null || true
+  pkill -f "pw-cat -p --raw" 2>/dev/null || true
 }
 
 # Speak $1 in a detached session (survives the hook process exiting).
 # Binary is piper-tts (piper-tts-bin package); playback via pw-cat — this
-# machine has no alsa-utils/aplay, PipeWire tools only.
+# machine has no alsa-utils/aplay, PipeWire tools only. The playback rate
+# comes from the voice's own config (a hardcoded rate chipmunks any voice
+# whose native rate differs). sentence_silence eases the pacing.
 say_text() {
   [ -f "$MODEL" ] || return 0
   hush
-  setsid -f env TTS_TEXT="$1" TTS_MODEL="$MODEL" bash -c '
+  rate="$(jq -r '.audio.sample_rate // 22050' "$MODEL.json" 2>/dev/null || echo 22050)"
+  setsid -f env TTS_TEXT="$1" TTS_MODEL="$MODEL" TTS_RATE="$rate" bash -c '
     printf "%s" "$TTS_TEXT" \
-      | piper-tts -m "$TTS_MODEL" --output_raw 2>/dev/null \
-      | pw-cat -p --raw --rate 22050 --channels 1 --format s16 - 2>/dev/null
+      | piper-tts -m "$TTS_MODEL" --output_raw --sentence_silence 0.35 2>/dev/null \
+      | pw-cat -p --raw --rate "$TTS_RATE" --channels 1 --format s16 - 2>/dev/null
   ' >/dev/null 2>&1 </dev/null
 }
 
-# Markdown -> listenable text.
+# Markdown -> listenable text. Beyond structure-stripping, the goal is
+# taming what espeak's phonemizer turns into frantic gibberish: raw URLs,
+# deep filesystem paths, and symbol runs all "speed-read" horribly.
 clean_md() {
   awk 'BEGIN{cb=0} /^```/{cb=!cb; if(cb) print "Code block."; next} !cb' \
   | sed -E \
+      -e '/^[-| :=]+$/d' \
       -e 's/\[([^]]*)\]\([^)]*\)/\1/g' \
       -e 's/`([^`]+)`/\1/g' \
       -e 's/^#+ +//' \
       -e 's/(\*\*|__)//g' \
-      -e 's/^ *[-*] +//' \
-      -e 's/[|]/ /g'
+      -e 's/\*([^*]+)\*/\1/g' \
+      -e 's@https?://[^[:space:])]+@ link @g' \
+      -e 's@(~|/)[A-Za-z0-9._/-]*/([A-Za-z0-9._-]+)@ \2@g' \
+      -e 's/^ *[-*•] +//' \
+      -e 's/[-=]{3,}/ /g' \
+      -e 's/[|]/ /g' \
+      -e 's/✓/ check /g; s/[✗✘]/ fail /g; s/→/ to /g; s/·/, /g'
 }
 
 case "${1:-hook}" in
