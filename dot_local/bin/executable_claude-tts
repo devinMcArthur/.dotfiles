@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# claude-tts — speak Claude Code's final message aloud (piper, local neural
+# TTS — the output mirror of voxtype's local whisper input).
+#
+#   claude-tts             # hook mode: reads Claude Code Stop-hook JSON on
+#                          # stdin (registered in ~/.claude/settings.json)
+#   claude-tts on|off      # enable / disable speech (default: on)
+#   claude-tts toggle      # flip + notify (Super+Ctrl+V, bar pill syncs)
+#   claude-tts stop        # shut up — kill the current playback
+#   claude-tts status      # enabled? which voice?
+#   claude-tts voice [nm]  # list downloaded voices / switch voice
+#   claude-tts test [txt]  # speak a test line
+#
+# Design: extraction runs inline (fast), playback is DETACHED (setsid -f)
+# so the hook returns immediately — a long read never blocks the next
+# prompt. Each new message kills the previous playback rather than queue.
+# Markdown is flattened for the ear: code fences become the words "Code
+# block", links keep their text, headers/bullets/emphasis are stripped.
+
+set -uo pipefail
+
+VOICES="$HOME/.local/share/claude-tts"
+STATE="$HOME/.local/state/claude-tts"
+mkdir -p "$STATE"
+OFF="$STATE/off"
+# Active voice: basename in $STATE/voice (set via `claude-tts voice <name>`),
+# falling back to the default download.
+DEFAULT_VOICE="en_US-lessac-medium"
+MODEL="$VOICES/$(cat "$STATE/voice" 2>/dev/null || echo "$DEFAULT_VOICE").onnx"
+[ -f "$MODEL" ] || MODEL="$VOICES/$DEFAULT_VOICE.onnx"
+
+# Kill any in-flight speech. Bracket trick keeps pkill from matching this
+# script's own cmdline (the voxtype/screensaver lesson). Both patterns key
+# on the claude-tts model dir so no other piper/pw-cat use gets caught.
+hush() {
+  pkill -f "claude[-]tts/en_US" 2>/dev/null || true
+  pkill -f "pw-cat -p --raw --rate 22050" 2>/dev/null || true
+}
+
+# Speak $1 in a detached session (survives the hook process exiting).
+# Binary is piper-tts (piper-tts-bin package); playback via pw-cat — this
+# machine has no alsa-utils/aplay, PipeWire tools only.
+say_text() {
+  [ -f "$MODEL" ] || return 0
+  hush
+  setsid -f env TTS_TEXT="$1" TTS_MODEL="$MODEL" bash -c '
+    printf "%s" "$TTS_TEXT" \
+      | piper-tts -m "$TTS_MODEL" --output_raw 2>/dev/null \
+      | pw-cat -p --raw --rate 22050 --channels 1 --format s16 - 2>/dev/null
+  ' >/dev/null 2>&1 </dev/null
+}
+
+# Markdown -> listenable text.
+clean_md() {
+  awk 'BEGIN{cb=0} /^```/{cb=!cb; if(cb) print "Code block."; next} !cb' \
+  | sed -E \
+      -e 's/\[([^]]*)\]\([^)]*\)/\1/g' \
+      -e 's/`([^`]+)`/\1/g' \
+      -e 's/^#+ +//' \
+      -e 's/(\*\*|__)//g' \
+      -e 's/^ *[-*] +//' \
+      -e 's/[|]/ /g'
+}
+
+case "${1:-hook}" in
+  hook)
+    input="$(cat)"
+    [ -e "$OFF" ] && exit 0
+    # Loop guard: never speak from a re-entrant Stop hook.
+    [ "$(jq -r '.stop_hook_active // false' <<<"$input")" = "true" ] && exit 0
+    tp="$(jq -r '.transcript_path // empty' <<<"$input")"
+    [ -n "$tp" ] && [ -f "$tp" ] || exit 0
+    # Last assistant entry with any text content. fromjson? tolerates the
+    # occasional non-JSON/partial line; the entry format is version-prone,
+    # so fail silent rather than loud.
+    text="$(jq -rRs '
+      [ split("\n")[] | fromjson? | select(.type=="assistant")
+        | .message.content // [] | map(select(.type=="text") | .text)
+        | join("\n") | select(length>0)
+      ] | last // ""' "$tp" 2>/dev/null | clean_md)"
+    [ -n "${text//[[:space:]]/}" ] || exit 0
+    say_text "$text"
+    ;;
+  on)     rm -f "$OFF"; echo "claude-tts: enabled" ;;
+  off)    touch "$OFF"; hush; echo "claude-tts: disabled" ;;
+  toggle)
+    if [ -e "$OFF" ]; then
+      rm -f "$OFF"
+      notify-send -a "Claude Voice" -t 2500 "Claude speaks" \
+        "replies will be read aloud" 2>/dev/null || true
+    else
+      touch "$OFF"; hush
+      notify-send -a "Claude Voice" -t 2500 "Claude muted" \
+        "toggle back: Super+Ctrl+V or the bar pill" 2>/dev/null || true
+    fi
+    ;;
+  stop)   hush ;;
+  status)
+    [ -e "$OFF" ] && echo "speech: disabled" || echo "speech: enabled"
+    [ -f "$MODEL" ] && echo "voice:  $(basename "$MODEL" .onnx)" \
+      || echo "voice:  MISSING ($MODEL)"
+    ;;
+  voice)
+    if [ -n "${2:-}" ]; then
+      if [ -f "$VOICES/$2.onnx" ]; then
+        echo "$2" > "$STATE/voice"
+        echo "voice: $2"
+      else
+        echo "no such voice: $2 (downloaded voices below)" >&2
+        for f in "$VOICES"/*.onnx; do basename "$f" .onnx; done >&2
+        exit 1
+      fi
+    else
+      cur="$(basename "$MODEL" .onnx)"
+      for f in "$VOICES"/*.onnx; do
+        n="$(basename "$f" .onnx)"
+        [ "$n" = "$cur" ] && echo "* $n" || echo "  $n"
+      done
+    fi
+    ;;
+  test)
+    shift || true
+    say_text "${*:-Claude text to speech is working.}"
+    ;;
+  *)
+    sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+    exit 2
+    ;;
+esac

@@ -1,0 +1,12 @@
+{
+    "id": "dankClaudeVoice",
+    "name": "Claude Voice",
+    "description": "Top-bar mute toggle for claude-tts (Claude Code spoken replies)",
+    "version": "1.0.0",
+    "author": "devin + claude",
+    "icon": "record_voice_over",
+    "type": "widget",
+    "component": "./DankClaudeVoice.qml",
+    "permissions": ["process"],
+    "requires_dms": ">=1.4.6"
+}

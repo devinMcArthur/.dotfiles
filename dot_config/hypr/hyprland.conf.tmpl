@@ -75,6 +75,11 @@ exec-once = systemctl --user import-environment --all
 # so we kick it manually; Restart=on-failure supervision comes free.
 exec-once = systemctl --user start soteria.service
 
+# Dictation daemon (F12 push-to-talk). Same WantedBy=graphical-session.target
+# trap as soteria: the target never fires under greetd without UWSM, so the
+# enabled unit sits dead until kicked.
+exec-once = systemctl --user start voxtype.service
+
 # --- Desktop shell: DankMaterialShell TRIAL (Quickshell) --------------------
 # One process replaces the waybar+swaync+swayosd federation: bar with real
 # interactive panels (network Wi-Fi toggle, bluetooth, audio), control
@@ -280,10 +285,16 @@ bind = $mainMod CTRL, E, exec, wofi-emoji                                    # e
 # Reminders: "<minutes> <message>" prompt → notification when time's up
 bind = $mainMod CTRL, R, exec, $HOME/.local/bin/hypr-remind                  # set a reminder
 
-# Dictation (voxtype, local whisper.cpp): HOLD F12 to talk, release to
-# transcribe into the focused input. Daemon: systemctl --user status voxtype
-bind = , F12, exec, voxtype record start                                     # dictation: hold F12 to talk
-bindr = , F12, exec, voxtype record stop                                     # dictation: release to transcribe
+# Dictation (voxtype, local whisper.cpp): tap Super+X to start recording,
+# tap again to stop + transcribe into the focused input. Toggle, not
+# hold-to-talk: a release bind on a modifier chord misfires when Super is
+# released before X. Daemon: systemctl --user status voxtype
+bind = SUPER, X, exec, voxtype record toggle                                 # dictation: toggle record/transcribe
+bind = SUPER SHIFT, X, exec, voxtype record cancel                           # dictation: discard recording
+
+# Claude Code spoken replies (claude-tts, local piper TTS): mute/unmute.
+# Same flag the bar's Claude Voice pill flips; muting cuts speech mid-word.
+bind = SUPER CTRL, V, exec, claude-tts toggle                                # claude voice: mute/unmute
 
 # Lock screen
 bind = $mainMod, escape, exec, $lock                                           # lock the screen

@@ -231,6 +231,12 @@ AUR_PKGS=(
   # crate (core-foundation) in the lockfile.
   voxtype-bin
 
+  # Local neural TTS — claude-tts speaks Claude Code's final message via a
+  # Stop hook in ~/.claude/settings.json (app-managed, registered by hand —
+  # see docs). Voice model lives in ~/.local/share/claude-tts/. The output
+  # mirror of voxtype above.
+  piper-tts-bin
+
   # Firefox follows the laptop theme: Pywalfox native daemon feeds the
   # browser chrome colors from ~/.cache/wal/colors.json (rendered from
   # theme tokens by chezmoi); `theme set` re-themes open windows live via

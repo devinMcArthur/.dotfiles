@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-25T22:24:53-06:00_
+_Generated 2026-08-26T07:42:07-06:00_
 
 ## Hyprland — window manager
 
@@ -16,7 +16,6 @@ _Generated 2026-08-25T22:24:53-06:00_
 | `ALT + R` | `submap` | resize |
 | `down` | `resizeactive` | 0 10 |
 | `escape` | `submap` | reset |
-| `F12` | `exec` | voxtype record start                                     # dictation: hold F12 to talk |
 | `left` | `resizeactive` | -10 0 |
 | `right` | `resizeactive` | 10 0 |
 | `SUPER + 0` | `workspace` | 10 |
@@ -44,6 +43,7 @@ _Generated 2026-08-25T22:24:53-06:00_
 | `SUPER + CTRL + S` | `exec` | dms ipc call quickCapture screenshot output edit  # screenshot monitor → annotate |
 | `SUPER + CTRL + SHIFT + SPACE` | `exec` | $HOME/.local/bin/theme menu                            # theme switcher menu |
 | `SUPER + CTRL + slash` | `movecurrentworkspacetomonitor` | eDP-1 |
+| `SUPER + CTRL + V` | `exec` | claude-tts toggle                                # claude voice: mute/unmute |
 | `SUPER + E` | `exec` | $fileManager # Show the graphical file browser |
 | `SUPER + escape` | `exec` | $lock                                           # lock the screen |
 | `SUPER + F` | `fullscreen` | — |
@@ -88,12 +88,14 @@ _Generated 2026-08-25T22:24:53-06:00_
 | `SUPER + SHIFT + slash` | `exec` | $HOME/.local/bin/laptop-docs # Super+? → open laptop reference site (mdBook). Displaced the previous `movewindow mon:eDP-1` bind below — restore it if you want the comma/period/slash monitor-movement symmetry back. |
 | `SUPER + SHIFT + T` | `exec` | $HOME/.local/bin/hypr-ocr                    # grab text from screen → clipboard |
 | `SUPER + SHIFT + V` | `exec` | cliphist wipe                                  # wipe clipboard history |
+| `SUPER + SHIFT + X` | `exec` | voxtype record cancel                           # dictation: discard recording |
 | `SUPER + slash` | `focusmonitor` | eDP-1 |
 | `SUPER + SPACE` | `exec` | dms ipc call launcher toggle # app launcher (DMS; wofi remains for scripts) |
 | `SUPER + Tab` | `swapactiveworkspaces` | desc:Acer Technologies KA272 0x13800DD9 desc:Acer Technologies KA272 0x13800FAE |
 | `SUPER + T` | `togglefloating` | # toggle window float / tile |
 | `SUPER + V` | `exec` | cliphist-menu                                        # clipboard history |
 | `SUPER + W` | `exec` | $HOME/.local/bin/win # smart launcher for the win11 KVM VM (starts + attaches virt-viewer) |
+| `SUPER + X` | `exec` | voxtype record toggle                                 # dictation: toggle record/transcribe |
 | `SUPER + Y` | `layoutmsg` | togglesplit # dwindle |
 | `up` | `resizeactive` | 0 -10 |
 | `XF86AudioLowerVolume` | `exec` | wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- |
