@@ -147,6 +147,12 @@ mode = "type"
 # Fall back to clipboard if typing fails
 fallback_to_clipboard = true
 
+# Type newline characters as Shift+Enter instead of Enter, so dictated
+# "new line" breaks the line inside chat inputs (Claude Code, Telegram)
+# instead of submitting the half-finished message. Editors treat
+# Shift+Enter as a plain newline, so nothing is lost there.
+shift_enter_newlines = true
+
 # Per-language XKB layout variants for multilingual dictation.
 # Use this with language arrays such as `language = ["en", "ru"]` when a
 # language needs a variant that should not apply to other languages.
@@ -211,14 +217,27 @@ on_transcription = true
 # command = "ollama run llama3.2:1b 'Clean up this dictation. Fix grammar, remove filler words. Output only the cleaned text:'"
 # timeout_ms = 30000  # 30 second timeout (generous for LLM)
 
-# [text]
+[text]
 # Text processing options (word replacements, spoken punctuation)
 #
-# Enable spoken punctuation conversion (e.g., say "period" to get ".")
+# Spoken punctuation stays OFF — whisper's prosody-based auto-punctuation
+# does a good job on its own, and converting every "colon"/"period" would
+# hijack those words in normal speech.
 # spoken_punctuation = false
 #
-# Custom word replacements (case-insensitive)
-# replacements = { "vox type" = "voxtype" }
+# Newline only, via replacements: say "new line" for a line break
+# ("new paragraph" for a blank line between). With [output]
+# shift_enter_newlines these type as Shift+Enter, so in chat-style inputs
+# (Claude Code prompt) they insert a line break WITHOUT submitting.
+# NOTE: replacements/smart-submit run in the daemon's OUTPUT stage —
+# `voxtype transcribe <wav>` prints raw text and won't show them.
+# "vox type" fixes whisper's favorite mishearing of the name.
+replacements = { "new line" = "\n", "newline" = "\n", "new paragraph" = "\n\n", "vox type" = "voxtype" }
+
+# Say "submit" at the END of a dictation: voxtype strips the word and
+# presses Enter — the spoken send button for Claude Code / chats. Mid-
+# sentence "submit" is untouched (end-of-recording only).
+smart_auto_submit = true
 
 [status]
 # Status display icons for Waybar/tray integrations
