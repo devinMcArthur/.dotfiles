@@ -1,0 +1,140 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# hibernate-setup v2 — suspend-then-hibernate for lid close.
+# (v2: dropped the live logind restart — it froze the session; see below.)
+#
+# Lid close stays instant s2idle; after HibernateDelaySec asleep, systemd
+# wakes briefly, snapshots RAM to a disk swapfile, and powers off — zero
+# drain overnight. All native systemd + btrfs-progs; this script is glue:
+#
+#   @swap    : TOP-LEVEL btrfs subvolume mounted at /swap. Top-level (not
+#              nested under @) because snapper rollback swaps @ out from
+#              under nested children — a nested swapfile would be stranded.
+#              Snapshots never descend into other subvolumes, and restic
+#              only backs up /home, so the 32G file is invisible to both.
+#   swapfile : btrfs fs mkswapfile (handles +C/no-compress correctly),
+#              pri=0 so the 4G zram (pri=100) stays first for paging.
+#   resume=  : kernel cmdline (GRUB) + `resume` mkinitcpio hook — the
+#              udev initramfs needs both to find the image at boot.
+#   logind   : lid -> suspend-then-hibernate (docked lid stays ignore);
+#              sleep.conf HibernateDelaySec=60min.
+#
+# Resume only works from the NEXT boot's initramfs/cmdline — but both are
+# rebuilt on disk before this script exits, so even a hibernate later this
+# boot resumes correctly.
+#
+# ESCAPE HATCH if boot hangs at resume: at the GRUB entry press `e`,
+# delete `resume=... resume_offset=...`, F10 — boots fresh, image ignored.
+# Undo everything: swapoff /swap/swapfile, remove the two fstab lines, the
+# resume params in /etc/default/grub, the `resume` hook in mkinitcpio.conf,
+# the drop-ins in /etc/systemd/{logind,sleep}.conf.d/, then
+# grub-mkconfig -o /boot/grub/grub.cfg && mkinitcpio -P.
+
+set -euo pipefail
+
+echo "==> Hibernate setup (suspend-then-hibernate on lid close)..."
+
+if [ "$(findmnt -no FSTYPE /)" != "btrfs" ]; then
+  echo "    root is not btrfs — skipping hibernate setup"
+  exit 0
+fi
+
+sudo bash <<'ROOT'
+set -euo pipefail
+
+SWAP_SIZE=32g
+SWAP_MNT=/swap
+SWAP_FILE=$SWAP_MNT/swapfile
+changed_grub=0
+changed_initramfs=0
+
+# --- @swap subvolume (top-level) + mount -----------------------------------
+if ! btrfs subvolume show "$SWAP_MNT" >/dev/null 2>&1; then
+  free_g=$(df -BG --output=avail / | tail -1 | tr -dc 0-9)
+  [ "$free_g" -ge 40 ] || { echo "ERROR: need >=40G free, have ${free_g}G"; exit 1; }
+  top=$(mktemp -d)
+  mount -o subvolid=5 "$(findmnt -no SOURCE / | sed 's/\[.*//')" "$top"
+  [ -d "$top/@swap" ] || btrfs subvolume create "$top/@swap"
+  umount "$top" && rmdir "$top"
+  mkdir -p "$SWAP_MNT"
+  echo "    created top-level subvolume @swap"
+fi
+if ! grep -q "subvol=/@swap" /etc/fstab; then
+  cp -a /etc/fstab "/etc/fstab.bak.$(date +%Y%m%d%H%M%S)"
+  uuid=$(findmnt -no UUID /)
+  printf 'UUID=%s\t%s\tbtrfs\trw,relatime,ssd,space_cache=v2,subvol=/@swap\t0 0\n' \
+    "$uuid" "$SWAP_MNT" >> /etc/fstab
+  echo "    fstab: +$SWAP_MNT (subvol=/@swap)"
+fi
+mountpoint -q "$SWAP_MNT" || mount "$SWAP_MNT"
+
+# --- swapfile ---------------------------------------------------------------
+if [ ! -f "$SWAP_FILE" ]; then
+  btrfs filesystem mkswapfile --size "$SWAP_SIZE" "$SWAP_FILE"
+  echo "    created $SWAP_FILE ($SWAP_SIZE)"
+fi
+if ! grep -q "^$SWAP_FILE" /etc/fstab; then
+  printf '%s\tnone\tswap\tdefaults,pri=0\t0 0\n' "$SWAP_FILE" >> /etc/fstab
+  echo "    fstab: +$SWAP_FILE (pri=0, zram stays first)"
+fi
+swapon --show=NAME --noheadings | grep -qx "$SWAP_FILE" || swapon "$SWAP_FILE"
+
+# --- kernel resume: GRUB cmdline + mkinitcpio hook --------------------------
+offset=$(btrfs inspect-internal map-swapfile -r "$SWAP_FILE")
+case "$offset" in (*[!0-9]*|"") echo "ERROR: bad resume offset '$offset'"; exit 1;; esac
+uuid=$(findmnt -no UUID /)
+want="resume=UUID=$uuid resume_offset=$offset"
+if ! grep -q "$want" /etc/default/grub; then
+  cp -a /etc/default/grub "/etc/default/grub.bak.$(date +%Y%m%d%H%M%S)"
+  sed -i -E 's/ ?resume=[^" ]*//; s/ ?resume_offset=[^" ]*//' /etc/default/grub
+  sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=\"|&$want |" /etc/default/grub
+  grep -q "$want" /etc/default/grub || { echo "ERROR: cmdline edit failed"; exit 1; }
+  echo "    kernel cmdline: +$want"
+  changed_grub=1
+fi
+if ! grep -qE '^HOOKS=.* resume ' /etc/mkinitcpio.conf; then
+  cp -a /etc/mkinitcpio.conf "/etc/mkinitcpio.conf.bak.$(date +%Y%m%d%H%M%S)"
+  sed -i 's/ block filesystems / block resume filesystems /' /etc/mkinitcpio.conf
+  grep -qE '^HOOKS=.* resume ' /etc/mkinitcpio.conf \
+    || { echo "ERROR: failed to insert resume hook"; exit 1; }
+  echo "    mkinitcpio: resume hook added (after block)"
+  changed_initramfs=1
+fi
+# (plain `[ ] &&` would trip set -e when unchanged)
+if [ "$changed_grub" -eq 1 ]; then grub-mkconfig -o /boot/grub/grub.cfg; fi
+if [ "$changed_initramfs" -eq 1 ]; then mkinitcpio -P; fi
+
+# --- policy: lid + sleep drop-ins -------------------------------------------
+mkdir -p /etc/systemd/logind.conf.d /etc/systemd/sleep.conf.d
+cat > /etc/systemd/logind.conf.d/50-lid-hibernate.conf <<'EOF'
+# chezmoi: hibernate-setup. Lid close = instant s2idle, hibernate after
+# HibernateDelaySec (sleep.conf.d). Docked (external monitors) unchanged:
+# lid close keeps running.
+[Login]
+HandleLidSwitch=suspend-then-hibernate
+HandleLidSwitchExternalPower=suspend-then-hibernate
+HandleLidSwitchDocked=ignore
+EOF
+cat > /etc/systemd/sleep.conf.d/50-suspend-then-hibernate.conf <<'EOF'
+# chezmoi: hibernate-setup. How long s2idle lasts before the machine wakes
+# itself and hibernates to /swap/swapfile.
+[Sleep]
+HibernateDelaySec=60min
+EOF
+# NO logind restart: restarting systemd-logind under a live Wayland session
+# rebuilds seat0 and revokes the compositor's input/DRM leases — Hyprland
+# freezes solid (learned 2026-08-26: looked like a full crash, forced a
+# power-button shutdown). The drop-in is read at next boot, which the
+# resume= cmdline needs anyway.
+
+# --- verify -----------------------------------------------------------------
+echo "    verify:"
+swapon --show | sed 's/^/      /'
+grep -o 'resume=[^" ]*' /boot/grub/grub.cfg | head -1 | sed 's/^/      grub.cfg: /'
+grep -oE '^HOOKS=.*' /etc/mkinitcpio.conf | sed 's/^/      /'
+ROOT
+
+echo "==> Done. Hibernate is armed from the next boot onward (and a"
+echo "    hibernate later THIS boot resumes fine — grub.cfg/initramfs are"
+echo "    already rebuilt). Test when convenient: systemctl hibernate"
+{{ end -}}
