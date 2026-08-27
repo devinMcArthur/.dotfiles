@@ -222,7 +222,63 @@ GH_SECTIONS = {"actions": "/actions", "pulls": "/pulls", "issues": "/issues",
                "commits": "/commits", "settings": "/settings"}
 _ctx_cache = {"at": 0.0, "data": None}
 _places_cache = {"at": 0.0, "data": None}
+_tabs_cache = {"at": 0.0, "data": None}
 PLACES_FILE = os.path.join(HOME, ".config/voice-control/places.conf")
+
+
+def open_tabs():
+    """Every tab currently open in Firefox: (title, url, lastAccessed).
+
+    This is the difference between guessing and knowing. "The bow mark
+    app" is not a riddle when the app is sitting in a tab — the machine
+    just has to look. Firefox writes its live session to a lz4-compressed
+    recovery file every few seconds; read it, never write it."""
+    if _tabs_cache["data"] and time.monotonic() - _tabs_cache["at"] < 20:
+        return _tabs_cache["data"]
+    tabs = []
+    try:
+        import glob
+        import lz4.block
+        for f in glob.glob(os.path.join(
+                HOME, ".mozilla/firefox/*/sessionstore-backups/recovery.jsonlz4")):
+            raw = open(f, "rb").read()
+            if raw[:8] != b"mozLz40\0":
+                continue
+            data = json.loads(lz4.block.decompress(raw[8:]))
+            for w in data.get("windows", []):
+                for t in w.get("tabs", []):
+                    entries = t.get("entries", [])
+                    if not entries:
+                        continue
+                    cur = entries[min(max(t.get("index", 1) - 1, 0), len(entries) - 1)]
+                    url = cur.get("url", "")
+                    if url.startswith(("http://", "https://")):
+                        tabs.append((cur.get("title", ""), url, t.get("lastAccessed", 0)))
+    except Exception:
+        pass
+    tabs.sort(key=lambda x: x[2], reverse=True)     # most recently used first
+    _tabs_cache.update(at=time.monotonic(), data=tabs)
+    return tabs
+
+
+def tab_names(title, url):
+    """Spoken names a tab could answer to: its title, and the words in its
+    domain — "paving.bowmark.ca" answers to "bowmark" and "paving bowmark",
+    which is how "the bow mark app" finds it."""
+    names = []
+    clean = re.sub(r"[^a-z0-9 ]+", " ", (title or "").lower())
+    clean = re.sub(r"\s+", " ", clean).strip()
+    if clean:
+        names.append(clean)
+    m = re.match(r"https?://([^/:]+)", url or "")
+    if m:
+        host = m.group(1)
+        parts = [x for x in re.split(r"[.-]", host)
+                 if x not in ("www", "com", "ca", "org", "net", "io", "dev", "app")]
+        if parts:
+            names.append(" ".join(parts))
+            names.append(parts[-1] if parts[-1] != "localhost" else parts[0])
+    return [n for n in names if len(n) >= 3]
 
 
 def places():
@@ -265,13 +321,27 @@ def places():
 
 
 def resolve_place(name):
-    """Best bookmark match for a spoken name, or None."""
+    """Best match for a spoken destination: what is OPEN first, then
+    bookmarks. A page already in a tab is the likelier referent than a
+    bookmark you saved months ago."""
     import difflib
     name = re.sub(r"\b(the|app|site|page|website|dashboard)\b", " ", name.lower())
     name = re.sub(r"[^a-z0-9 ]+", " ", name)
     name = re.sub(r"\s+", " ", name).strip()
     if len(name) < 3:
         return None
+    squashed = name.replace(" ", "")
+    # Open tabs first, most-recently-used order breaking ties.
+    best_tab, tab_score = None, 0.0
+    for title, url, _ in open_tabs():
+        for cand in tab_names(title, url):
+            r = difflib.SequenceMatcher(None, squashed, cand.replace(" ", "")).ratio()
+            if squashed and squashed in cand.replace(" ", ""):
+                r = max(r, 0.9)
+            if r > tab_score:
+                best_tab, tab_score = url, r
+    if tab_score >= 0.75:
+        return best_tab
     known = places()
     if name in known:
         return known[name]
@@ -321,7 +391,9 @@ def context():
         monitors = [m["name"] for m in mons]
     except Exception:
         monitors = []
-    data = {"repos": repos, "sessions": sessions, "monitors": monitors}
+    tabs = [{"title": t[:60], "url": u} for t, u, _ in open_tabs()[:12]]
+    data = {"repos": repos, "sessions": sessions, "monitors": monitors,
+            "open_tabs": tabs}
     _ctx_cache.update(at=time.monotonic(), data=data)
     return data
 
@@ -357,7 +429,10 @@ def llm_plan(phrase):
         "Use the exact owner/repo from this list, never invent one: "
         + json.dumps(ctx["repos"]) + "\n"
         "Open tmux sessions: " + json.dumps(ctx["sessions"]) + "\n"
-        "Monitors: " + json.dumps(ctx["monitors"])
+        "Monitors: " + json.dumps(ctx["monitors"]) + "\n"
+        "Pages open in the browser right now (prefer these when the user "
+        "refers to something as 'the X app' or 'my X'): "
+        + json.dumps(ctx["open_tabs"])
     )
     body = {
         "model": LLM_MODEL,
