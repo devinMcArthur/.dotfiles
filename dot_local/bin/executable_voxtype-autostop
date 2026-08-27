@@ -44,6 +44,9 @@ OFF_FLAG = os.path.join(STATE_DIR, "off")
 SECS_FILE = os.path.join(STATE_DIR, "silence-secs")
 WORD_FILE = os.path.join(STATE_DIR, "word")
 TMP_WAV = os.path.join(RUNTIME, "voxtype-autostop-tail.wav")
+# NAME, not path: voxtype rejects an absolute path with "unknown model"
+# and falls back to the configured base.en.
+MODEL_NAME = "tiny.en"
 MODEL = os.path.expanduser("~/.local/share/voxtype/models/ggml-tiny.en.bin")
 
 RATE = 16000
@@ -102,7 +105,7 @@ def tail_says_word(frames, word) -> bool:
             w.setframerate(RATE)
             w.writeframes(pcm)
         out = subprocess.run(
-            ["voxtype", "--quiet", "--model", MODEL, "transcribe", TMP_WAV],
+            ["voxtype", "--quiet", "--model", MODEL_NAME, "transcribe", TMP_WAV],
             capture_output=True, text=True, timeout=15,
         ).stdout
     except (OSError, subprocess.SubprocessError):

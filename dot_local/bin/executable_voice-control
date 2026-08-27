@@ -41,7 +41,12 @@ OFF_FLAG = os.path.join(STATE_DIR, "off")
 SLEEP_FLAG = os.path.join(STATE_DIR, "asleep")
 LOG = os.path.join(STATE_DIR, "log")
 TMP_WAV = os.path.join(RUNTIME, "voice-control-utterance.wav")
-MODEL = os.path.join(HOME, ".local/share/voxtype/models/ggml-tiny.en.bin")
+# voxtype resolves model NAMES from its models dir. An absolute path is
+# rejected ("unknown model: <path>", visible to the user) and silently
+# falls back to the configured base.en — which is what shipped, running
+# the slower model AND warning on every utterance.
+MODEL_NAME = "tiny.en"
+MODEL_FILE = os.path.join(HOME, ".local/share/voxtype/models/ggml-tiny.en.bin")
 
 RATE = 16000
 FRAME = 1600                 # 100ms
@@ -229,7 +234,7 @@ def run_command(phrase, speak=True):
 
 
 def transcribe(frames):
-    if not os.path.exists(MODEL):
+    if not os.path.exists(MODEL_FILE):
         return ""
     try:
         with wave.open(TMP_WAV, "wb") as w:
@@ -237,7 +242,7 @@ def transcribe(frames):
             w.setsampwidth(2)
             w.setframerate(RATE)
             w.writeframes(b"".join(frames))
-        out = subprocess.run(["voxtype", "--quiet", "--model", MODEL,
+        out = subprocess.run(["voxtype", "--quiet", "--model", MODEL_NAME,
                               "transcribe", TMP_WAV],
                              capture_output=True, text=True, timeout=20).stdout
     except (OSError, subprocess.SubprocessError):
@@ -354,7 +359,7 @@ def main():
         print("listening: %s" % ("no (off)" if os.path.exists(OFF_FLAG) else "yes"))
         print("asleep:    %s" % ("yes" if os.path.exists(SLEEP_FLAG) else "no"))
         print("wake word: %s (fuzzy)" % " / ".join(WAKE_WORDS))
-        print("model:     %s" % ("tiny.en" if os.path.exists(MODEL) else "MISSING"))
+        print("model:     %s" % (MODEL_NAME if os.path.exists(MODEL_FILE) else "MISSING"))
     elif cmd == "test":
         phrase = normalize(" ".join(sys.argv[2:]))
         argv, label = match(phrase)
