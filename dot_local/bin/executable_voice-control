@@ -141,6 +141,36 @@ COMMANDS = [
 ]
 
 
+def command_env():
+    """Environment a desktop command needs.
+
+    The daemon can be started from a shell that has no Wayland/Hyprland
+    variables (systemd, a detached test shell, a stale session), and then
+    every `hyprctl dispatch` dies with "HYPRLAND_INSTANCE_SIGNATURE not
+    set!" — silently, if its output is discarded. Resolve the live
+    instance from the runtime dir instead of trusting the inherited env.
+    """
+    env = dict(os.environ)
+    hypr_dir = os.path.join(RUNTIME, "hypr")
+    sig = env.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+    if not sig or not os.path.isdir(os.path.join(hypr_dir, sig)):
+        try:
+            sigs = [d for d in os.listdir(hypr_dir)
+                    if os.path.isdir(os.path.join(hypr_dir, d))]
+            sigs.sort(key=lambda d: os.path.getmtime(os.path.join(hypr_dir, d)),
+                      reverse=True)
+            if sigs:
+                env["HYPRLAND_INSTANCE_SIGNATURE"] = sigs[0]
+        except OSError:
+            pass
+    if not env.get("WAYLAND_DISPLAY"):
+        for name in sorted(os.listdir(RUNTIME)):
+            if name.startswith("wayland-") and not name.endswith(".lock"):
+                env["WAYLAND_DISPLAY"] = name
+                break
+    return env
+
+
 def log(msg):
     os.makedirs(STATE_DIR, exist_ok=True)
     with open(LOG, "a") as f:
@@ -237,11 +267,22 @@ def run_command(phrase, speak=True):
     if speak:
         beep(True)
     try:
-        subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         start_new_session=True)
+        proc = subprocess.Popen(argv, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True,
+                                start_new_session=True, env=command_env())
     except OSError as e:
-        log("failed: %s" % e)
+        log("failed to start: %s" % e)
         return False
+    # Catch an immediate failure (bad env, missing binary) without waiting
+    # on commands that are supposed to keep running, like a browser.
+    try:
+        out = proc.communicate(timeout=1.5)[0]
+        if proc.returncode != 0:
+            log("FAILED rc=%d: %s" % (proc.returncode, (out or "").strip()[:150]))
+            beep(False)
+            return False
+    except subprocess.TimeoutExpired:
+        pass
     return True
 
 
