@@ -363,6 +363,13 @@ def plan_to_argv(plan):
     if act == "hypr":
         disp = str(plan.get("dispatcher", "")).strip()
         arg = str(plan.get("arg", "")).strip()
+        if disp not in HYPR_DISPATCH and re.search(r"[,:]", disp):
+            # Small models cram the argument into the dispatcher field
+            # ("movetoworkspace,arg:4"); take it apart rather than reject.
+            parts = [x for x in re.split(r"[,:]", disp) if x.strip()]
+            disp = parts[0].strip()
+            if not arg and len(parts) > 1:
+                arg = parts[-1].strip()
         if disp not in HYPR_DISPATCH:
             return None
         if arg and not re.match(r"^[A-Za-z0-9+,:._ -]{1,40}$", arg):
