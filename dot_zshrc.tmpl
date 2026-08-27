@@ -176,6 +176,29 @@ iso2sd() {
   sudo dd if="$1" of="/dev/$drive" bs=4M status=progress oflag=sync && sync
 }
 
+# --- Images in the terminal, tmux and all -----------------------------------
+# tmux blocks the Kitty graphics protocol unless it is passed through, which
+# is why images "don't work" in a multiplexer by default. allow-passthrough
+# is on (see .tmux.conf) and `kitten icat` detects tmux on its own; this is
+# the short name, a chafa fallback for anywhere the protocol is unavailable
+# (an ssh session, a plain tty), and a no-argument form that shows the most
+# recent screenshot — the common case after a Super+S capture.
+icat() {
+  local -a files=("$@")
+  if (( ! $# )); then
+    files=("${(@f)$(ls -t ~/Pictures/Screenshots/* ~/Pictures/screenshots/* 2>/dev/null | head -1)}")
+    [[ -n "$files[1]" ]] || { echo "icat: no screenshots found" >&2; return 1; }
+    echo "${files[1]:t}"
+  fi
+  if command -v kitten >/dev/null 2>&1; then
+    kitten icat --align left "${files[@]}"
+  elif command -v chafa >/dev/null 2>&1; then
+    chafa "${files[@]}"
+  else
+    echo "icat: install kitty (kitten) or chafa" >&2; return 1
+  fi
+}
+
 # --- PATH (deduplicated via typeset -U; leftmost wins) -----------------------
 typeset -U PATH path
 export ANDROID_HOME="$HOME/Android/Sdk"
