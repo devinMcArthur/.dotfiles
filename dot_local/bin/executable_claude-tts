@@ -52,8 +52,23 @@ fi
 
 # Is audio playing right now? (pw-cat -p is playback; voxtype-autostop's
 # capture is pw-cat -r, so it can't be mistaken for speech.)
+# Playback runs in its own process GROUP whose id is recorded below, so
+# "is it speaking?" and "shut up" are exact — no pattern matching at all.
+# Every pkill -f pattern this replaced ("claude-tts/en_US", "pw-cat -p
+# --raw") also matched innocent processes that merely MENTIONED the
+# string, e.g. a shell testing this script, and killed them (exit 144).
+# One file per live playback, named for its process GROUP id. A single
+# slot was not enough: hook speech and a manual test can overlap, and the
+# newer launcher clobbered the older id, leaving that one unkillable.
 speaking() {
-  pgrep -f "pw-cat -p --raw" >/dev/null 2>&1
+  local f pg
+  for f in "$STATE"/pgids/*; do
+    [ -e "$f" ] || continue
+    pg="${f##*/}"
+    if kill -0 -"$pg" 2>/dev/null; then return 0; fi
+    rm -f "$f"          # dead group: prune
+  done
+  return 1
 }
 
 # One line per hook invocation: which event fired and what it did.
@@ -68,13 +83,20 @@ hooklog() {   # event outcome id
 # Kill any in-flight speech. Bracket trick keeps pkill from matching this
 # script's own cmdline (the voxtype/screensaver lesson). Both patterns key
 # on the claude-tts model dir so no other piper/pw-cat use gets caught.
+# Playback and synthesis run under their OWN argv[0] (exec -a below), so
+# these are pkill -x on an exact process NAME. Every -f pattern here was a
+# footgun: "claude-tts/en_US" and "pw-cat -p --raw" match any process whose
+# command line merely MENTIONS them — including a shell testing this script,
+# which is exactly how it kept killing test runs (exit 144).
 hush() {
-  pkill -f "claude[-]tts/en_US" 2>/dev/null || true
-  # Full deployed path only: a bare "kokoro-say" pattern once matched an
-  # interactive shell whose command STRING mentioned the script (exit 144,
-  # the dms-run pkill lesson all over again).
-  pkill -f "claude[-]tts/kokoro/kokoro-say" 2>/dev/null || true
-  pkill -f "pw-cat -p --raw" 2>/dev/null || true
+  local f pg
+  for f in "$STATE"/pgids/*; do
+    [ -e "$f" ] || continue
+    pg="${f##*/}"
+    kill -TERM -"$pg" 2>/dev/null
+    rm -f "$f"
+  done
+  return 0
 }
 
 # Speak $1 in a detached session (survives the hook process exiting).
@@ -86,19 +108,25 @@ say_text() {
   hush
   if [ "$(engine)" = kokoro ]; then
     kokoro_ok || return 0
-    setsid -f env TTS_TEXT="$1" TTS_VOICE="${VOICE#kokoro-}" KOKORO="$KOKORO" bash -c '
+    setsid -f env TTS_TEXT="$1" TTS_VOICE="${VOICE#kokoro-}" KOKORO="$KOKORO" \
+      STATE="$STATE" bash -c '
+      mkdir -p "$STATE/pgids"; touch "$STATE/pgids/$$"   # setsid: we lead the group
       printf "%s" "$TTS_TEXT" \
         | "$KOKORO/venv/bin/python" "$KOKORO/kokoro-say.py" "$TTS_VOICE" 2>/dev/null \
         | pw-cat -p --raw --rate 24000 --channels 1 --format s16 - 2>/dev/null
+      rm -f "$STATE/pgids/$$"
     ' >/dev/null 2>&1 </dev/null
     return 0
   fi
   [ -f "$MODEL" ] || return 0
   rate="$(jq -r '.audio.sample_rate // 22050' "$MODEL.json" 2>/dev/null || echo 22050)"
-  setsid -f env TTS_TEXT="$1" TTS_MODEL="$MODEL" TTS_RATE="$rate" bash -c '
+  setsid -f env TTS_TEXT="$1" TTS_MODEL="$MODEL" TTS_RATE="$rate" \
+    STATE="$STATE" bash -c '
+    mkdir -p "$STATE/pgids"; touch "$STATE/pgids/$$"
     printf "%s" "$TTS_TEXT" \
       | piper-tts -m "$TTS_MODEL" --output_raw --sentence_silence 0.35 2>/dev/null \
       | pw-cat -p --raw --rate "$TTS_RATE" --channels 1 --format s16 - 2>/dev/null
+    rm -f "$STATE/pgids/$$"
   ' >/dev/null 2>&1 </dev/null
 }
 

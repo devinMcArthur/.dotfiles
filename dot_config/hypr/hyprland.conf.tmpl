@@ -84,6 +84,10 @@ exec-once = systemctl --user start voxtype.service
 # itself — no second Super+X). Disable: voxtype-autostop off
 exec-once = $HOME/.local/bin/voxtype-autostop
 
+# Voice commands: say "turing, workspace three" (wake word + fixed
+# grammar, all local). Off: voice-control off | spoken "turing sleep"
+exec-once = $HOME/.local/bin/voice-control
+
 # --- Desktop shell: DankMaterialShell TRIAL (Quickshell) --------------------
 # One process replaces the waybar+swaync+swayosd federation: bar with real
 # interactive panels (network Wi-Fi toggle, bluetooth, audio), control

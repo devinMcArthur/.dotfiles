@@ -1,0 +1,374 @@
+#!/usr/bin/env python3
+"""voice-control — say "turing, workspace three" and it happens.
+
+Tier 1: a fixed command grammar. No LLM, so nothing can hallucinate an
+action — an utterance either matches the table below or is ignored.
+
+  voice-control              # daemon (hyprland exec-once)
+  voice-control on|off       # enable/disable without restarting
+  voice-control status       # armed? asleep? wake word?
+  voice-control test "..."   # run the matcher on text, no mic needed
+  voice-control list         # every phrase it knows
+
+How: always-on parallel PipeWire capture (same trick voxtype-autostop
+uses — several readers of one mic is fine). Frames are high-passed
+before RMS, because this laptop's fan sits at a loud but low-frequency
+floor that swamps a plain energy threshold. Speech opens an utterance
+buffer (with pre-roll, so the first syllable survives), silence closes
+it, and only then does whisper tiny.en run — so the CPU cost is per
+utterance spoken near the machine, not continuous.
+
+Every action is an argv list executed WITHOUT a shell. Adding a command
+means adding a row to COMMANDS, never a string interpolated into sh.
+
+Say "turing sleep" to stop acting on commands, "turing wake up" to
+resume. `voice-control off` stops the listening itself.
+"""
+
+import os
+import re
+import subprocess
+import sys
+import time
+import wave
+
+import numpy as np
+
+HOME = os.path.expanduser("~")
+RUNTIME = os.environ.get("XDG_RUNTIME_DIR", "/run/user/%d" % os.getuid())
+STATE_DIR = os.path.join(HOME, ".local/state/voice-control")
+OFF_FLAG = os.path.join(STATE_DIR, "off")
+SLEEP_FLAG = os.path.join(STATE_DIR, "asleep")
+LOG = os.path.join(STATE_DIR, "log")
+TMP_WAV = os.path.join(RUNTIME, "voice-control-utterance.wav")
+MODEL = os.path.join(HOME, ".local/share/voxtype/models/ggml-tiny.en.bin")
+
+RATE = 16000
+FRAME = 1600                 # 100ms
+FRAME_BYTES = FRAME * 2
+PREROLL = 5                  # frames kept before speech starts (0.5s)
+END_SILENCE_MS = 700         # silence that closes an utterance
+MAX_UTTERANCE_S = 8
+MIN_SPEECH_MS = 300          # ignore coughs/clicks
+MIN_THRESHOLD = 400.0
+THRESHOLD_MULT = 2.5
+
+# Whisper mishears the wake word constantly — tiny.en rendered a clean
+# TTS "Turing" as "Choring" — so matching is fuzzy rather than a fixed
+# variant list. A near miss still has to be followed by a real command,
+# so a loose gate cannot by itself cause an action.
+WAKE_WORDS = ("turing", "computer")
+WAKE_RATIO = 0.6
+
+
+def is_wake(word):
+    import difflib
+    return any(difflib.SequenceMatcher(None, word, w).ratio() >= WAKE_RATIO
+               or word.startswith(w[:4]) for w in WAKE_WORDS)
+
+NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+           "seven": 7, "eight": 8, "nine": 9, "ten": 10, "to": 2, "too": 2,
+           "for": 4, "won": 1}
+
+
+def num(word):
+    if word.isdigit():
+        return int(word)
+    return NUMBERS.get(word)
+
+
+def hypr(*args):
+    return ["hyprctl", "dispatch", *args]
+
+
+def dms(*args):
+    return ["dms", "ipc", "call", *args]
+
+
+# (regex, argv-or-callable, spoken-back label). First match wins.
+COMMANDS = [
+    (r"^(?:go to )?workspace (\w+)$",
+     lambda m: hypr("workspace", str(num(m.group(1)))) if num(m.group(1)) else None,
+     "workspace"),
+    (r"^next workspace$", hypr("workspace", "e+1"), "next workspace"),
+    (r"^(?:previous|last) workspace$", hypr("workspace", "e-1"), "previous workspace"),
+    (r"^next window$", hypr("cyclenext"), "next window"),
+    (r"^(?:previous|last) window$", hypr("cyclenext", "prev"), "previous window"),
+    (r"^(?:close|kill)(?: window| this)?$", hypr("killactive"), "close window"),
+    (r"^(?:full ?screen|maximi[sz]e)$", hypr("fullscreen", "1"), "fullscreen"),
+    (r"^float(?:ing)?$", hypr("togglefloating"), "floating"),
+    (r"^(?:move|send) (?:window )?(?:to )?workspace (\w+)$",
+     lambda m: hypr("movetoworkspace", str(num(m.group(1)))) if num(m.group(1)) else None,
+     "move to workspace"),
+    (r"^(?:open |launch )?(?:the )?browser$", ["firefox"], "browser"),
+    (r"^(?:open |launch )?(?:a )?terminal$", ["ghostty"], "terminal"),
+    (r"^(?:open |launch )?(?:the )?(?:files|file manager)$", ["thunar"], "files"),
+    (r"^(?:open )?launcher$", dms("launcher", "toggle"), "launcher"),
+    (r"^(?:open )?clipboard$", dms("clipboard", "toggle"), "clipboard"),
+    (r"^(?:open )?control cent(?:er|re)$", dms("control-center", "toggle"), "control center"),
+    (r"^(?:show )?notifications?$", dms("notifications", "toggle"), "notifications"),
+    (r"^lock(?: (?:the )?screen)?$", [os.path.join(HOME, ".local/bin/hypr-lock")], "locking"),
+    (r"^(?:random|change|new) theme$", [os.path.join(HOME, ".local/bin/theme"), "random"], "theme"),
+    (r"^(?:take a )?screenshot$", [os.path.join(HOME, ".local/bin/hypr-screenshot")], "screenshot"),
+    (r"^volume up$", dms("audio", "increment"), "volume up"),
+    (r"^volume down$", dms("audio", "decrement"), "volume down"),
+    (r"^(?:mute|unmute)(?: volume)?$", dms("audio", "mute"), "mute"),
+    (r"^brightness up$", dms("brightness", "increment"), "brightness up"),
+    (r"^brightness down$", dms("brightness", "decrement"), "brightness down"),
+    (r"^(?:play|pause|play pause)(?: music)?$", dms("mpris", "playPause"), "play pause"),
+    (r"^next (?:track|song)$", dms("mpris", "next"), "next track"),
+    (r"^night mode$", dms("night", "toggle"), "night mode"),
+    (r"^(?:tmux )?session (.+)$",
+     lambda m: ["tmux", "switch-client", "-t", m.group(1).replace(" ", "-")],
+     "session"),
+]
+
+
+def log(msg):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    with open(LOG, "a") as f:
+        f.write("%s %s\n" % (time.strftime("%H:%M:%S"), msg))
+    try:
+        lines = open(LOG).readlines()[-200:]
+        open(LOG, "w").writelines(lines)
+    except OSError:
+        pass
+
+
+def beep(ok=True):
+    """Short tone: rising = understood, low buzz = heard but unknown."""
+    freq, dur = (880.0, 0.09) if ok else (220.0, 0.16)
+    t = np.arange(int(RATE * dur)) / RATE
+    pcm = (np.sin(2 * np.pi * freq * t) * 6000 * np.hanning(len(t))).astype(np.int16)
+    try:
+        p = subprocess.Popen(
+            ["pw-cat", "-p", "--raw", "--rate", str(RATE), "--channels", "1",
+             "--format", "s16", "-"],
+            stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        p.stdin.write(pcm.tobytes())
+        p.stdin.close()
+    except OSError:
+        pass
+
+
+def muzzled():
+    """True when we must not act on what the mic hears.
+
+    Two sources of self-inflicted commands: claude-tts speaking (its
+    replies say "turing" constantly — the machine's own name is the wake
+    word), and voxtype dictation in progress (those words are meant for
+    the cursor, not for us).
+    """
+    pgids = os.path.join(HOME, ".local/state/claude-tts/pgids")
+    try:
+        for name in os.listdir(pgids):
+            try:
+                os.killpg(int(name), 0)     # group alive => speech in flight
+                return True
+            except (OSError, ValueError):
+                continue
+    except OSError:
+        pass
+    try:
+        st = open(os.path.join(RUNTIME, "voxtype", "state")).read().strip()
+        return st in ("recording", "transcribing")
+    except OSError:
+        return False
+
+
+def normalize(text):
+    text = text.lower().strip()
+    text = re.sub(r"[^a-z0-9 ]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def match(phrase):
+    """Return (argv, label) for a command phrase, or (None, None)."""
+    for pattern, action, label in COMMANDS:
+        m = re.match(pattern, phrase)
+        if not m:
+            continue
+        argv = action(m) if callable(action) else action
+        if argv:
+            return argv, label
+    return None, None
+
+
+def run_command(phrase, speak=True):
+    # Sleep/wake are handled here so they work while asleep.
+    if re.match(r"^(?:go to )?sleep$|^stop listening$", phrase):
+        open(SLEEP_FLAG, "w").close()
+        log("asleep")
+        beep(False)
+        return True
+    if re.match(r"^wake up$|^start listening$|^wake$", phrase):
+        if os.path.exists(SLEEP_FLAG):
+            os.remove(SLEEP_FLAG)
+        log("awake")
+        beep(True)
+        return True
+    if os.path.exists(SLEEP_FLAG):
+        return False
+
+    argv, label = match(phrase)
+    if not argv:
+        log("unknown: %r" % phrase)
+        if speak:
+            beep(False)
+        return False
+    log("run: %r -> %s" % (phrase, " ".join(argv)))
+    if speak:
+        beep(True)
+    try:
+        subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    except OSError as e:
+        log("failed: %s" % e)
+        return False
+    return True
+
+
+def transcribe(frames):
+    if not os.path.exists(MODEL):
+        return ""
+    try:
+        with wave.open(TMP_WAV, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(RATE)
+            w.writeframes(b"".join(frames))
+        out = subprocess.run(["voxtype", "--quiet", "--model", MODEL,
+                              "transcribe", TMP_WAV],
+                             capture_output=True, text=True, timeout=20).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    ansi = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+    lines = [ansi.sub("", l).strip() for l in out.splitlines()]
+    lines = [l for l in lines
+             if l and not l.startswith(("Loading", "Audio format", "Processing",
+                                        "whisper_", "ggml_", "main:"))]
+    return lines[-1] if lines else ""
+
+
+def handle_utterance(frames):
+    raw = transcribe(frames)
+    if not raw:
+        return
+    phrase = normalize(raw)
+    words = phrase.split()
+    if not words:
+        return
+    # Wake word must open the utterance ("hey turing ..." allowed).
+    if words[0] == "hey" and len(words) > 1:
+        words = words[1:]
+    if not is_wake(words[0]):
+        return
+    command = " ".join(words[1:]).strip()
+    if not command:
+        return
+    log("heard: %r" % raw)
+    run_command(command)
+
+
+def daemon():
+    os.makedirs(STATE_DIR, exist_ok=True)
+    while True:
+        if os.path.exists(OFF_FLAG):
+            time.sleep(1)
+            continue
+        cap = subprocess.Popen(
+            ["pw-cat", "-r", "--raw", "--rate", str(RATE), "--channels", "1",
+             "--format", "s16", "-"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        floor = None
+        pre, utter = [], []
+        speech_ms = silent_ms = 0
+        capturing = False
+        try:
+            while not os.path.exists(OFF_FLAG):
+                raw = cap.stdout.read(FRAME_BYTES)
+                if not raw or len(raw) < FRAME_BYTES:
+                    break
+                samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
+                hp = np.diff(samples)
+                rms = float(np.sqrt(np.mean(hp * hp))) if hp.size else 0.0
+                if floor is None:
+                    floor = rms
+                elif rms < floor:
+                    floor = 0.7 * floor + 0.3 * rms
+                else:
+                    floor = 0.995 * floor + 0.005 * rms
+
+                if muzzled():
+                    capturing = False
+                    pre, utter = [], []
+                    continue
+                loud = rms > max(floor * THRESHOLD_MULT, MIN_THRESHOLD)
+                if not capturing:
+                    pre.append(raw)
+                    del pre[:-PREROLL]
+                    if loud:
+                        capturing = True
+                        utter = list(pre) + [raw]
+                        speech_ms, silent_ms = 100, 0
+                else:
+                    utter.append(raw)
+                    if loud:
+                        speech_ms += 100
+                        silent_ms = 0
+                    else:
+                        silent_ms += 100
+                    too_long = len(utter) * 100 >= MAX_UTTERANCE_S * 1000
+                    if silent_ms >= END_SILENCE_MS or too_long:
+                        # Discard rather than transcribe: cheaper, and it
+                        # cannot act on our own voice or your dictation.
+                        if speech_ms >= MIN_SPEECH_MS and not muzzled():
+                            handle_utterance(utter)
+                        capturing = False
+                        pre, utter = [], []
+        except Exception as e:      # never die on a transient mic error
+            log("error: %s" % e)
+            time.sleep(1)
+        finally:
+            cap.terminate()
+            try:
+                cap.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                cap.kill()
+
+
+def main():
+    os.makedirs(STATE_DIR, exist_ok=True)
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "daemon"
+    if cmd == "daemon":
+        return daemon()
+    if cmd == "on":
+        for f in (OFF_FLAG, SLEEP_FLAG):
+            if os.path.exists(f):
+                os.remove(f)
+        print("voice-control: listening")
+    elif cmd == "off":
+        open(OFF_FLAG, "w").close()
+        print("voice-control: off")
+    elif cmd == "status":
+        print("listening: %s" % ("no (off)" if os.path.exists(OFF_FLAG) else "yes"))
+        print("asleep:    %s" % ("yes" if os.path.exists(SLEEP_FLAG) else "no"))
+        print("wake word: %s (fuzzy)" % " / ".join(WAKE_WORDS))
+        print("model:     %s" % ("tiny.en" if os.path.exists(MODEL) else "MISSING"))
+    elif cmd == "test":
+        phrase = normalize(" ".join(sys.argv[2:]))
+        argv, label = match(phrase)
+        print("phrase: %r" % phrase)
+        print("match:  %s" % (" ".join(argv) if argv else "(none)"))
+    elif cmd == "list":
+        for pattern, _, label in COMMANDS:
+            print("  %-28s %s" % (label, pattern))
+        print("  %-28s %s" % ("sleep / wake up", "stop or resume acting"))
+    else:
+        print(__doc__.strip())
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
