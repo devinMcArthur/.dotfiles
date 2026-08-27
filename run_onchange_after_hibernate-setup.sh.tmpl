@@ -1,7 +1,9 @@
 {{ if eq .chezmoi.os "linux" -}}
 #!/usr/bin/env bash
-# hibernate-setup v3 — suspend-then-hibernate for lid close.
+# hibernate-setup v4 — suspend-then-hibernate for lid close.
 # (v2: dropped the live logind restart — it froze the session; see below.
+#  v4: rebind the i2c-HID touchpad on resume — it comes back SILENT from
+#      hibernate (device node and drivers all present, zero events).
 #  v3: sudo-free fast path when configured + refuse headless sudo — a
 #  re-triggered run under `theme set`'s apply parked sudo on an invisible
 #  tty1 prompt, holding chezmoi's state lock and blocking theme switching.)
@@ -52,7 +54,8 @@ if swapon --show=NAME --noheadings | grep -qx /swap/swapfile \
    && grep -q "resume=" /boot/grub/grub.cfg 2>/dev/null \
    && grep -qE '^HOOKS=.* resume ' /etc/mkinitcpio.conf \
    && [ -f /etc/systemd/logind.conf.d/50-lid-hibernate.conf ] \
-   && [ -f /etc/systemd/sleep.conf.d/50-suspend-then-hibernate.conf ]; then
+   && [ -f /etc/systemd/sleep.conf.d/50-suspend-then-hibernate.conf ] \
+   && [ -x /usr/lib/systemd/system-sleep/50-touchpad-rebind ]; then
   echo "    already configured (swap active, resume armed) — nothing to do"
   exit 0
 fi
@@ -153,6 +156,36 @@ EOF
 # freezes solid (learned 2026-08-26: looked like a full crash, forced a
 # power-button shutdown). The drop-in is read at next boot, which the
 # resume= cmdline needs anyway.
+
+# --- resume fix: i2c-HID touchpad comes back silent from hibernate ----------
+# The device node, drivers and libinput entry all survive; the controller
+# simply stops emitting (measured: zero bytes from /dev/input/eventN over
+# 45s). Unbind/bind re-initialises it in about a second. Discovered by
+# input name rather than hardcoding this laptop's PIXA3854, and only
+# devices exposing a Touchpad are touched — never the keyboard controller.
+install -m755 /dev/stdin /usr/lib/systemd/system-sleep/50-touchpad-rebind <<'HOOK'
+#!/bin/sh
+[ "$1" = post ] || exit 0
+case "$2" in
+  hibernate|suspend-then-hibernate|hybrid-sleep) ;;
+  *) exit 0 ;;
+esac
+sleep 1        # let the bus settle before poking it
+for dev in /sys/bus/i2c/drivers/i2c_hid_acpi/i2c-*; do
+  [ -e "$dev" ] || continue
+  name=$(basename "$dev")
+  names=$(cat /sys/bus/i2c/devices/"$name"/*/input/input*/name 2>/dev/null)
+  case "$names" in
+    *[Tt]ouchpad*)
+      printf '%s' "$name" > /sys/bus/i2c/drivers/i2c_hid_acpi/unbind 2>/dev/null
+      printf '%s' "$name" > /sys/bus/i2c/drivers/i2c_hid_acpi/bind 2>/dev/null
+      logger -t touchpad-rebind "rebound $name after $2"
+      ;;
+  esac
+done
+exit 0
+HOOK
+echo "    installed /usr/lib/systemd/system-sleep/50-touchpad-rebind"
 
 # --- verify -----------------------------------------------------------------
 echo "    verify:"

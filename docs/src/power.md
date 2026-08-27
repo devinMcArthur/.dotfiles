@@ -35,6 +35,30 @@ including whatever secrets were in memory (e.g. unlocked 1Password
 session material). Same exposure class as the unencrypted disk generally;
 revisit if LUKS ever lands.
 
+## The touchpad comes back silent
+
+Hibernate restores RAM perfectly, but the i2c-HID touchpad controller
+does not resume: the device node, both drivers and the libinput entry
+all survive — and it emits **nothing** (measured: zero bytes from
+`/dev/input/eventN` over 45 seconds). Nothing in the kernel log
+complains, which is what makes it confusing.
+
+`50-touchpad-rebind` (installed under `/usr/lib/systemd/system-sleep/`
+by the hibernate setup script) unbinds and rebinds the controller on
+every resume from hibernate. It finds the device by looking for an
+input named "Touchpad" rather than hardcoding this laptop's
+`PIXA3854`, and never touches the keyboard controller.
+
+To do it by hand if the hook is ever missing:
+
+```bash
+echo -n i2c-PIXA3854:00 | sudo tee /sys/bus/i2c/drivers/i2c_hid_acpi/unbind
+echo -n i2c-PIXA3854:00 | sudo tee /sys/bus/i2c/drivers/i2c_hid_acpi/bind
+```
+
+The keyboard keeps working throughout — it is a separate controller —
+so this is always recoverable without a mouse.
+
 ## Lessons learned
 
 - **Never restart systemd-logind under a live session.** v1 of the setup
@@ -50,6 +74,7 @@ revisit if LUKS ever lands.
 | Symptom | Fix |
 |---|---|
 | Boot hangs at resume | GRUB entry → `e` → delete `resume=` + `resume_offset=` → F10; boots fresh, image ignored |
+| Trackpad dead after resume | the rebind hook should handle it; by hand, see above. Keyboard still works |
 | Hibernate refuses ("no swap") | `swapon --show` must list `/swap/swapfile`; `swapon /swap/swapfile` or check fstab |
 | Undo everything | script header documents the full teardown |
 
