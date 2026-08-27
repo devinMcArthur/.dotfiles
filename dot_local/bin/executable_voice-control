@@ -8,6 +8,8 @@ action — an utterance either matches the table below or is ignored.
   voice-control on|off       # enable/disable without restarting
   voice-control status       # armed? asleep? wake word?
   voice-control test "..."   # run the matcher on text, no mic needed
+  voice-control ask "..."    # full path incl. the LLM, no mic needed
+  voice-control llm on|off   # enable/disable the LLM fallback
   voice-control list         # every phrase it knows
 
 How: always-on parallel PipeWire capture (same trick voxtype-autostop
@@ -25,11 +27,15 @@ Say "turing sleep" to stop acting on commands, "turing wake up" to
 resume. `voice-control off` stops the listening itself.
 """
 
+import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 import wave
 
 import numpy as np
@@ -171,6 +177,244 @@ def command_env():
     return env
 
 
+# ---------------------------------------------------------------- Tier 2
+# Anything the grammar above does not match goes to a local LLM, which
+# proposes ONE typed action from the catalog below. The model never emits
+# a shell command: it fills in a small JSON object, and every field is
+# checked against an allowlist here before anything runs. Worst case for a
+# hallucination is a rejected plan, not an arbitrary command.
+LLM_FLAG = os.path.join(STATE_DIR, "llm-off")
+OLLAMA = "http://localhost:11434/api/chat"
+LLM_MODEL = "qwen2.5:3b"
+
+HYPR_DISPATCH = {"workspace", "movetoworkspace", "movetoworkspacesilent",
+                 "cyclenext", "killactive", "fullscreen", "togglefloating",
+                 "movewindow", "focusmonitor", "movecurrentworkspacetomonitor",
+                 "togglesplit", "pin", "centerwindow", "swapwindow", "focuswindow"}
+DMS_TARGETS = {"audio", "bar", "brightness", "clipboard", "control-center", "dash",
+               "launcher", "lock", "mpris", "night", "notifications", "notepad",
+               "outputs", "inhibit", "keybinds", "hypr", "color-picker", "dock"}
+APPS = {"firefox", "ghostty", "thunar", "obsidian", "discord", "slack",
+        "spotify", "okular", "xournalpp", "pdfarranger", "btop"}
+SCRIPT_ARGS = {                     # script -> allowed first argument
+    "theme": {"random", "list", "menu", "current", "set"},
+    "laptop-backup": {"status", "list", "run"},
+    "net-speedtest": set(),
+    "hypr-screenshot": set(),
+    "hypr-ocr": set(),
+    "hypr-notes": set(),
+    "hypr-cheatsheet": set(),
+}
+GH_SECTIONS = {"actions": "/actions", "pulls": "/pulls", "issues": "/issues",
+               "releases": "/releases", "code": "", "home": "", "wiki": "/wiki",
+               "commits": "/commits", "settings": "/settings"}
+_ctx_cache = {"at": 0.0, "data": None}
+
+
+def context():
+    """What the model is allowed to talk about: this machine's real repos,
+    sessions and monitors. Refreshed lazily — a new repo or tmux session
+    becomes speakable without touching any code."""
+    if _ctx_cache["data"] and time.monotonic() - _ctx_cache["at"] < 120:
+        return _ctx_cache["data"]
+    repos = {}
+    for parent in (os.path.join(HOME, "work"), os.path.join(HOME, "personal")):
+        try:
+            entries = sorted(os.listdir(parent))
+        except OSError:
+            continue
+        for name in entries:
+            d = os.path.join(parent, name)
+            if not os.path.isdir(os.path.join(d, ".git")):
+                continue
+            try:
+                url = subprocess.run(["git", "-C", d, "remote", "get-url", "origin"],
+                                     capture_output=True, text=True, timeout=5).stdout.strip()
+            except (OSError, subprocess.SubprocessError):
+                continue
+            m = re.search(r"[:/]([^/:]+/[^/]+?)(?:\.git)?$", url)
+            if m:
+                repos[name.lower().replace("-", " ").replace("_", " ")] = m.group(1)
+    try:
+        sessions = subprocess.run(["tmux", "list-sessions", "-F", "#S"],
+                                  capture_output=True, text=True, timeout=5).stdout.split()
+    except (OSError, subprocess.SubprocessError):
+        sessions = []
+    try:
+        mons = json.loads(subprocess.run(["hyprctl", "monitors", "-j"], env=command_env(),
+                                         capture_output=True, text=True, timeout=5).stdout)
+        monitors = [m["name"] for m in mons]
+    except Exception:
+        monitors = []
+    data = {"repos": repos, "sessions": sessions, "monitors": monitors}
+    _ctx_cache.update(at=time.monotonic(), data=data)
+    return data
+
+
+def llm_plan(phrase):
+    """Ask the local model for one typed action. Returns a dict or None."""
+    ctx = context()
+    system = (
+        "You turn a spoken desktop command into ONE action on an Arch Linux "
+        "laptop running Hyprland. Reply with JSON only.\n"
+        "action=url: open a web page (field: url, https only). Use this for "
+        "any website named by the user, e.g. reddit -> https://reddit.com\n"
+        "action=gh: open a GitHub repo page (fields: repo, section one of "
+        + ", ".join(sorted(GH_SECTIONS)) + ")\n"
+        "action=app: launch a program (field: app, one of "
+        + ", ".join(sorted(APPS)) + ")\n"
+        "action=hypr: window/workspace control (fields: dispatcher one of "
+        + ", ".join(sorted(HYPR_DISPATCH)) + "; arg)\n"
+        "night mode means screen warmth / blue-light filter (target=night, "
+        "function=toggle); brightness means backlight level.\n"
+        "action=dms: desktop shell (fields: target one of "
+        + ", ".join(sorted(DMS_TARGETS)) + "; function e.g. toggle, increment; arg optional)\n"
+        "action=tmux: switch terminal session (field: session)\n"
+        "action=script: run a helper (fields: name one of "
+        + ", ".join(sorted(SCRIPT_ARGS)) + "; args)\n"
+        "action=none: the request does not fit any action.\n"
+        "Always add a short 'say' field describing what you did, under 8 words.\n"
+        "Examples: 'open reddit' -> {\"action\":\"url\",\"url\":"
+        "\"https://reddit.com\",\"say\":\"Opening Reddit\"}; "
+        "'open the actions for bow mark' -> {\"action\":\"gh\",\"repo\":"
+        "\"devinMcArthur/bow-mark\",\"section\":\"actions\",\"say\":"
+        "\"Opening bow-mark actions\"}.\n"
+        "Use the exact owner/repo from this list, never invent one: "
+        + json.dumps(ctx["repos"]) + "\n"
+        "Open tmux sessions: " + json.dumps(ctx["sessions"]) + "\n"
+        "Monitors: " + json.dumps(ctx["monitors"])
+    )
+    body = {
+        "model": LLM_MODEL,
+        "stream": False,
+        # Stay resident: a cold load costs ~24s, a warm call ~2-3s. Frees
+        # itself after an idle hour; `ollama stop qwen2.5:3b` frees it now.
+        "keep_alive": "1h",
+        "options": {"temperature": 0},
+        "format": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string",
+                           "enum": ["url", "gh", "app", "hypr", "dms", "tmux",
+                                    "script", "none"]},
+                "url": {"type": "string"}, "repo": {"type": "string"},
+                "section": {"type": "string"}, "app": {"type": "string"},
+                "dispatcher": {"type": "string"}, "arg": {"type": "string"},
+                "target": {"type": "string"}, "function": {"type": "string"},
+                "session": {"type": "string"}, "name": {"type": "string"},
+                "args": {"type": "array", "items": {"type": "string"}},
+                "say": {"type": "string"},
+            },
+            "required": ["action", "say"],
+        },
+        "messages": [{"role": "system", "content": system},
+                     {"role": "user", "content": phrase}],
+    }
+    try:
+        req = urllib.request.Request(
+            OLLAMA, data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=25) as r:
+            reply = json.loads(r.read().decode())
+        return json.loads(reply["message"]["content"])
+    except (urllib.error.URLError, OSError, ValueError, KeyError) as e:
+        log("llm error: %s" % e)
+        return None
+
+
+def plan_to_argv(plan):
+    """Validate a model plan into an argv list, or None if it fails checks."""
+    if not isinstance(plan, dict):
+        return None
+    act = plan.get("action")
+    ctx = context()
+    if act == "url":
+        url = str(plan.get("url", ""))
+        if re.match(r"^https://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%%-]+$", url):
+            return ["xdg-open", url]
+        return None
+    if act == "gh":
+        repo = str(plan.get("repo", "")).strip()
+        known = set(ctx["repos"].values())
+        repo = ctx["repos"].get(repo.lower(), repo)
+        if repo not in known:
+            # The model invents owners ("bm-native/bm_native"); recover by
+            # matching on the repository name alone, which it gets right.
+            import difflib
+            want = repo.split("/")[-1].lower().replace("-", "").replace("_", "")
+            best, score = None, 0.0
+            for full in known:
+                name = full.split("/")[-1].lower().replace("-", "").replace("_", "")
+                r = difflib.SequenceMatcher(None, want, name).ratio()
+                if r > score:
+                    best, score = full, r
+            if score < 0.8:
+                return None
+            repo = best
+        section = GH_SECTIONS.get(str(plan.get("section", "home")).lower())
+        if section is None:
+            return None
+        return ["xdg-open", "https://github.com/%s%s" % (repo, section)]
+    if act == "app":
+        app = str(plan.get("app", "")).strip()
+        if app in APPS and shutil.which(app):
+            return [app]
+        return None
+    if act == "hypr":
+        disp = str(plan.get("dispatcher", "")).strip()
+        arg = str(plan.get("arg", "")).strip()
+        if disp not in HYPR_DISPATCH:
+            return None
+        if arg and not re.match(r"^[A-Za-z0-9+,:._ -]{1,40}$", arg):
+            return None
+        return hypr(disp, arg) if arg else hypr(disp)
+    if act == "dms":
+        target = str(plan.get("target", "")).strip()
+        func = str(plan.get("function", "")).strip() or "toggle"
+        arg = str(plan.get("arg", "")).strip()
+        if target not in DMS_TARGETS or not re.match(r"^[A-Za-z]{1,24}$", func):
+            return None
+        argv = dms(target, func)
+        if arg and re.match(r"^[A-Za-z0-9._ -]{1,40}$", arg):
+            argv.append(arg)
+        return argv
+    if act == "tmux":
+        sess = str(plan.get("session", "")).strip()
+        if sess in ctx["sessions"]:
+            return ["tmux", "switch-client", "-t", sess]
+        return None
+    if act == "script":
+        name = str(plan.get("name", "")).strip()
+        if name not in SCRIPT_ARGS:
+            return None
+        path = os.path.join(HOME, ".local/bin", name)
+        if not os.path.exists(path):
+            return None
+        args = [str(a) for a in (plan.get("args") or [])][:2]
+        allowed = SCRIPT_ARGS[name]
+        if args and (not allowed or args[0] not in allowed):
+            return None
+        return [path] + args
+    return None
+
+
+def speak(text):
+    """Short spoken confirmation, independent of claude-tts so it never
+    interrupts (or is interrupted by) Claude reading a reply."""
+    voice = os.path.join(HOME, ".local/share/claude-tts/en_US-ryan-high.onnx")
+    if not text or not os.path.exists(voice):
+        return
+    try:
+        subprocess.Popen(
+            "printf %s " + subprocess.list2cmdline([text]) +
+            " | piper-tts -m " + voice + " --output_raw 2>/dev/null"
+            " | pw-cat -p --raw --rate 22050 --channels 1 --format s16 - 2>/dev/null",
+            shell=True, start_new_session=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        pass
+
+
 def log(msg):
     os.makedirs(STATE_DIR, exist_ok=True)
     with open(LOG, "a") as f:
@@ -241,7 +485,7 @@ def match(phrase):
     return None, None
 
 
-def run_command(phrase, speak=True):
+def run_command(phrase, notify=True):
     # Sleep/wake are handled here so they work while asleep.
     if re.match(r"^(?:go to )?sleep$|^stop listening$", phrase):
         open(SLEEP_FLAG, "w").close()
@@ -258,14 +502,35 @@ def run_command(phrase, speak=True):
         return False
 
     argv, label = match(phrase)
+    spoken = ""
+    # The model will map ANY utterance onto something in its catalog —
+    # "run sudo rm -rf" came back as a screenshot. The catalog is
+    # non-destructive by construction, so the blast radius is a surprising
+    # action rather than a dangerous one, but destructive-sounding speech
+    # should not reach it at all.
+    if re.search(r"\b(sudo|rm|delete|erase|format|wipe|kill everything|"
+                 r"shutdown|reboot|uninstall|drop database)\b", phrase):
+        log("refused (destructive wording): %r" % phrase)
+        if notify:
+            beep(False)
+        return False
+    if not argv and not os.path.exists(LLM_FLAG):
+        plan = llm_plan(phrase)
+        if plan:
+            argv = plan_to_argv(plan)
+            spoken = str(plan.get("say", ""))[:80]
+            log("llm: %r -> %s%s" % (phrase, json.dumps(plan),
+                                     "" if argv else "  [REJECTED]"))
     if not argv:
         log("unknown: %r" % phrase)
-        if speak:
+        if notify:
             beep(False)
         return False
     log("run: %r -> %s" % (phrase, " ".join(argv)))
-    if speak:
+    if notify:
         beep(True)
+        if spoken:
+            speak(spoken)
     try:
         proc = subprocess.Popen(argv, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True,
@@ -436,6 +701,25 @@ def main():
         print("asleep:    %s" % ("yes" if os.path.exists(SLEEP_FLAG) else "no"))
         print("wake word: %s (fuzzy)" % " / ".join(WAKE_WORDS))
         print("model:     %s" % (MODEL_NAME if os.path.exists(MODEL_FILE) else "MISSING"))
+    elif cmd == "ask":
+        # Same path a spoken command takes, minus the microphone.
+        phrase = normalize(" ".join(sys.argv[2:]))
+        argv, _ = match(phrase)
+        if argv:
+            print("grammar: %s" % " ".join(argv))
+            return 0
+        plan = llm_plan(phrase)
+        print("plan:    %s" % json.dumps(plan))
+        argv = plan_to_argv(plan) if plan else None
+        print("action:  %s" % (" ".join(argv) if argv else "(rejected)"))
+    elif cmd == "llm":
+        if len(sys.argv) > 2 and sys.argv[2] == "off":
+            open(LLM_FLAG, "w").close()
+            print("llm fallback off (grammar only)")
+        else:
+            if os.path.exists(LLM_FLAG):
+                os.remove(LLM_FLAG)
+            print("llm fallback on (%s)" % LLM_MODEL)
     elif cmd == "debug":
         on = len(sys.argv) < 3 or sys.argv[2] != "off"
         if on:
