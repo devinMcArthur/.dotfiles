@@ -13,6 +13,7 @@
 - [Window manager — Hyprland](./window-manager.md)
 - [Status bar, launcher, notifications](./desktop-shell.md)
 - [Login & lock](./login-lock.md)
+- [Voice — dictation, replies, control](./voice.md)
 
 # Power & hardware
 
