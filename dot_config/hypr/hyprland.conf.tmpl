@@ -304,6 +304,10 @@ bind = SUPER SHIFT, X, exec, voxtype record cancel                           # d
 # Same flag the bar's Claude Voice pill flips; muting cuts speech mid-word.
 bind = SUPER CTRL, V, exec, claude-tts toggle                                # claude voice: mute/unmute
 
+# Type an instruction instead of speaking it: same grammar, same local
+# model, same allowlist as the voice commands (see voice-control).
+bind = SUPER, semicolon, exec, voice-control prompt                                # claude voice: mute/unmute
+
 # Lock screen
 bind = $mainMod, escape, exec, $lock                                           # lock the screen
 

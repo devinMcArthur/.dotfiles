@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-26T21:24:00-06:00_
+_Generated 2026-08-26T22:03:04-06:00_
 
 ## Hyprland — window manager
 
@@ -63,6 +63,7 @@ _Generated 2026-08-26T21:24:00-06:00_
 | `SUPER + Q` | `killactive` | # close the active window |
 | `SUPER + return` | `exec` | $terminal  #open the terminal |
 | `SUPER + semicolon` | `exec` | $HOME/.local/bin/hypr-cheatsheet                              # show keybind cheatsheet |
+| `SUPER + semicolon` | `exec` | voice-control prompt                                # claude voice: mute/unmute |
 | `SUPER + S` | `exec` | dms ipc call quickCapture screenshot region edit   # screenshot region → annotate |
 | `SUPER + SHIFT + 0` | `movetoworkspace` | 10 |
 | `SUPER + SHIFT + 1` | `movetoworkspace` | 1 |

@@ -9,6 +9,8 @@ action — an utterance either matches the table below or is ignored.
   voice-control status       # armed? asleep? wake word?
   voice-control test "..."   # run the matcher on text, no mic needed
   voice-control ask "..."    # full path incl. the LLM, no mic needed
+  voice-control prompt       # type an instruction (Super+semicolon)
+  voice-control run "..."    # execute typed text directly
   voice-control llm on|off   # enable/disable the LLM fallback
   voice-control list         # every phrase it knows
 
@@ -205,6 +207,10 @@ SCRIPT_ARGS = {                     # script -> allowed first argument
     "hypr-notes": set(),
     "hypr-cheatsheet": set(),
 }
+# A script invoked bare can do more than asked — `laptop-backup` with no
+# argument RUNS a backup, and the model dropped the "status" it meant.
+# Anything whose bare form is consequential gets an explicit safe default.
+SCRIPT_DEFAULTS = {"laptop-backup": ["status"], "theme": ["random"]}
 GH_SECTIONS = {"actions": "/actions", "pulls": "/pulls", "issues": "/issues",
                "releases": "/releases", "code": "", "home": "", "wiki": "/wiki",
                "commits": "/commits", "settings": "/settings"}
@@ -398,6 +404,8 @@ def plan_to_argv(plan):
         if not os.path.exists(path):
             return None
         args = [str(a) for a in (plan.get("args") or [])][:2]
+        if not args:
+            args = list(SCRIPT_DEFAULTS.get(name, []))
         allowed = SCRIPT_ARGS[name]
         if args and (not allowed or args[0] not in allowed):
             return None
@@ -492,18 +500,18 @@ def match(phrase):
     return None, None
 
 
-def run_command(phrase, notify=True):
+def run_command(phrase, feedback="beep"):
     # Sleep/wake are handled here so they work while asleep.
     if re.match(r"^(?:go to )?sleep$|^stop listening$", phrase):
         open(SLEEP_FLAG, "w").close()
         log("asleep")
-        beep(False)
+        tell(feedback, False, "Sleeping")
         return True
     if re.match(r"^wake up$|^start listening$|^wake$", phrase):
         if os.path.exists(SLEEP_FLAG):
             os.remove(SLEEP_FLAG)
         log("awake")
-        beep(True)
+        tell(feedback, True, "Listening")
         return True
     if os.path.exists(SLEEP_FLAG):
         return False
@@ -518,8 +526,7 @@ def run_command(phrase, notify=True):
     if re.search(r"\b(sudo|rm|delete|erase|format|wipe|kill everything|"
                  r"shutdown|reboot|uninstall|drop database)\b", phrase):
         log("refused (destructive wording): %r" % phrase)
-        if notify:
-            beep(False)
+        tell(feedback, False, "Refused: %s" % phrase)
         return False
     if not argv and not os.path.exists(LLM_FLAG):
         plan = llm_plan(phrase)
@@ -530,20 +537,19 @@ def run_command(phrase, notify=True):
                                      "" if argv else "  [REJECTED]"))
     if not argv:
         log("unknown: %r" % phrase)
-        if notify:
-            beep(False)
+        tell(feedback, False, "No action for: %s" % phrase)
         return False
     log("run: %r -> %s" % (phrase, " ".join(argv)))
-    if notify:
-        beep(True)
-        if spoken:
-            speak(spoken)
+    tell(feedback, True, spoken or " ".join(argv[:3]))
+    if feedback == "beep" and spoken:
+        speak(spoken)
     try:
         proc = subprocess.Popen(argv, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True,
                                 start_new_session=True, env=command_env())
     except OSError as e:
         log("failed to start: %s" % e)
+        tell(feedback, False, "Failed to start: %s" % argv[0])
         return False
     # Catch an immediate failure (bad env, missing binary) without waiting
     # on commands that are supposed to keep running, like a browser.
@@ -551,11 +557,49 @@ def run_command(phrase, notify=True):
         out = proc.communicate(timeout=1.5)[0]
         if proc.returncode != 0:
             log("FAILED rc=%d: %s" % (proc.returncode, (out or "").strip()[:150]))
-            beep(False)
+            tell(feedback, False, "Command failed: %s" % argv[0])
             return False
     except subprocess.TimeoutExpired:
         pass
     return True
+
+
+def tell(channel, ok, message):
+    """Confirm an outcome. Voice commands get a tone (you are not looking
+    at the screen); typed commands get a notification (you are)."""
+    if channel == "beep":
+        beep(ok)
+    elif channel == "notify":
+        subprocess.Popen(
+            ["notify-send", "-a", "Voice control", "-t", "3000",
+             "-u", "normal" if ok else "critical",
+             "Command" if ok else "No action", message],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def prompt():
+    """Type an instruction instead of speaking it — same grammar, same
+    model, same allowlist. wofi is already themed by `theme set`, so the
+    box matches the desktop; yad is the fallback."""
+    try:
+        if shutil.which("wofi"):
+            out = subprocess.run(
+                ["wofi", "--dmenu", "--prompt", "command", "--lines", "1",
+                 "--width", "520", "--height", "72", "--cache-file", "/dev/null"],
+                input="", capture_output=True, text=True).stdout
+        else:
+            out = subprocess.run(["yad", "--entry", "--title", "Command",
+                                  "--entry-label", "Do:"],
+                                 capture_output=True, text=True).stdout
+    except (OSError, subprocess.SubprocessError) as e:
+        log("prompt failed: %s" % e)
+        return 1
+    phrase = normalize(out)
+    if not phrase:
+        return 0
+    log("typed: %r" % phrase)
+    run_command(phrase, feedback="notify")
+    return 0
 
 
 def transcribe(frames):
@@ -708,6 +752,11 @@ def main():
         print("asleep:    %s" % ("yes" if os.path.exists(SLEEP_FLAG) else "no"))
         print("wake word: %s (fuzzy)" % " / ".join(WAKE_WORDS))
         print("model:     %s" % (MODEL_NAME if os.path.exists(MODEL_FILE) else "MISSING"))
+    elif cmd == "prompt":
+        return prompt()
+    elif cmd == "run":
+        return 0 if run_command(normalize(" ".join(sys.argv[2:])),
+                                feedback="notify") else 1
     elif cmd == "ask":
         # Same path a spoken command takes, minus the microphone.
         phrase = normalize(" ".join(sys.argv[2:]))
