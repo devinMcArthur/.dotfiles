@@ -459,28 +459,52 @@ def beep(ok=True):
 
 
 def muzzled():
-    """True when we must not act on what the mic hears.
+    """True when the mic must be ignored outright: voxtype is dictating,
+    and those words are meant for the cursor, not for us.
 
-    Two sources of self-inflicted commands: claude-tts speaking (its
-    replies say "turing" constantly — the machine's own name is the wake
-    word), and voxtype dictation in progress (those words are meant for
-    the cursor, not for us).
+    Claude speaking is NOT muzzled any more. Deafness during a reply made
+    voice commands unusable for the 30-60s it takes to read a long one —
+    exactly when you most want to interrupt. Its speech is filtered by
+    CONTENT instead, see is_own_echo().
     """
-    pgids = os.path.join(HOME, ".local/state/claude-tts/pgids")
-    try:
-        for name in os.listdir(pgids):
-            try:
-                os.killpg(int(name), 0)     # group alive => speech in flight
-                return True
-            except (OSError, ValueError):
-                continue
-    except OSError:
-        pass
     try:
         st = open(os.path.join(RUNTIME, "voxtype", "state")).read().strip()
         return st in ("recording", "transcribing")
     except OSError:
         return False
+
+
+def is_own_echo(text):
+    """Did the mic just hear Claude reading its own reply?
+
+    claude-tts publishes the text it is speaking, so the check is on
+    content rather than on timing: the machine's own name appears in
+    replies constantly, and a wake word is a wake word whoever says it.
+    """
+    try:
+        spoken = open(os.path.join(HOME, ".local/state/claude-tts/speaking")).read()
+    except OSError:
+        return False
+    if not spoken.strip():
+        return False
+    import difflib
+    heard = re.sub(r"[^a-z0-9 ]+", " ", text.lower())
+    heard = re.sub(r"\s+", " ", heard).strip()
+    said = re.sub(r"[^a-z0-9 ]+", " ", spoken.lower())
+    said = re.sub(r"\s+", " ", said).strip()
+    if len(heard) < 4:
+        return True             # a fragment heard mid-reply: not a command
+    if heard in said:
+        return True
+    # Whisper garbles what it hears through the speakers, so exact
+    # containment is not enough — compare against the closest window.
+    best = 0.0
+    words = said.split()
+    span = max(4, len(heard.split()))
+    for i in range(0, max(1, len(words) - span + 1)):
+        window = " ".join(words[i:i + span])
+        best = max(best, difflib.SequenceMatcher(None, heard, window).ratio())
+    return best >= 0.6
 
 
 def normalize(text):
@@ -541,6 +565,9 @@ def run_command(phrase, feedback="beep"):
         tell(feedback, False, "No action for: %s" % phrase)
         return False
     log("run: %r -> %s" % (phrase, " ".join(argv)))
+    # Commanding mid-reply is an interruption: stop the reading.
+    subprocess.Popen([os.path.join(HOME, ".local/bin/claude-tts"), "stop"],
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     cls = focus_hint(argv)
     if cls:
         focus_window(cls)
@@ -684,6 +711,10 @@ def handle_utterance(frames):
     words = phrase.split()
     if debug:
         log("debug: heard %r" % raw)
+    if is_own_echo(phrase):
+        if debug:
+            log("debug: ignored (Claude's own speech)")
+        return
     if not words:
         return
     # Wake word must open the utterance ("hey turing ..." allowed).
