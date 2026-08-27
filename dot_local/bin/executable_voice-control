@@ -38,6 +38,7 @@ HOME = os.path.expanduser("~")
 RUNTIME = os.environ.get("XDG_RUNTIME_DIR", "/run/user/%d" % os.getuid())
 STATE_DIR = os.path.join(HOME, ".local/state/voice-control")
 OFF_FLAG = os.path.join(STATE_DIR, "off")
+DEBUG_FLAG = os.path.join(STATE_DIR, "debug")
 SLEEP_FLAG = os.path.join(STATE_DIR, "asleep")
 LOG = os.path.join(STATE_DIR, "log")
 TMP_WAV = os.path.join(RUNTIME, "voice-control-utterance.wav")
@@ -45,16 +46,22 @@ TMP_WAV = os.path.join(RUNTIME, "voice-control-utterance.wav")
 # rejected ("unknown model: <path>", visible to the user) and silently
 # falls back to the configured base.en — which is what shipped, running
 # the slower model AND warning on every utterance.
-MODEL_NAME = "tiny.en"
-MODEL_FILE = os.path.join(HOME, ".local/share/voxtype/models/ggml-tiny.en.bin")
+# base.en, not tiny.en: commands must be recognized correctly or nothing
+# happens, and tiny rendered "Volume up." as "Bell you mop" over the
+# speaker-to-mic path. base costs ~2s per utterance instead of ~1.15s,
+# which is invisible next to the pause the VAD already waits out. (The
+# dictation auto-stop keeps tiny — it only has to spot one known word.)
+MODEL_NAME = "base.en"
+MODEL_FILE = os.path.join(HOME, ".local/share/voxtype/models/ggml-base.en.bin")
 
 RATE = 16000
 FRAME = 1600                 # 100ms
 FRAME_BYTES = FRAME * 2
 PREROLL = 5                  # frames kept before speech starts (0.5s)
-END_SILENCE_MS = 700         # silence that closes an utterance
+END_SILENCE_MS = 900         # silence that closes an utterance
+WAKE_LATCH_S = 8             # after a bare wake word, listen for a command
 MAX_UTTERANCE_S = 8
-MIN_SPEECH_MS = 300          # ignore coughs/clicks
+MIN_SPEECH_MS = 200          # ignore coughs/clicks (a lone "Turing" is short)
 MIN_THRESHOLD = 400.0
 THRESHOLD_MULT = 2.5
 
@@ -63,12 +70,17 @@ THRESHOLD_MULT = 2.5
 # variant list. A near miss still has to be followed by a real command,
 # so a loose gate cannot by itself cause an action.
 WAKE_WORDS = ("turing", "computer")
-WAKE_RATIO = 0.6
+WAKE_RATIO = 0.6        # wake word followed by a command: this acts, so
+WAKE_RATIO_BARE = 0.45  # be stricter than a lone wake word, which only arms
 
 
-def is_wake(word):
+def is_wake(word, bare=False):
+    """Fuzzy because whisper mangles it — a lone "Turing." came back as
+    "Dureg." Arming on a near miss costs nothing (the next utterance still
+    has to be a real command), so the bare case is judged leniently."""
     import difflib
-    return any(difflib.SequenceMatcher(None, word, w).ratio() >= WAKE_RATIO
+    ratio = WAKE_RATIO_BARE if bare else WAKE_RATIO
+    return any(difflib.SequenceMatcher(None, word, w).ratio() >= ratio
                or word.startswith(w[:4]) for w in WAKE_WORDS)
 
 NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
@@ -255,21 +267,41 @@ def transcribe(frames):
     return lines[-1] if lines else ""
 
 
+_latch = [0.0]   # monotonic time until which a bare command is accepted
+
+
 def handle_utterance(frames):
+    debug = os.path.exists(DEBUG_FLAG)
     raw = transcribe(frames)
     if not raw:
+        if debug:
+            log("debug: utterance transcribed to nothing (%d frames)" % len(frames))
         return
     phrase = normalize(raw)
     words = phrase.split()
+    if debug:
+        log("debug: heard %r" % raw)
     if not words:
         return
     # Wake word must open the utterance ("hey turing ..." allowed).
     if words[0] == "hey" and len(words) > 1:
         words = words[1:]
-    if not is_wake(words[0]):
-        return
-    command = " ".join(words[1:]).strip()
-    if not command:
+    if is_wake(words[0], bare=(len(words) == 1)):
+        command = " ".join(words[1:]).strip()
+        if not command:
+            # Bare wake word: people pause after it ("Turing... volume up"),
+            # and that pause closes the utterance. Stay armed briefly so the
+            # next thing said counts as the command.
+            _latch[0] = time.monotonic() + WAKE_LATCH_S
+            log("armed (wake word alone) — say the command")
+            beep(True)
+            return
+    elif time.monotonic() < _latch[0]:
+        command = phrase            # armed by a bare wake word just now
+        _latch[0] = 0.0
+    else:
+        if debug:
+            log("debug: no wake word in %r (first word %r)" % (raw, words[0]))
         return
     log("heard: %r" % raw)
     run_command(command)
@@ -329,6 +361,9 @@ def daemon():
                         # cannot act on our own voice or your dictation.
                         if speech_ms >= MIN_SPEECH_MS and not muzzled():
                             handle_utterance(utter)
+                        elif os.path.exists(DEBUG_FLAG) and speech_ms:
+                            log("debug: dropped %dms utterance (min %d, muzzled=%s)"
+                                % (speech_ms, MIN_SPEECH_MS, muzzled()))
                         capturing = False
                         pre, utter = [], []
         except Exception as e:      # never die on a transient mic error
@@ -360,6 +395,15 @@ def main():
         print("asleep:    %s" % ("yes" if os.path.exists(SLEEP_FLAG) else "no"))
         print("wake word: %s (fuzzy)" % " / ".join(WAKE_WORDS))
         print("model:     %s" % (MODEL_NAME if os.path.exists(MODEL_FILE) else "MISSING"))
+    elif cmd == "debug":
+        on = len(sys.argv) < 3 or sys.argv[2] != "off"
+        if on:
+            open(DEBUG_FLAG, "w").close()
+            print("debug logging ON — logs EVERY utterance heard near the mic")
+        else:
+            if os.path.exists(DEBUG_FLAG):
+                os.remove(DEBUG_FLAG)
+            print("debug logging off")
     elif cmd == "test":
         phrase = normalize(" ".join(sys.argv[2:]))
         argv, label = match(phrase)
