@@ -144,6 +144,11 @@ COMMANDS = [
     (r"^(?:play|pause|play pause)(?: music)?$", dms("mpris", "playPause"), "play pause"),
     (r"^next (?:track|song)$", dms("mpris", "next"), "next track"),
     (r"^night mode$", dms("night", "toggle"), "night mode"),
+    # Catch-all for named destinations, LAST so "open browser" and friends
+    # match first. Falls through to the LLM when nothing is bookmarked.
+    (r"^(?:open|go to|show me|launch|bring up)(?: the)? (.+)$",
+     lambda m: (lambda u: ["xdg-open", u] if u else None)(resolve_place(m.group(1))),
+     "open place"),
     (r"^(?:tmux )?session (.+)$",
      lambda m: ["tmux", "switch-client", "-t", m.group(1).replace(" ", "-")],
      "session"),
@@ -216,6 +221,69 @@ GH_SECTIONS = {"actions": "/actions", "pulls": "/pulls", "issues": "/issues",
                "releases": "/releases", "code": "", "home": "", "wiki": "/wiki",
                "commits": "/commits", "settings": "/settings"}
 _ctx_cache = {"at": 0.0, "data": None}
+_places_cache = {"at": 0.0, "data": None}
+PLACES_FILE = os.path.join(HOME, ".config/voice-control/places.conf")
+
+
+def places():
+    """Spoken name -> URL, from your Firefox bookmarks plus an optional
+    places.conf ("name = url" per line).
+
+    The model only knows public sites it was trained on; anything private
+    — a deployed app, an internal dashboard — it can only guess at. Your
+    bookmarks are precisely the pages you care about, named the way you
+    would say them, so they are consulted BEFORE the model guesses."""
+    if _places_cache["data"] and time.monotonic() - _places_cache["at"] < 300:
+        return _places_cache["data"]
+    found = {}
+    try:
+        import glob
+        import sqlite3
+        for db in glob.glob(os.path.join(HOME, ".mozilla/firefox/*/places.sqlite")):
+            # immutable: read it while Firefox holds the lock, no copy.
+            con = sqlite3.connect("file:%s?immutable=1" % db, uri=True)
+            for title, url in con.execute(
+                    "SELECT b.title, p.url FROM moz_bookmarks b "
+                    "JOIN moz_places p ON b.fk = p.id "
+                    "WHERE b.type = 1 AND b.title IS NOT NULL "
+                    "AND p.url LIKE 'http%' LIMIT 400"):
+                key = re.sub(r"[^a-z0-9 ]+", " ", title.lower()).strip()
+                if key:
+                    found.setdefault(re.sub(r"\s+", " ", key), url)
+            con.close()
+    except Exception:
+        pass
+    try:
+        for line in open(PLACES_FILE):
+            if "=" in line and not line.strip().startswith("#"):
+                name, url = line.split("=", 1)
+                found[re.sub(r"[^a-z0-9 ]+", " ", name.lower()).strip()] = url.strip()
+    except OSError:
+        pass
+    _places_cache.update(at=time.monotonic(), data=found)
+    return found
+
+
+def resolve_place(name):
+    """Best bookmark match for a spoken name, or None."""
+    import difflib
+    name = re.sub(r"\b(the|app|site|page|website|dashboard)\b", " ", name.lower())
+    name = re.sub(r"[^a-z0-9 ]+", " ", name)
+    name = re.sub(r"\s+", " ", name).strip()
+    if len(name) < 3:
+        return None
+    known = places()
+    if name in known:
+        return known[name]
+    best, score = None, 0.0
+    for key, url in known.items():
+        # Compare with spaces removed: whisper splits and joins words
+        # unpredictably ("bow mark" / "bowmark" / "bull mark").
+        r = difflib.SequenceMatcher(None, name.replace(" ", ""),
+                                    key.replace(" ", "")).ratio()
+        if r > score:
+            best, score = url, r
+    return best if score >= 0.75 else None
 
 
 def context():

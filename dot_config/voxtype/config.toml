@@ -100,6 +100,11 @@ language = "en"
 # Translate non-English speech to English
 translate = false
 
+# Vocabulary hint. Whisper leans on this when a word is ambiguous, which
+# is how proper nouns stop coming back mangled ("bow mark" was landing as
+# "bullmark"). Applies to dictation and to voice commands alike.
+initial_prompt = "Devin McArthur works on bow-mark, bm_native, Liverpool, Liverpool-app, Liverpool-portal, hubsite and bowmark-scheduler on a laptop named turing running Hyprland, tmux, chezmoi, ghostty, Claude Code and DankMaterialShell."
+
 # Number of CPU threads for inference (omit for auto-detection)
 # threads = 4
 
