@@ -590,15 +590,24 @@ def focus_hint(argv):
 
 
 def focus_window(cls):
-    """Focus in the background, twice: an app that was already running
-    focuses immediately, a freshly launched one needs its window first."""
-    def go():
-        for delay in (0.7, 2.5):
-            time.sleep(delay)
-            subprocess.run(["hyprctl", "dispatch", "focuswindow",
-                            "class:(?i)%s" % re.escape(cls)],
-                           env=command_env(), capture_output=True)
-    threading.Thread(target=go, daemon=True).start()
+    """Focus in a DETACHED process, twice: an app already running focuses
+    at once, a freshly launched one needs its window to exist first.
+
+    Not a thread — the typed path (`prompt`, `run`) exits as soon as the
+    command is launched, and a daemon thread dies with the interpreter,
+    so the focus silently never happened. It only appeared to work from
+    a long-running daemon, or by luck when the parent lingered."""
+    sel = "class:(?i)%s" % re.escape(cls)
+    # The selector is passed as an ARGUMENT, never interpolated into the
+    # script: list2cmdline quotes for Windows, so "(?i)" reached bash bare
+    # and died with a syntax error — silently, output being discarded.
+    subprocess.Popen(
+        ["bash", "-c",
+         'sleep 0.7; hyprctl dispatch focuswindow "$1";'
+         ' sleep 1.8; hyprctl dispatch focuswindow "$1"',
+         "focus", sel],
+        env=command_env(), start_new_session=True,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def tell(channel, ok, message):
