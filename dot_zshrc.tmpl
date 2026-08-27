@@ -184,10 +184,15 @@ iso2sd() {
 # (an ssh session, a plain tty), and a no-argument form that shows the most
 # recent screenshot — the common case after a Super+S capture.
 icat() {
+  # null_glob: a missing screenshot directory must not abort the command,
+  # which is what a bare glob does under zsh.
+  setopt local_options null_glob
   local -a files=("$@")
   if (( ! $# )); then
-    files=("${(@f)$(ls -t ~/Pictures/Screenshots/* ~/Pictures/screenshots/* 2>/dev/null | head -1)}")
-    [[ -n "$files[1]" ]] || { echo "icat: no screenshots found" >&2; return 1; }
+    local -a shots=(~/Pictures/Screenshots/*(.) ~/Pictures/screenshots/*(.))
+    (( $#shots )) || { echo "icat: no screenshots found" >&2; return 1; }
+    # Newest across BOTH directories, so mtime ordering has to span them.
+    files=("$(print -l $shots | xargs -r ls -t 2>/dev/null | head -1)")
     echo "${files[1]:t}"
   fi
   if command -v kitten >/dev/null 2>&1; then
