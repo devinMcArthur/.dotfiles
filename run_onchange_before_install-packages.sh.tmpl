@@ -112,6 +112,11 @@ PACMAN_PKGS=(
   # Btrfs snapshots + auto pre/post around pacman + grub boot-into-snapshot
   snapper snap-pac grub-btrfs inotify-tools
 
+  # Reads Firefox's live session file (mozLz4) so voice-control can see
+  # which pages are open — "the bow mark app" resolves to the tab that is
+  # already sitting there rather than to a guess.
+  python-lz4
+
   # Offsite /home backups: restic -> Cloudflare R2 (encrypted client-side;
   # secrets via 1Password — see laptop-backup + op-backup.env)
   restic
@@ -219,11 +224,6 @@ AUR_PKGS=(
   # Catppuccin Mocha GTK theme for regreet, matching GRUB menu theme.
   catppuccin-gtk-theme-mocha
   catppuccin-mocha-grub-theme-git
-
-  # Reads Firefox's live session file (mozLz4) so voice-control can see
-  # which pages are open — "the bow mark app" resolves to the tab that is
-  # already sitting there rather than to a guess.
-  python-lz4
 
   # TerminalTextEffects CLI (`tte`) — the screensaver's animation engine.
   python-terminaltexteffects
