@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-26T22:03:04-06:00_
+_Generated 2026-08-26T22:04:57-06:00_
 
 ## Hyprland — window manager
 
@@ -46,6 +46,7 @@ _Generated 2026-08-26T22:03:04-06:00_
 | `SUPER + CTRL + V` | `exec` | claude-tts toggle                                # claude voice: mute/unmute |
 | `SUPER + E` | `exec` | $fileManager # Show the graphical file browser |
 | `SUPER + escape` | `exec` | $lock                                           # lock the screen |
+| `SUPER + F1` | `exec` | $HOME/.local/bin/hypr-cheatsheet                                      # show keybind cheatsheet |
 | `SUPER + F` | `fullscreen` | — |
 | `SUPER + grave` | `togglespecialworkspace` | scratch |
 | `SUPER + h` | `movefocus` | l |
@@ -62,8 +63,7 @@ _Generated 2026-08-26T22:03:04-06:00_
 | `SUPER + P` | `pseudo` | # dwindle |
 | `SUPER + Q` | `killactive` | # close the active window |
 | `SUPER + return` | `exec` | $terminal  #open the terminal |
-| `SUPER + semicolon` | `exec` | $HOME/.local/bin/hypr-cheatsheet                              # show keybind cheatsheet |
-| `SUPER + semicolon` | `exec` | voice-control prompt                                # claude voice: mute/unmute |
+| `SUPER + semicolon` | `exec` | voice-control prompt                          # type a command (voice-control) |
 | `SUPER + S` | `exec` | dms ipc call quickCapture screenshot region edit   # screenshot region → annotate |
 | `SUPER + SHIFT + 0` | `movetoworkspace` | 10 |
 | `SUPER + SHIFT + 1` | `movetoworkspace` | 1 |

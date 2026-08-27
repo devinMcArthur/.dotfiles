@@ -306,7 +306,7 @@ bind = SUPER CTRL, V, exec, claude-tts toggle                                # c
 
 # Type an instruction instead of speaking it: same grammar, same local
 # model, same allowlist as the voice commands (see voice-control).
-bind = SUPER, semicolon, exec, voice-control prompt                                # claude voice: mute/unmute
+bind = $mainMod, semicolon, exec, voice-control prompt                          # type a command (voice-control)
 
 # Lock screen
 bind = $mainMod, escape, exec, $lock                                           # lock the screen
@@ -319,7 +319,7 @@ bind = $mainMod SHIFT, V, exec, cliphist wipe                                  #
 bind = $mainMod SHIFT, C, exec, hyprpicker -a                                  # pick color under cursor
 
 # Keybind cheatsheet
-bind = $mainMod, semicolon, exec, $HOME/.local/bin/hypr-cheatsheet                              # show keybind cheatsheet
+bind = $mainMod, F1, exec, $HOME/.local/bin/hypr-cheatsheet                                      # show keybind cheatsheet
 
 # Theme switcher (wofi picker over themes/*.yaml — Omarchy's bind)
 bind = $mainMod CTRL SHIFT, SPACE, exec, $HOME/.local/bin/theme menu                            # theme switcher menu
