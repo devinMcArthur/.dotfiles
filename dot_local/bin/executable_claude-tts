@@ -30,6 +30,15 @@ KOKORO="$VOICES/kokoro"
 STATE="$HOME/.local/state/claude-tts"
 mkdir -p "$STATE"
 OFF="$STATE/off"
+
+# How long a waiter will hold off before speaking anyway, in half-seconds.
+# This is a deadlock valve, NOT a pacing knob: falling through it does not
+# queue politely, it calls hush and cuts off whatever is mid-sentence. At
+# 120 (60s) that happened routinely — Kokoro reads ~150 words a minute and
+# replies are frequently longer, so a long message got chopped by the next
+# one. speaking() already prunes dead process groups, so the only thing
+# left for this to guard is a genuinely hung player.
+WAIT_MAX=1200   # 10 minutes
 # Active voice: name in $STATE/voice (set via `claude-tts voice <name>`).
 # Two engines share the selector: piper voices are onnx basenames
 # (en_US-ryan-high); Kokoro-82M voices carry a kokoro- prefix
@@ -258,7 +267,7 @@ case "${1:-hook}" in
               spoken="$(printf '%s' "$text" | clean_md)"
               if [ -n "${spoken//[[:space:]]/}" ]; then
                 w=0
-                while speaking && [ "$w" -lt 120 ]; do sleep 0.5; w=$((w+1)); done
+                while speaking && [ "$w" -lt "$WAIT_MAX" ]; do sleep 0.5; w=$((w+1)); done
                 hooklog "$ev" spoke "$uuid"
                 say_text "$spoken"
               fi
@@ -274,7 +283,7 @@ case "${1:-hook}" in
   _queued)
     # Detached tail of announce(): wait out any speech, then say it.
     ev="$2"; say="$3"
-    w=0; while speaking && [ "$w" -lt 120 ]; do sleep 0.5; w=$((w+1)); done
+    w=0; while speaking && [ "$w" -lt "$WAIT_MAX" ]; do sleep 0.5; w=$((w+1)); done
     hooklog "$ev" spoke "queued"
     say_text "$say"
     ;;

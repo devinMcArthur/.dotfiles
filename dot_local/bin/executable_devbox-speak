@@ -50,7 +50,10 @@ speak() {
   local w=0
   while [ "$w" -lt 10 ] && ! "$TTS" busy; do sleep 0.5; w=$((w+1)); done
   w=0
-  while [ "$w" -lt 240 ] && "$TTS" busy; do sleep 0.5; w=$((w+1)); done
+  # Generous on purpose: expiring here means the next line starts while
+  # this one is still talking, and claude-tts then hushes it. 240 (two
+  # minutes) was short enough that long box replies cut each other off.
+  while [ "$w" -lt 1200 ] && "$TTS" busy; do sleep 0.5; w=$((w+1)); done
 }
 
 case "${1:-follow}" in
