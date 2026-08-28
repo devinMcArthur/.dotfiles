@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+{{ if ne .chezmoi.osRelease.id "arch" }}exit 0  # pacman mirror refresh — Arch only.{{ end }}
 # Configure reflector to refresh /etc/pacman.d/mirrorlist weekly.
 #
 # Without this, a default Arch install ships with whatever mirrorlist

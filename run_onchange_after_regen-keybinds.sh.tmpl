@@ -1,5 +1,6 @@
 {{- if eq .chezmoi.os "linux" -}}
 #!/usr/bin/env bash
+{{ if ne .chezmoi.osRelease.id "arch" }}exit 0  # regenerates the Hyprland keybind cheatsheet.{{ end }}
 # Auto-regenerate docs/src/keybinds.md when any source-of-truth changes.
 #
 # Change detection: the three sha256sum lines below cause this script's

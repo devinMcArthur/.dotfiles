@@ -1,0 +1,35 @@
+# Per-host chezmoi config, GENERATED at `chezmoi init` (not committed as a
+# plain file — it carries the git identity, and this repo is public).
+#
+# machine: "laptop" or "server". Auto-detected from the distro, because
+# this workstation is Arch and remote boxes are Debian-family; override
+# at init with:  chezmoi init --promptString machine=server
+#
+# Everything gated on it lives in .chezmoiignore and the run_onchange
+# scripts: a server skips Hyprland, the shell, themes, voice and the
+# hardware setup, and keeps the shell, editor, multiplexer and CLI tools.
+{{- $laptop := eq .chezmoi.osRelease.id "arch" -}}
+{{- $machine := promptStringOnce . "machine" "machine class (laptop/server)" (ternary "laptop" "server" $laptop) -}}
+{{- $name := promptStringOnce . "name" "full name" -}}
+{{- $email := promptStringOnce . "email" "git email" }}
+
+[data]
+  name    = {{ $name | quote }}
+  email   = {{ $email | quote }}
+  machine = {{ $machine | quote }}
+
+  # Profile selector — flip per machine.
+  # Used in templates like:  {{ `{{ if eq .profile "work" }}` }} ... {{ `{{ end }}` }}
+  profile = "personal"
+
+[onepassword]
+  command = "op"
+  # Desktop-app integration handles auth on the laptop; a server needs a
+  # service-account token in OP_SERVICE_ACCOUNT_TOKEN instead.
+  prompt = false
+
+[edit]
+  command = "nvim"
+
+[diff]
+  pager = "less -R"

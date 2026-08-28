@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+{{ if ne .chezmoi.osRelease.id "arch" }}exit 0  # Framework EC battery charge limit — laptop hardware.{{ end }}
 # Installs a systemd oneshot that reapplies the Framework laptop battery
 # charge limit at boot. fw-ectool stores the limit in the EC, which
 # normally persists across reboots, but firmware/EC resets can revert it

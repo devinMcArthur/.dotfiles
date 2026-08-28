@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+{{ if ne .chezmoi.osRelease.id "arch" }}exit 0  # btrfs snapshots of a workstation's root — not a VPS.{{ end }}
 # Configure snapper for btrfs root snapshots + grub-btrfs boot integration.
 #
 # Assumes the canonical Arch-installer-with-snapper btrfs subvolume layout:

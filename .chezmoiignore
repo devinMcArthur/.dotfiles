@@ -65,6 +65,54 @@
 git_token.txt
 openai_api.txt.gpg
 
+# --- Server profile: everything below is desktop-only -----------------------
+# A headless box gets the shell, editor, multiplexer, git and CLI tooling;
+# it has no compositor, no bar, no themes, no audio and no Framework
+# hardware, so deploying that config would be noise at best and broken
+# services at worst. Detection: Arch here means this workstation.
+{{ if ne .chezmoi.osRelease.id "arch" }}
+.config/hypr
+.config/DankMaterialShell
+.config/waybar
+.config/wofi
+.config/swaync
+.config/swayosd
+.config/ghostty
+.config/hypridle
+.config/voxtype
+.config/voice-control
+.config/gtk-4.0
+.config/wlogout
+.config/swappy
+.config/mimeapps.list
+.config/systemd/user/laptop-backup.service
+.config/systemd/user/laptop-backup.timer
+.config/restic
+.config/op-backup.env
+.cache/wal
+.face
+Pictures
+.local/share/claude-tts
+.local/bin/theme
+.local/bin/theme-cards
+.local/bin/theme-carousel
+.local/bin/hypr-*
+.local/bin/claude-tts
+.local/bin/voice-control
+.local/bin/voxtype-autostop
+.local/bin/net-speedtest
+.local/bin/net-snapshot
+.local/bin/net-rollback
+.local/bin/laptop-backup
+.local/bin/laptop-update
+.local/bin/win
+.local/bin/win-monitor-watch
+.local/bin/clip-normalize
+.local/bin/cliphist-menu
+.local/bin/selfie
+.local/bin/zsh-popup
+{{ end }}
+
 # Repo-only files (kept in source, not deployed to $HOME)
 README.md
 docs

@@ -1,0 +1,54 @@
+{{- if and (eq .chezmoi.os "linux") (ne .chezmoi.osRelease.id "arch") -}}
+#!/usr/bin/env bash
+# Server counterpart to install-packages (which is Arch/pacman only).
+#
+# A remote box gets the half of this setup that has no screen: shell,
+# editor, multiplexer, git tooling, CLI utilities — plus the two things
+# that make remote work bearable (mosh) and worth doing (an agent).
+#
+# Deliberately absent: Hyprland, the bar, themes, audio, voice, the
+# Framework hardware bits. .chezmoiignore drops their config too, so a
+# server never grows a half-configured desktop.
+
+set -euo pipefail
+
+echo "==> Installing server packages (apt)..."
+export DEBIAN_FRONTEND=noninteractive
+
+APT_PKGS=(
+  zsh git curl wget less man-db unzip jq
+  neovim tmux
+  ripgrep fd-find fzf bat htop
+  build-essential
+  mosh                # the reason remote feels local: local echo over jitter
+  ca-certificates
+)
+
+sudo apt-get update -qq
+sudo apt-get install -y -qq "${APT_PKGS[@]}"
+
+# starship: the same prompt as the laptop, so the shell looks like home.
+if ! command -v starship >/dev/null 2>&1; then
+  curl -fsSL https://starship.rs/install.sh | sh -s -- --yes >/dev/null
+  echo "    starship installed"
+fi
+
+# Claude Code — the point of a remote box: an agent that keeps working
+# when the laptop sleeps, loses Wi-Fi or dies.
+if ! command -v claude >/dev/null 2>&1; then
+  curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1 || \
+    echo "    WARN: claude install failed — run: curl -fsSL https://claude.ai/install.sh | bash"
+fi
+
+# herdr comes from run_onchange_after_herdr-install (no OS gate — the
+# same static binary serves both machines).
+
+# Debian names a couple of tools differently; bridge them so muscle
+# memory and the shell config keep working.
+mkdir -p "$HOME/.local/bin"
+[ -x /usr/bin/fdfind ] && ln -sf /usr/bin/fdfind "$HOME/.local/bin/fd"
+[ -x /usr/bin/batcat ] && ln -sf /usr/bin/batcat "$HOME/.local/bin/bat"
+
+echo "==> Server packages done. Missing vs the laptop, by design:"
+echo "    desktop (Hyprland/DMS/themes), audio, voice, Framework hardware."
+{{ end -}}

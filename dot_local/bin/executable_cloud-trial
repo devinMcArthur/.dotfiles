@@ -29,7 +29,7 @@ TYPE_DEFAULT="${CLOUD_TRIAL_TYPE:-ccx23}"   # 4 dedicated vCPU / 16GB
 IMAGE="${CLOUD_TRIAL_IMAGE:-ubuntu-24.04}"
 TRIAL_HOURS="${TRIAL_HOURS:-6}"
 SSH_KEY="$HOME/.ssh/id_ed25519.pub"
-TOKEN_REF="op://Dev Secrets/hetzner-cloud/credential"
+TOKEN_REF="${CLOUD_TRIAL_TOKEN_REF:-op://Dev Secrets/hetzner_turing_api/credential}"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1" >&2; exit 1; }; }
 
@@ -42,7 +42,7 @@ No Hetzner token. Create one at console.hetzner.cloud (Security → API
 tokens, read+write), then store it:
 
   op item create --category=password --vault "Dev Secrets" \\
-    --title hetzner-cloud password=<token>
+    --title hetzner_turing_api credential=<token>
 
 Or export HCLOUD_TOKEN for a one-off.
 MSG

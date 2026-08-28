@@ -1,5 +1,6 @@
 {{ if eq .chezmoi.os "linux" -}}
 #!/usr/bin/env bash
+{{ if ne .chezmoi.osRelease.id "arch" }}exit 0  # suspend-then-hibernate on lid close — a laptop concern.{{ end }}
 # hibernate-setup v4 — suspend-then-hibernate for lid close.
 # (v2: dropped the live logind restart — it froze the session; see below.
 #  v4: rebind the i2c-HID touchpad on resume — it comes back SILENT from
