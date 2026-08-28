@@ -107,9 +107,13 @@ CLOUDINIT
   [ -n "${ip:-}" ] || { echo "server never became reachable" >&2; exit 1; }
 
   # Auto-destroy: the real hazard is forgetting this exists.
-  systemctl --user stop "cloud-trial-reaper.timer" 2>/dev/null || true
-  systemd-run --user --unit=cloud-trial-reaper --on-active="${TRIAL_HOURS}h" \
-    "$HOME/.local/bin/cloud-trial" down --force >/dev/null 2>&1 || true
+  # Unit name carries the server name: two trial boxes must each get
+  # their own reaper, or the second silently disarms the first.
+  local unit="cloud-trial-reaper-$NAME"
+  systemctl --user stop "$unit.timer" 2>/dev/null || true
+  systemd-run --user --unit="$unit" --on-active="${TRIAL_HOURS}h" \
+    env CLOUD_TRIAL_NAME="$NAME" "$HOME/.local/bin/cloud-trial" down --force \
+    >/dev/null 2>&1 || true
 
   cat <<INFO
 
@@ -139,19 +143,19 @@ cmd_status() {
   server_exists || { echo "no trial server"; exit 0; }
   hcloud server describe "$NAME" -o format='{{.Name}}  {{.Status}}  {{.ServerType.Name}}  {{.Datacenter.Location.Name}}  created {{.Created}}'
   echo "hourly: $(hcloud server-type describe "$(hcloud server describe "$NAME" -o format='{{.ServerType.Name}}')" -o json 2>/dev/null | jq -r '.prices[0].price_hourly.gross // "?"' | cut -c1-6) EUR"
-  systemctl --user list-timers cloud-trial-reaper.timer --no-pager 2>/dev/null | sed -n 2p
+  systemctl --user list-timers "cloud-trial-reaper-$NAME.timer" --no-pager 2>/dev/null | sed -n 2p
 }
 
 cmd_down() {
   need hcloud; load_token
-  server_exists || { echo "nothing to destroy"; systemctl --user stop cloud-trial-reaper.timer 2>/dev/null || true; exit 0; }
+  server_exists || { echo "nothing to destroy"; systemctl --user stop "cloud-trial-reaper-$NAME.timer" 2>/dev/null || true; exit 0; }
   if [ "${1:-}" != "--force" ]; then
     read -r -p "destroy $NAME? [y/N] " a
     [ "$a" = y ] || { echo "kept"; exit 0; }
   fi
   hcloud server delete "$NAME" >/dev/null && echo "destroyed $NAME"
-  systemctl --user stop cloud-trial-reaper.timer 2>/dev/null || true
-  systemctl --user reset-failed cloud-trial-reaper.service 2>/dev/null || true
+  systemctl --user stop "cloud-trial-reaper-$NAME.timer" 2>/dev/null || true
+  systemctl --user reset-failed "cloud-trial-reaper-$NAME.service" 2>/dev/null || true
 }
 
 case "${1:-}" in
