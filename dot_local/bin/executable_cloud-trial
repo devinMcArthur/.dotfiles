@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# cloud-trial — rent a dev box for an afternoon and find out how remote
+# work actually feels, then destroy it.
+#
+#   cloud-trial up [type]    # create + bootstrap (default: ccx23, hil)
+#   cloud-trial connect      # mosh in (falls back to ssh)
+#   cloud-trial status       # state, uptime, cost so far
+#   cloud-trial down         # destroy it
+#   cloud-trial ip           # print the address
+#
+# Why Hillsboro: measured from this laptop, US-West is 45ms while
+# Hetzner's cheap European dedicated boxes are 155ms. For "laptop as a
+# terminal" the round trip matters more than the core count.
+#
+# Why mosh: the same measurement showed 18ms of jitter on this Wi-Fi
+# (45ms min, 109ms max). SSH sends every keystroke over that; mosh echoes
+# locally and reconciles, so typing feels local and only redraws pay.
+#
+# SAFETY: `up` schedules an automatic `down` after TRIAL_HOURS (default 6)
+# via a systemd user timer, because the actual risk of a trial box is
+# forgetting it exists. `down` cancels that timer. Nothing is destroyed
+# without the name matching this script's own prefix.
+
+set -euo pipefail
+
+NAME="${CLOUD_TRIAL_NAME:-devbox-trial}"
+LOCATION="${CLOUD_TRIAL_LOCATION:-hil}"     # Hillsboro, OR — 45ms
+TYPE_DEFAULT="${CLOUD_TRIAL_TYPE:-ccx23}"   # 4 dedicated vCPU / 16GB
+IMAGE="${CLOUD_TRIAL_IMAGE:-ubuntu-24.04}"
+TRIAL_HOURS="${TRIAL_HOURS:-6}"
+SSH_KEY="$HOME/.ssh/id_ed25519.pub"
+TOKEN_REF="op://Dev Secrets/hetzner-cloud/credential"
+
+need() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1" >&2; exit 1; }; }
+
+load_token() {
+  [ -n "${HCLOUD_TOKEN:-}" ] && return 0
+  need op
+  HCLOUD_TOKEN="$(op read "$TOKEN_REF" 2>/dev/null)" || {
+    cat >&2 <<MSG
+No Hetzner token. Create one at console.hetzner.cloud (Security → API
+tokens, read+write), then store it:
+
+  op item create --category=password --vault "Dev Secrets" \\
+    --title hetzner-cloud password=<token>
+
+Or export HCLOUD_TOKEN for a one-off.
+MSG
+    exit 1
+  }
+  export HCLOUD_TOKEN
+}
+
+server_exists() { hcloud server describe "$NAME" >/dev/null 2>&1; }
+
+cmd_up() {
+  need hcloud; load_token
+  local type="${1:-$TYPE_DEFAULT}"
+  if server_exists; then
+    echo "already running — cloud-trial connect"; exit 0
+  fi
+  [ -f "$SSH_KEY" ] || { echo "no ssh key at $SSH_KEY" >&2; exit 1; }
+
+  # Upload the key once (idempotent).
+  local keyname="cloud-trial-$(hostname)"
+  hcloud ssh-key describe "$keyname" >/dev/null 2>&1 \
+    || hcloud ssh-key create --name "$keyname" --public-key-from-file "$SSH_KEY" >/dev/null
+
+  # Firewall: SSH + mosh's UDP range, restricted to this machine's current
+  # address. A trial box should not be reachable by the whole internet.
+  local myip fw="cloud-trial-fw"
+  myip="$(curl -fsS https://api.ipify.org 2>/dev/null || echo "0.0.0.0")/32"
+  if ! hcloud firewall describe "$fw" >/dev/null 2>&1; then
+    hcloud firewall create --name "$fw" >/dev/null
+  fi
+  hcloud firewall replace-rules "$fw" --rules-file /dev/stdin >/dev/null <<RULES
+[
+ {"direction":"in","protocol":"tcp","port":"22","source_ips":["$myip"]},
+ {"direction":"in","protocol":"udp","port":"60000-61000","source_ips":["$myip"]}
+]
+RULES
+
+  echo "==> Creating $NAME ($type, $LOCATION, $IMAGE)..."
+  hcloud server create \
+    --name "$NAME" --type "$type" --image "$IMAGE" --location "$LOCATION" \
+    --ssh-key "$keyname" --firewall "$fw" \
+    --user-data-from-file /dev/stdin >/dev/null <<'CLOUDINIT'
+#cloud-config
+package_update: true
+packages: [mosh, zsh, neovim, tmux, git, curl, htop, ripgrep, fd-find, build-essential, jq]
+runcmd:
+  # herdr, so the remote feels like the local setup rather than a bare box
+  - curl -fsSL -o /usr/local/bin/herdr https://github.com/herdrdev/herdr/releases/download/v0.8.2/herdr-linux-x86_64
+  - chmod +x /usr/local/bin/herdr
+  - chsh -s /usr/bin/zsh root
+  - touch /root/.zshrc
+CLOUDINIT
+
+  echo "==> Waiting for boot..."
+  local ip
+  for _ in $(seq 1 60); do
+    ip="$(hcloud server ip "$NAME" 2>/dev/null || true)"
+    [ -n "$ip" ] && ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=3 \
+      "root@$ip" true 2>/dev/null && break
+    sleep 5
+  done
+  [ -n "${ip:-}" ] || { echo "server never became reachable" >&2; exit 1; }
+
+  # Auto-destroy: the real hazard is forgetting this exists.
+  systemctl --user stop "cloud-trial-reaper.timer" 2>/dev/null || true
+  systemd-run --user --unit=cloud-trial-reaper --on-active="${TRIAL_HOURS}h" \
+    "$HOME/.local/bin/cloud-trial" down --force >/dev/null 2>&1 || true
+
+  cat <<INFO
+
+  $NAME is up at $ip
+  connect:  cloud-trial connect
+  destroy:  cloud-trial down
+  auto-destroy in ${TRIAL_HOURS}h (systemd-run --user, cancelled by 'down')
+
+  Cloud-init is still installing packages; give it a minute before
+  judging anything. Then the test that matters: open nvim over mosh and
+  type. Fast keystrokes = mosh working; laggy redraws = the 45ms.
+INFO
+}
+
+cmd_connect() {
+  need hcloud; load_token
+  local ip; ip="$(hcloud server ip "$NAME")"
+  if command -v mosh >/dev/null 2>&1; then
+    exec mosh "root@$ip"
+  fi
+  echo "mosh not installed locally (pacman -S mosh) — falling back to ssh" >&2
+  exec ssh "root@$ip"
+}
+
+cmd_status() {
+  need hcloud; load_token
+  server_exists || { echo "no trial server"; exit 0; }
+  hcloud server describe "$NAME" -o format='{{.Name}}  {{.Status}}  {{.ServerType.Name}}  {{.Datacenter.Location.Name}}  created {{.Created}}'
+  echo "hourly: $(hcloud server-type describe "$(hcloud server describe "$NAME" -o format='{{.ServerType.Name}}')" -o json 2>/dev/null | jq -r '.prices[0].price_hourly.gross // "?"' | cut -c1-6) EUR"
+  systemctl --user list-timers cloud-trial-reaper.timer --no-pager 2>/dev/null | sed -n 2p
+}
+
+cmd_down() {
+  need hcloud; load_token
+  server_exists || { echo "nothing to destroy"; systemctl --user stop cloud-trial-reaper.timer 2>/dev/null || true; exit 0; }
+  if [ "${1:-}" != "--force" ]; then
+    read -r -p "destroy $NAME? [y/N] " a
+    [ "$a" = y ] || { echo "kept"; exit 0; }
+  fi
+  hcloud server delete "$NAME" >/dev/null && echo "destroyed $NAME"
+  systemctl --user stop cloud-trial-reaper.timer 2>/dev/null || true
+  systemctl --user reset-failed cloud-trial-reaper.service 2>/dev/null || true
+}
+
+case "${1:-}" in
+  up)      shift; cmd_up "$@" ;;
+  connect|mosh|ssh) cmd_connect ;;
+  status)  cmd_status ;;
+  down)    shift; cmd_down "$@" ;;
+  ip)      need hcloud; load_token; hcloud server ip "$NAME" ;;
+  *)       sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

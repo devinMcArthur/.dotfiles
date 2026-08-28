@@ -117,6 +117,12 @@ PACMAN_PKGS=(
   # already sitting there rather than to a guess.
   python-lz4
 
+  # Remote dev-box trial (cloud-trial): hcloud provisions the machine,
+  # mosh is what makes it usable — this Wi-Fi measured 18ms of jitter
+  # (45ms min, 109ms max to US-West), which SSH pays on every keystroke
+  # and mosh hides behind local echo.
+  hcloud mosh
+
   # Offsite /home backups: restic -> Cloudflare R2 (encrypted client-side;
   # secrets via 1Password — see laptop-backup + op-backup.env)
   restic
