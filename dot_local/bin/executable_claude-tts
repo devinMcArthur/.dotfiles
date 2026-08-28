@@ -154,10 +154,17 @@ say_text() {
   hush
   if [ "$(engine)" = kokoro ]; then
     kokoro_ok || return 0
+    # seq rises with every playback. A pending resume compares against it
+    # and gives up if anything else has spoken since — a stale remainder
+    # is worse than no remainder.
+    printf '%s' "$(( $(cat "$STATE/seq" 2>/dev/null || echo 0) + 1 ))" > "$STATE/seq"
+    printf '%s' "$1" > "$STATE/current-text"
     setsid -f env TTS_TEXT="$1" TTS_VOICE="${VOICE#kokoro-}" KOKORO="$KOKORO" \
-      STATE="$STATE" bash -c '
+      STATE="$STATE" KOKORO_PROGRESS="$STATE/progress" \
+      KOKORO_FROM_UNIT="${TTS_FROM_UNIT:-0}" bash -c '
       mkdir -p "$STATE/pgids"; touch "$STATE/pgids/$$"   # setsid: we lead the group
       printf "%s" "$TTS_TEXT" > "$STATE/speaking"   # what the mic is about to hear
+      printf 0 > "$STATE/progress"
       printf "%s" "$TTS_TEXT" \
         | "$KOKORO/venv/bin/python" "$KOKORO/kokoro-say.py" "$TTS_VOICE" 2>/dev/null \
         | pw-cat -p --raw --rate 24000 --channels 1 --format s16 - 2>/dev/null
@@ -369,6 +376,32 @@ case "${1:-hook}" in
         done
       fi
     fi
+    ;;
+  snapshot)
+    # Record where playback had got to, so it can be picked up later.
+    # Called by `dictate` BEFORE it hushes — once the process group is
+    # gone the progress file stops advancing, so ordering matters.
+    speaking || exit 0
+    [ "$(engine)" = kokoro ] || exit 0     # piper has no unit positions
+    printf '%s %s' "$(cat "$STATE/progress" 2>/dev/null || echo 0)" \
+                   "$(cat "$STATE/seq" 2>/dev/null || echo 0)" > "$STATE/resume-at"
+    cp -f "$STATE/current-text" "$STATE/resume-text" 2>/dev/null || true
+    ;;
+  _resume)
+    # Detached: wait out the dictation, then finish what was interrupted.
+    [ -f "$STATE/resume-at" ] && [ -f "$STATE/resume-text" ] || exit 0
+    read -r unit seq < "$STATE/resume-at"
+    # The key may have been pressed before voxtype flips to "recording",
+    # so wait briefly for it to start rather than racing it to idle.
+    w=0; while [ "$w" -lt 20 ] && ! dictating; do sleep 0.25; w=$((w+1)); done
+    w=0; while dictating && [ "$w" -lt "$WAIT_MAX" ]; do sleep 0.5; w=$((w+1)); done
+    # Something newer spoke while the mic was open — let it stand.
+    [ "$(cat "$STATE/seq" 2>/dev/null || echo 0)" = "$seq" ] || exit 0
+    text="$(cat "$STATE/resume-text")"
+    rm -f "$STATE/resume-at" "$STATE/resume-text"
+    [ -n "${text//[[:space:]]/}" ] || exit 0
+    hooklog resume spoke "unit $unit"
+    TTS_FROM_UNIT="$unit" say_text "$text"
     ;;
   busy)
     # Exit 0 while audio is playing. devbox-speak serializes queued remote

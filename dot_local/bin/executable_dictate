@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
-# dictate — start/stop voxtype, silencing any spoken reply first.
+# dictate — start/stop voxtype, pausing any spoken reply first.
 #
 #   dictate toggle | cancel
 #
 # claude-tts refuses to START speaking while the mic is hot, but a reply
-# already in progress when you hit the key would keep talking over you —
-# and whisper would transcribe it back into your own input. Reaching for
-# the dictation key means you want to talk, not listen, so in-flight
-# speech is cut rather than queued.
+# already in progress would keep talking over you — and whisper would
+# transcribe it back into your own input. So the reply is cut here.
+#
+# Cut, not lost: snapshot records how far playback had actually got, and
+# a detached _resume waits out the dictation and finishes the message
+# from that point. Order matters — snapshot must read the progress file
+# while the player is still alive.
 set -uo pipefail
-"$HOME/.local/bin/claude-tts" stop >/dev/null 2>&1 || true
+TTS="$HOME/.local/bin/claude-tts"
+if "$TTS" busy 2>/dev/null; then
+  "$TTS" snapshot >/dev/null 2>&1 || true
+  "$TTS" stop     >/dev/null 2>&1 || true
+  setsid -f "$TTS" _resume >/dev/null 2>&1 </dev/null || true
+fi
 exec voxtype record "${1:-toggle}"

@@ -6,6 +6,15 @@
 #
 #   kokoro-say.py <voice> [speed]     # e.g. kokoro-say.py af_heart 1.0
 #
+# Env:
+#   KOKORO_PROGRESS   file to write the index of the unit currently being
+#                     HEARD (not written — see LAG_BYTES). Lets a caller
+#                     resume this message later from roughly where it was
+#                     cut off, e.g. when dictation interrupts it.
+#   KOKORO_FROM_UNIT  skip this many units. Splitting is deterministic, so
+#                     the same text plus an index reproduces the remainder
+#                     exactly; no audio is stored anywhere.
+#
 # Output sample rate is 24000 (Kokoro native; caller must match).
 # Synthesis is chunked per sentence so first audio arrives after one
 # sentence, and a producer thread synthesizes AHEAD of playback: without
@@ -26,8 +35,20 @@ from kokoro_onnx import Kokoro
 HERE = os.path.dirname(os.path.abspath(__file__))
 LOOKAHEAD = 6  # sentences held in memory ahead of playback (~500KB max)
 
+# Written audio runs AHEAD of audible audio by the prebuffer plus pw-cat's
+# own buffer. Reporting the last unit written would resume past speech the
+# listener never heard, so back the estimate off by that much. Erring late
+# means resume repeats a little, which is the pleasant direction.
+LAG_SEC = 2.6
+
 
 def main() -> int:
+    progress_path = os.environ.get("KOKORO_PROGRESS") or ""
+    try:
+        from_unit = max(0, int(os.environ.get("KOKORO_FROM_UNIT") or 0))
+    except ValueError:
+        from_unit = 0
+
     voice = sys.argv[1] if len(sys.argv) > 1 else "af_heart"
     speed = float(sys.argv[2]) if len(sys.argv) > 2 else 1.0
     text = sys.stdin.read().strip()
@@ -73,16 +94,20 @@ def main() -> int:
         return units
 
     chunks = split_units(text)
+    # Absolute indices survive the slice, so a resumed run reports
+    # positions in the original message's terms.
+    base = min(from_unit, len(chunks))
+    chunks = chunks[base:]
     q: queue.Queue = queue.Queue(maxsize=LOOKAHEAD)
     dead = threading.Event()  # writer lost its pipe (hushed) — stop synth
 
     def producer() -> None:
-        for chunk in chunks:
+        for i, chunk in enumerate(chunks):
             if dead.is_set():
                 break
             samples, _rate = kokoro.create(chunk, voice=voice, speed=speed, lang="en-us")
             pcm = (np.clip(samples, -1.0, 1.0) * 32767).astype(np.int16)
-            q.put(pcm.tobytes())
+            q.put((base + i, pcm.tobytes()))
         q.put(None)
 
     threading.Thread(target=producer, daemon=True).start()
@@ -96,26 +121,51 @@ def main() -> int:
     BYTES_PER_SEC = 48000  # 24kHz s16 mono
 
     out = sys.stdout.buffer
-    pending: list[bytes] = []
+    pending: list[tuple[int, bytes]] = []
     banked = 0
     done = False
     while not done and banked < PREBUFFER_SEC * BYTES_PER_SEC:
-        buf = q.get()
-        if buf is None:
+        item = q.get()
+        if item is None:
             done = True
         else:
-            pending.append(buf)
-            banked += len(buf)
+            pending.append(item)
+            banked += len(item[1])
+
+    written = 0
+    marks: list[tuple[int, int]] = []   # (unit index, cumulative end byte)
+    lag_bytes = int(LAG_SEC * BYTES_PER_SEC)
+
+    def note(idx: int, nbytes: int) -> None:
+        nonlocal written
+        written += nbytes
+        marks.append((idx, written))
+        if not progress_path:
+            return
+        heard = written - lag_bytes
+        cur = marks[0][0]
+        for a, end in marks:
+            if end > heard:
+                cur = a
+                break
+        try:
+            with open(progress_path, "w") as fh:
+                fh.write(str(cur))
+        except OSError:
+            pass
 
     try:
-        for buf in pending:
+        for idx, buf in pending:
             out.write(buf)
+            note(idx, len(buf))
         out.flush()
         while not done:
-            buf = q.get()
-            if buf is None:
+            item = q.get()
+            if item is None:
                 break
+            idx, buf = item
             out.write(buf)
+            note(idx, len(buf))
             out.flush()
     except BrokenPipeError:  # hushed mid-playback — exit quietly
         dead.set()
