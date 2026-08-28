@@ -1,0 +1,25 @@
+[Unit]
+Description=Speak the dev box's Claude replies on this laptop
+# The box has no audio, so its claude-tts queues replies instead of
+# speaking them; this drains that queue over ssh and speaks them here.
+#
+# A service rather than a shell line because the drainer lost its only
+# autostart when box agents moved into herdr-mirror tabs: it used to be
+# launched by `devbox` (Super+D), and opening that window is no longer
+# part of the workflow. Nothing would have failed loudly — the box would
+# simply have gone quiet.
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/devbox-speak follow
+# The drainer gives up after repeated connection failures rather than
+# retrying forever, so restarting it is how it survives a box that is
+# down, rebuilt, or not yet created. ssh finds the 1Password agent via
+# IdentityAgent in ~/.ssh/config, so no SSH_AUTH_SOCK is needed here.
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=graphical-session.target

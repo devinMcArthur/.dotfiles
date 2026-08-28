@@ -38,11 +38,26 @@ green         = "#{{ .theme.colors.green }}"
 # prefix stays ctrl+b. tmux here is ctrl+a, so the two can be nested
 # without fighting — useful while migrating, harmless afterwards.
 #
-# Pane focus (prefix+h/j/k/l) is already herdr's default and matches
-# `bind -r h select-pane -L` in .tmux.conf, so it is left alone.
+# Tab switching is prefix+h/l, not herdr's prefix+p/n — h/l is the vim
+# horizontal pair, and tabs are what actually gets switched here (most
+# tabs hold a single agent pane).
+#
+# That takes prefix+h/l away from pane focus, which is herdr's default
+# for them, so pane focus moves out to prefix+alt+h/j/k/l. The result is
+# a consistent ladder by scope: workspaces on prefix+shift, tabs bare,
+# panes on prefix+alt. prefix+alt is already proven here (focus_agent,
+# the scratch popup) — it is the bare alt chords that terminals eat.
 #
 # NOT ctrl+h/ctrl+l for anything: ctrl+h is ASCII backspace in a
 # terminal, so the binding can never fire — it silently did nothing.
+previous_tab = "prefix+h"
+next_tab     = "prefix+l"
+
+focus_pane_left  = "prefix+alt+h"
+focus_pane_down  = "prefix+alt+j"
+focus_pane_up    = "prefix+alt+k"
+focus_pane_right = "prefix+alt+l"
+
 previous_workspace = "prefix+shift+h"
 next_workspace     = "prefix+shift+l"
 switch_workspace   = "prefix+shift+1..9"

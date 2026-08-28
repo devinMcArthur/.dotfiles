@@ -85,6 +85,7 @@ openai_api.txt.gpg
 .config/wlogout
 .config/swappy
 .config/mimeapps.list
+.config/systemd/user/devbox-speak.service
 .config/systemd/user/laptop-backup.service
 .config/systemd/user/laptop-backup.timer
 .config/restic
