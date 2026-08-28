@@ -20,11 +20,45 @@ REMOTE_HERDR="/home/dev/.local/bin/herdr"
 
 read_host() { [ -f "$CONF" ] && tr -d '[:space:]' < "$CONF"; }
 
+# Keep `Host devbox` in ~/.ssh/config pointing at the current box. That
+# file is not chezmoi-managed (it holds work hosts), so we edit in place
+# and touch only our own block.
+sync_ssh_alias() {
+  python3 - "$1" <<'PYEOF'
+import os, re, sys
+h = sys.argv[1]
+user, _, addr = h.partition("@")
+if not addr:
+    user, addr = "dev", h
+p = os.path.expanduser("~/.ssh/config")
+s = open(p).read() if os.path.exists(p) else ""
+block = ("Host devbox\n"
+         "    # Written by `devbox host` — herdr-mirror addresses the box\n"
+         "    # by this alias, so its config never needs editing.\n"
+         f"    HostName {addr}\n"
+         f"    User {user}\n"
+         "    ServerAliveInterval 20\n"
+         "    ServerAliveCountMax 3\n\n")
+if re.search(r"^Host devbox\b", s, re.M):
+    s = re.sub(r"^Host devbox\n(?:[ \t]+\S.*\n|[ \t]*\n(?=[ \t]+\S))*\n?", block, s, count=1, flags=re.M)
+elif "Host *" in s:
+    s = s.replace("Host *", block + "Host *", 1)
+else:
+    s = s + "\n" + block
+open(p, "w").write(s)
+print(f"  ssh alias: devbox -> {user}@{addr}")
+PYEOF
+}
+
 case "${1:-open}" in
   host)
     if [ -n "${2:-}" ]; then
       mkdir -p "${CONF%/*}"; printf '%s\n' "$2" > "$CONF"
       echo "devbox host: $2"
+      # herdr-mirror addresses the box through the ~/.ssh/config alias
+      # `devbox`, so a rebuilt box (new IP) means updating that too —
+      # otherwise the sidebar quietly mirrors nothing.
+      sync_ssh_alias "$2"
     else
       h="$(read_host)"; echo "${h:-<unset — devbox host user@address>}"
     fi

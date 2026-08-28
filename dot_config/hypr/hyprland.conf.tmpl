@@ -91,6 +91,11 @@ exec-once = $HOME/.local/bin/voxtype-autostop
 # already back in place instead of rebuilding it by hand. Headless: no
 # window appears until you attach.
 exec-once = $HOME/.local/bin/herdr server
+# herdr-mirror daemon: puts the dev box's agents in this sidebar. The
+# plugin also starts it when a mirrored workspace is focused, but after a
+# reboot there is no mirrored workspace to focus until the daemon has run
+# once — it creates them. So start it here too.
+exec-once = $HOME/.local/bin/herdr-mirror start
 
 # Voice commands: say "turing, workspace three" (wake word + fixed
 # grammar, all local). Off: voice-control off | spoken "turing sleep"

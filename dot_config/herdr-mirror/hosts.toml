@@ -1,0 +1,33 @@
+# herdr-mirror — the dev box's agents in this laptop's sidebar.
+#
+# The laptop is the hub, not the box: bow-mark work runs on the box,
+# everything else (dotfiles, desktop, this repo) runs here, and both
+# belong in one agent list. The box is also the disposable half — it can
+# be destroyed with `cloud-trial down` — so the aggregating view lives on
+# the machine that persists.
+#
+# Only this end needs the plugin. The box just needs herdr running.
+
+autostart    = true    # start the daemon when the mirrored workspace is focused
+poll_seconds = 60
+
+# The box is headless with nobody else at the keyboard, so mirror panes
+# are writable rather than watch-only.
+always_control = true
+
+# Deliberately false. With it on, closing a local mirror pane closes the
+# agent on the box — which would throw away the entire reason the agents
+# live there: they are supposed to outlive this laptop, not be tied to a
+# tab being open. Close the tab, keep the agent; `devbox-workspace kill`
+# is the explicit way to end one.
+close_remote_on_local_close = false
+
+[hosts.box]
+# An ~/.ssh/config alias, not an address: the box's IP changes when it is
+# rebuilt (and changed once on its own overnight). `devbox host` keeps the
+# alias pointing at the right place, so this file never needs editing.
+target        = "devbox"
+prefix        = "box"
+remote_bin    = "/home/dev/.local/bin/herdr"
+enabled       = true
+api_transport = "auto"   # ssh -L socket forward, falling back to socat/python3

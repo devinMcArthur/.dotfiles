@@ -1,11 +1,5 @@
-# herdr pane opened as a viewport onto the dev box (devbox-workspace).
-# herdr can set a new tab's environment but not its command, so the
-# command has to come from here. exec, not call: the pane IS the
-# viewport, and a leftover parent shell would swallow the exit.
-if [[ -n ${HERDR_ATTACH:-} ]]; then
-  exec "$HOME/.local/bin/devbox-attach" "$HERDR_ATTACH"
-fi
-# Same idea, arbitrary command: `herdr tab create --env HERDR_EXEC=...`.
+# A herdr pane can be given an environment but not a command, so a tab
+# created with `--env HERDR_EXEC=...` runs it from here.
 if [[ -n ${HERDR_EXEC:-} ]]; then
   exec zsh -ic "$HERDR_EXEC"
 fi
