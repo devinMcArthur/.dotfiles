@@ -334,6 +334,11 @@ case "${1:-hook}" in
       fi
     fi
     ;;
+  busy)
+    # Exit 0 while audio is playing. devbox-speak serializes queued remote
+    # replies on this — the pgid protocol stays in one place.
+    speaking
+    ;;
   test)
     shift || true
     say_text "${*:-Claude text to speech is working.}"

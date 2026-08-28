@@ -20,17 +20,21 @@ QUEUE=".local/state/claude-tts/say-queue"
 host="$(tr -d '[:space:]' < "$CONF" 2>/dev/null)"
 [ -n "$host" ] || { echo "no dev box set: devbox host user@address" >&2; exit 1; }
 
+TTS="$HOME/.local/bin/claude-tts"
+
 speak() {
   local line="$1"
   [ -n "${line//[[:space:]]/}" ] || return 0
-  "$HOME/.local/bin/claude-tts" test "$line"
-  # Serialize: claude-tts interrupts itself by design, so without waiting
+  "$TTS" test "$line"
+  # Serialize: claude-tts interrupts itself by design, so without waiting,
   # a burst of queued lines would talk over each other and only the last
-  # would be heard.
+  # would be heard. Playback is detached, so wait for it to APPEAR (it
+  # registers within milliseconds; synthesis alone takes longer) before
+  # waiting for it to finish.
   local w=0
-  while "$HOME/.local/bin/claude-tts" status >/dev/null 2>&1 && pgrep -f "kokoro-say" >/dev/null 2>&1 && [ "$w" -lt 240 ]; do
-    sleep 0.5; w=$((w+1))
-  done
+  while [ "$w" -lt 10 ] && ! "$TTS" busy; do sleep 0.5; w=$((w+1)); done
+  w=0
+  while [ "$w" -lt 240 ] && "$TTS" busy; do sleep 0.5; w=$((w+1)); done
 }
 
 case "${1:-follow}" in
