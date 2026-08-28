@@ -1,0 +1,34 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+{{ if eq .chezmoi.osRelease.id "arch" }}exit 0  # a server concern; the laptop accepts no ssh.{{ end }}
+# sshd must notice a client that vanished.
+#
+# Ubuntu ships ClientAliveInterval 0: sshd never probes, so a session whose
+# client dropped off the network lives forever. That is not merely untidy —
+# herdr-mirror's pane streams escalate to a "control" session while you type,
+# and an orphaned control session keeps holding the pane. Every reconnect
+# then gets read-only observe and reports it cannot take over, until the
+# orphan is killed by hand. Measured 2026-08-28 after a Wi-Fi drop: three
+# `sshd: dev@notty` sessions still holding w1:p1, w1:p5 and w1:p8 nearly
+# three hours later.
+#
+# 15s x 4 reaps a dead session in about a minute, which is far below the
+# time it takes to notice and complain.
+set -euo pipefail
+
+conf=/etc/ssh/sshd_config.d/50-client-alive.conf
+want='ClientAliveInterval 15
+ClientAliveCountMax 4'
+
+if [ "$(sudo cat "$conf" 2>/dev/null)" = "$want" ]; then
+  echo "==> sshd keepalive already configured"
+  exit 0
+fi
+
+printf '%s\n' "$want" | sudo install -m644 /dev/stdin "$conf"
+# Validate before reloading: a bad sshd config that fails to load would be a
+# very bad thing to discover from a rented box.
+sudo sshd -t
+sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd
+echo "==> sshd: $(sudo sshd -T | grep -i clientaliveinterval) (dead sessions reaped in ~60s)"
+{{ end -}}
