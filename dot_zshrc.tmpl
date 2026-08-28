@@ -49,7 +49,22 @@ with-secrets() {
 # Auto-inject for known TUI consumers.
 command -v op >/dev/null 2>&1 && {
   alias pi='with-secrets pi-safe'
-  alias claude='with-secrets claude'
+  # claude: prefer the 1Password-injected key, but do NOT refuse to start
+  # without it. herdr resumes agent panes at login, when the vault is
+  # still locked — with-secrets returns 1 before exec in that case, so a
+  # plain alias would leave every restored pane dead on arrival. Claude
+  # Code falls back to its own stored login when ANTHROPIC_API_KEY is
+  # absent, which is the right outcome for an unattended restore.
+  claude() {
+    local ref
+    ref="$(sed -n 's/^ANTHROPIC_API_KEY=//p' "$HOME/.config/op-dev.env" 2>/dev/null | tr -d '"')"
+    if [[ -n "$ref" ]] && op read "$ref" >/dev/null 2>&1; then
+      with-secrets claude "$@"
+    else
+      print -u2 "claude: 1Password locked — starting without ANTHROPIC_API_KEY"
+      command claude "$@"
+    fi
+  }
 }
 
 # Silence Node's `ExperimentalWarning: SQLite is an experimental feature...`

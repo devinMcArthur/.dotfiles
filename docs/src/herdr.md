@@ -57,8 +57,18 @@ Screen-history replay is deliberately **off** (upstream default): restored
 panes would re-render old output, and these panes carry 1Password
 material, tokens and command output.
 
-There is no autostart: herdr does not resurrect itself at login the way
-tmux does via continuum. Launch it, or add it to a session that does.
+The server starts at login (`exec-once` in hyprland.conf), headless — no
+window until you attach. So the session shape is already restored and
+agent conversations already resumed by the time you open a terminal and
+run `herdr`; rebuilding workspaces by hand is not part of the morning.
+
+**The vault is locked at login**, which matters because agent panes are
+resumed then. `claude` is a shell function rather than a plain
+`with-secrets` alias for exactly this reason: with-secrets returns 1
+*before* exec when it cannot read a secret, so an alias would leave
+every restored pane dead on arrival. The function uses the injected key
+when 1Password answers and starts Claude Code on its own stored login
+when it does not, printing one line to say so.
 
 Lid close hibernates rather than reboots (see [Power](./power.md)), so
 the common overnight case restores every process anyway — real restarts

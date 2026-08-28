@@ -84,6 +84,14 @@ exec-once = systemctl --user start voxtype.service
 # itself — no second Super+X). Disable: voxtype-autostop off
 exec-once = $HOME/.local/bin/voxtype-autostop
 
+# herdr (agent multiplexer) server. Starting it at login restores the
+# saved session shape — workspaces, tabs, panes, cwd, layout — and
+# resumes supported agent conversations (its Claude Code integration is
+# installed), so a terminal running `herdr` attaches to everything
+# already back in place instead of rebuilding it by hand. Headless: no
+# window appears until you attach.
+exec-once = $HOME/.local/bin/herdr server
+
 # Voice commands: say "turing, workspace three" (wake word + fixed
 # grammar, all local). Off: voice-control off | spoken "turing sleep"
 exec-once = $HOME/.local/bin/voice-control
