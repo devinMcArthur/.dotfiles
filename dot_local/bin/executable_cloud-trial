@@ -7,6 +7,7 @@
 #   cloud-trial status       # state, uptime, cost so far
 #   cloud-trial down         # destroy it
 #   cloud-trial ip           # print the address
+#   cloud-trial fw           # re-point the firewall at your current IP
 #
 # Why Hillsboro: measured from this laptop, US-West is 45ms while
 # Hetzner's cheap European dedicated boxes are 155ms. For "laptop as a
@@ -53,6 +54,23 @@ MSG
 
 server_exists() { hcloud server describe "$NAME" >/dev/null 2>&1; }
 
+# SSH + mosh's UDP range, restricted to this machine's CURRENT address —
+# a trial box should not be reachable by the whole internet. Pinned at
+# creation this locks you out the moment the ISP hands you a new address
+# (it did, overnight), so `cloud-trial fw` re-points it on demand.
+set_firewall() {
+  local myip fw="cloud-trial-fw"
+  myip="$(curl -fsS https://api.ipify.org 2>/dev/null || echo "0.0.0.0")/32"
+  hcloud firewall describe "$fw" >/dev/null 2>&1 || hcloud firewall create --name "$fw" >/dev/null
+  hcloud firewall replace-rules "$fw" --rules-file /dev/stdin >/dev/null <<RULES
+[
+ {"direction":"in","protocol":"tcp","port":"22","source_ips":["$myip"]},
+ {"direction":"in","protocol":"udp","port":"60000-61000","source_ips":["$myip"]}
+]
+RULES
+  echo "    firewall: ssh + mosh allowed from $myip"
+}
+
 cmd_up() {
   need hcloud; load_token
   local type="${1:-$TYPE_DEFAULT}"
@@ -66,19 +84,7 @@ cmd_up() {
   hcloud ssh-key describe "$keyname" >/dev/null 2>&1 \
     || hcloud ssh-key create --name "$keyname" --public-key-from-file "$SSH_KEY" >/dev/null
 
-  # Firewall: SSH + mosh's UDP range, restricted to this machine's current
-  # address. A trial box should not be reachable by the whole internet.
-  local myip fw="cloud-trial-fw"
-  myip="$(curl -fsS https://api.ipify.org 2>/dev/null || echo "0.0.0.0")/32"
-  if ! hcloud firewall describe "$fw" >/dev/null 2>&1; then
-    hcloud firewall create --name "$fw" >/dev/null
-  fi
-  hcloud firewall replace-rules "$fw" --rules-file /dev/stdin >/dev/null <<RULES
-[
- {"direction":"in","protocol":"tcp","port":"22","source_ips":["$myip"]},
- {"direction":"in","protocol":"udp","port":"60000-61000","source_ips":["$myip"]}
-]
-RULES
+  set_firewall
 
   echo "==> Creating $NAME ($type, $LOCATION, $IMAGE)..."
   hcloud server create \
@@ -171,5 +177,6 @@ case "${1:-}" in
   status)  cmd_status ;;
   down)    shift; cmd_down "$@" ;;
   ip)      need hcloud; load_token; hcloud server ip "$NAME" ;;
+  fw)      need hcloud; load_token; set_firewall ;;
   *)       sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
