@@ -43,9 +43,7 @@ case "${1:-open}" in
     # The box has no speakers, so its claude-tts queues replies instead of
     # speaking them. Drain that queue here for as long as this session is
     # open — one drainer per laptop, not per window.
-    if ! pgrep -u "$USER" -f "devbox-speak follow" >/dev/null 2>&1; then
-      setsid "$HOME/.local/bin/devbox-speak" follow >/dev/null 2>&1 &
-    fi
+    setsid "$HOME/.local/bin/devbox-speak" follow >/dev/null 2>&1 &
 
     # A failed connection must not close the window — otherwise the
     # hotkey just flashes a terminal and you learn nothing.

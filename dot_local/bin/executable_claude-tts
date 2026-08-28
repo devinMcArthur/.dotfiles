@@ -113,6 +113,12 @@ say_text() {
   if queue_mode; then
     mkdir -p "$STATE"
     printf '%s\n' "$(printf '%s' "$1" | tr '\n' ' ')" >> "$STATE/say-queue"
+    # The drainer tails from the end, so consumed lines are never removed.
+    # Cap the file rather than let a long-lived box grow it forever.
+    if [ "$(wc -l < "$STATE/say-queue")" -gt 500 ]; then
+      tail -n 100 "$STATE/say-queue" > "$STATE/say-queue.tmp" \
+        && mv "$STATE/say-queue.tmp" "$STATE/say-queue"
+    fi
     return 0
   fi
   hush
