@@ -104,14 +104,23 @@ hush() {
 # machine has no alsa-utils/aplay, PipeWire tools only. The playback rate
 # comes from the voice's own config (a hardcoded rate chipmunks any voice
 # whose native rate differs). sentence_silence eases the pacing.
+# A headless box has no audio. Rather than losing spoken replies when
+# working remotely, write the text to a queue the LAPTOP drains over ssh
+# (see devbox-speak) — the machine with speakers does the speaking.
+queue_mode() { [ -n "${CLAUDE_TTS_QUEUE:-}" ] || ! command -v pw-cat >/dev/null 2>&1; }
+
 say_text() {
+  if queue_mode; then
+    mkdir -p "$STATE"
+    printf '%s\n' "$(printf '%s' "$1" | tr '\n' ' ')" >> "$STATE/say-queue"
+    return 0
+  fi
   hush
   if [ "$(engine)" = kokoro ]; then
     kokoro_ok || return 0
     setsid -f env TTS_TEXT="$1" TTS_VOICE="${VOICE#kokoro-}" KOKORO="$KOKORO" \
       STATE="$STATE" bash -c '
-      mkdir -p "$STATE/pgids"; touch "$STATE/pgids/$$"
-    printf "%s" "$TTS_TEXT" > "$STATE/speaking"   # setsid: we lead the group
+      mkdir -p "$STATE/pgids"; touch "$STATE/pgids/$$"   # setsid: we lead the group
       printf "%s" "$TTS_TEXT" > "$STATE/speaking"   # what the mic is about to hear
       printf "%s" "$TTS_TEXT" \
         | "$KOKORO/venv/bin/python" "$KOKORO/kokoro-say.py" "$TTS_VOICE" 2>/dev/null \

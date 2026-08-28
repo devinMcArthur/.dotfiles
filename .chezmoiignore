@@ -97,7 +97,6 @@ Pictures
 .local/bin/theme-cards
 .local/bin/theme-carousel
 .local/bin/hypr-*
-.local/bin/claude-tts
 .local/bin/voice-control
 .local/bin/voxtype-autostop
 .local/bin/net-speedtest

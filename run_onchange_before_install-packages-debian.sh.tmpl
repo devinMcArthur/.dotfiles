@@ -62,6 +62,22 @@ if ! command -v dbmate >/dev/null 2>&1; then
   echo "    dbmate $(dbmate --version 2>/dev/null | head -1) installed"
 fi
 
+# Cluster tooling. Installed WITHOUT credentials: a rented box gets the
+# binaries so `doctl auth init` / `aws configure` are one interactive
+# step away, but nothing that reaches production is planted here.
+DOCTL_VERSION="1.115.0"
+if ! command -v doctl >/dev/null 2>&1; then
+  curl -fsSL "https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz" \
+    | sudo tar -xz -C /usr/local/bin doctl && echo "    doctl $(doctl version 2>/dev/null | head -1 | awk '{print $3}') installed"
+fi
+if ! command -v aws >/dev/null 2>&1; then
+  tmp="$(mktemp -d)"
+  curl -fsSL -o "$tmp/awscli.zip" "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" \
+    && (cd "$tmp" && unzip -q awscli.zip && sudo ./aws/install >/dev/null 2>&1) \
+    && echo "    aws cli installed"
+  rm -rf "$tmp"
+fi
+
 # starship: the same prompt as the laptop, so the shell looks like home.
 if ! command -v starship >/dev/null 2>&1; then
   curl -fsSL https://starship.rs/install.sh | sh -s -- --yes >/dev/null

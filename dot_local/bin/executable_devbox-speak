@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# devbox-speak — hear the remote box's Claude replies on this laptop.
+#
+#   devbox-speak          # follow the box's queue and speak each line
+#   devbox-speak once     # drain whatever is queued, then exit
+#
+# The box has no audio, so claude-tts there runs in queue mode: its hooks
+# append the cleaned reply text to ~/.local/state/claude-tts/say-queue
+# instead of synthesizing. This tails that file over ssh and speaks each
+# line HERE, with the same Kokoro voice as local sessions.
+#
+# Direction matters: the laptop pulls. The box cannot reach back through
+# NAT, and an ssh tunnel in that direction would break every time the
+# address changes (it changed overnight during the trial).
+
+set -uo pipefail
+
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/devbox/host"
+QUEUE=".local/state/claude-tts/say-queue"
+host="$(tr -d '[:space:]' < "$CONF" 2>/dev/null)"
+[ -n "$host" ] || { echo "no dev box set: devbox host user@address" >&2; exit 1; }
+
+speak() {
+  local line="$1"
+  [ -n "${line//[[:space:]]/}" ] || return 0
+  "$HOME/.local/bin/claude-tts" test "$line"
+  # Serialize: claude-tts interrupts itself by design, so without waiting
+  # a burst of queued lines would talk over each other and only the last
+  # would be heard.
+  local w=0
+  while "$HOME/.local/bin/claude-tts" status >/dev/null 2>&1 && pgrep -f "kokoro-say" >/dev/null 2>&1 && [ "$w" -lt 240 ]; do
+    sleep 0.5; w=$((w+1))
+  done
+}
+
+case "${1:-follow}" in
+  once)
+    ssh -o ConnectTimeout=10 "$host" "cat $QUEUE 2>/dev/null; : > $QUEUE" | while IFS= read -r l; do speak "$l"; done
+    ;;
+  follow)
+    echo "speaking $host replies (Ctrl-C to stop)"
+    # -F so a rotated/truncated queue keeps working; the box appends only.
+    ssh -o ConnectTimeout=10 -o ServerAliveInterval=30 "$host" \
+      "touch $QUEUE; tail -n0 -F $QUEUE 2>/dev/null" | while IFS= read -r l; do speak "$l"; done
+    ;;
+  *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
