@@ -22,7 +22,20 @@ APT_PKGS=(
   build-essential
   mosh                # the reason remote feels local: local echo over jitter
   ca-certificates
+  gh                  # the private repo lives on GitHub; cloning needs it
+  zoxide eza git-delta # same shell muscle memory as the laptop
 )
+
+# GitHub CLI is not in Debian/Ubuntu's repos — add the upstream one.
+# Needed before the first apt-get update so it lands in one pass.
+if ! command -v gh >/dev/null 2>&1; then
+  sudo install -m 0755 -d /usr/share/keyrings
+  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+    | sudo tee /usr/share/keyrings/githubcli-archive-keyring.gpg >/dev/null
+  sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+    | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+fi
 
 sudo apt-get update -qq
 sudo apt-get install -y -qq "${APT_PKGS[@]}"
