@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# devbox — open the remote dev box, straight into herdr.
+#
+#   devbox              # mosh in and attach herdr (Super+D)
+#   devbox ssh          # plain ssh shell, no herdr
+#   devbox host <addr>  # remember a new address (user@host or host)
+#   devbox host         # show the current one
+#
+# Why mosh: this Wi-Fi measured 18ms of jitter (45ms min, 109ms max to
+# US-West) and the address changes overnight. SSH pays that on every
+# keystroke and dies on a roam; mosh echoes locally and reconnects.
+#
+# The address lives in a file rather than the script so rebuilding the
+# box (new IP) does not mean editing dotfiles — `devbox host <ip>`.
+
+set -uo pipefail
+
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/devbox/host"
+REMOTE_HERDR="/home/dev/.local/bin/herdr"
+
+read_host() { [ -f "$CONF" ] && tr -d '[:space:]' < "$CONF"; }
+
+case "${1:-open}" in
+  host)
+    if [ -n "${2:-}" ]; then
+      mkdir -p "${CONF%/*}"; printf '%s\n' "$2" > "$CONF"
+      echo "devbox host: $2"
+    else
+      h="$(read_host)"; echo "${h:-<unset — devbox host user@address>}"
+    fi
+    ;;
+  ssh|shell)
+    h="$(read_host)"; [ -n "$h" ] || { echo "no host set: devbox host user@address" >&2; exit 1; }
+    exec ssh "$h"
+    ;;
+  open)
+    h="$(read_host)"
+    if [ -z "$h" ]; then
+      echo "No dev box configured."
+      echo "  devbox host dev@1.2.3.4     # then Super+D opens it"
+      exec "$SHELL"
+    fi
+    # A failed connection must not close the window — otherwise the
+    # hotkey just flashes a terminal and you learn nothing.
+    if command -v mosh >/dev/null 2>&1; then
+      mosh "$h" -- "$REMOTE_HERDR" || {
+        echo; echo "mosh failed. If the box is up, your IP may have changed:"
+        echo "  cloud-trial fw      # re-point the firewall at this machine"
+        exec "$SHELL"
+      }
+    else
+      ssh -t "$h" "$REMOTE_HERDR" || exec "$SHELL"
+    fi
+    ;;
+  *) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

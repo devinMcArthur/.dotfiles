@@ -314,6 +314,11 @@ bind = SUPER CTRL, V, exec, claude-tts toggle                                # c
 
 # Type an instruction instead of speaking it: same grammar, same local
 # model, same allowlist as the voice commands (see voice-control).
+# Remote dev box: terminal straight into herdr over mosh. The address
+# lives in ~/.config/devbox/host so rebuilding the box does not mean
+# editing this file — `devbox host dev@<ip>`.
+bind = $mainMod, D, exec, ghostty --title=devbox -e $HOME/.local/bin/devbox        # remote dev box (herdr)
+
 bind = $mainMod, semicolon, exec, voice-control prompt                          # type a command (voice-control)
 
 # Lock screen
