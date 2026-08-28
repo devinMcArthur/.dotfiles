@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# herdr-tab-picker — jump to a TAB, not a pane.
+#
+# herdr's built-in `goto` picker bottoms out at panes, which is the wrong
+# leaf here: nearly every tab holds a single agent, so the pane level is
+# noise. Its depth is not configurable (checked against the full default
+# config and the docs for 0.8.2), so this rebuilds the picker over the
+# socket API instead — `tab list` already reports everything the rows
+# need, and `tab focus` does the jump.
+#
+# Runs inside a herdr popup (see [[keys.command]] in config.toml), so it
+# exits when a choice is made and the popup closes with it.
+
+set -uo pipefail
+
+command -v fzf >/dev/null 2>&1 || { echo "fzf not installed" >&2; sleep 2; exit 1; }
+
+rows="$(herdr tab list 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+
+# Workspace labels are not on the tab records, so join them in — a bare
+# "w3" tells you nothing when three workspaces are open.
+names = {}
+try:
+    import subprocess
+    w = json.loads(subprocess.run(["herdr", "workspace", "list"],
+                                  capture_output=True, text=True).stdout)
+    for ws in w.get("result", {}).get("workspaces", []):
+        names[ws["workspace_id"]] = ws.get("label") or ws["workspace_id"]
+except Exception:
+    pass
+
+GLYPH = {"working": "◐", "blocked": "!", "done": "✓", "idle": "·", "unknown": " "}
+for t in d.get("result", {}).get("tabs", []):
+    ws = names.get(t["workspace_id"], t["workspace_id"])
+    st = t.get("agent_status", "unknown")
+    here = "*" if t.get("focused") else " "
+    # tab_id first: the selection is split off it, the rest is display.
+    print("%s\t%s %s %-18s %-22s %s" % (
+        t["tab_id"], here, GLYPH.get(st, " "), ws[:18], t.get("label", "")[:22], st))
+')"
+
+[ -n "$rows" ] || { echo "no tabs" >&2; sleep 2; exit 1; }
+
+sel="$(printf '%s\n' "$rows" \
+  | fzf --with-nth=2.. --delimiter=$'\t' \
+        --height=100% --reverse --prompt='tab > ' \
+        --header='enter: jump   esc: cancel' \
+  | cut -f1)"
+
+[ -n "$sel" ] || exit 0
+herdr tab focus "$sel" >/dev/null 2>&1

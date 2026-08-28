@@ -50,11 +50,17 @@ green         = "#{{ .theme.colors.green }}"
 #
 # NOT ctrl+h/ctrl+l for anything: ctrl+h is ASCII backspace in a
 # terminal, so the binding can never fire — it silently did nothing.
-# goto (jump to a pane/agent) takes prefix+s, the tmux choose-tree
-# reflex; settings takes prefix+g in the swap. Nothing else wants either
-# key — prefix+shift+g (new_worktree) is a separate binding and is
-# untouched.
-goto     = "prefix+s"
+# prefix+s is the tmux choose-tree reflex. It opens herdr-tab-picker
+# rather than herdr's own `goto` (see [[keys.command]] below), because
+# goto bottoms out at PANES and the useful leaf here is the tab — nearly
+# every tab holds one agent, so the pane level is just noise. goto's
+# depth is not configurable in 0.8.2, so the picker is rebuilt over the
+# socket API instead.
+#
+# goto keeps a home on prefix+shift+s for the rarer case of jumping
+# within a split. settings took prefix+g in the original swap;
+# prefix+shift+g (new_worktree) is a separate binding and is untouched.
+goto     = "prefix+shift+s"
 settings = "prefix+g"
 
 previous_tab = "prefix+h"
@@ -86,6 +92,17 @@ focus_agent    = "prefix+alt+1..9"
 # Bound BOTH ways deliberately: the bare alt+g matches the old reflex,
 # but alt chords are the first thing a terminal or an outer tmux eats
 # (see the ctrl+h lesson above), so prefix+alt+g is the guaranteed path.
+# Tab picker on the tmux choose-tree key. A popup, because that is the
+# only way a keybinding can run something of ours: it lists every tab
+# across all workspaces — including the box's mirrored ones — and focuses
+# the chosen one.
+[[keys.command]]
+key = "prefix+s"
+type = "popup"
+command = "{{ .chezmoi.homeDir }}/.local/bin/herdr-tab-picker"
+width = "60%"
+height = "50%"
+
 [[keys.command]]
 key = "alt+g"
 type = "popup"
