@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-28T12:42:43-06:00_
+_Generated 2026-08-28T14:03:59-06:00_
 
 ## Hyprland — window manager
 
@@ -31,6 +31,7 @@ _Generated 2026-08-28T12:42:43-06:00_
 | `SUPER + A` | `exec` | $HOME/.local/bin/hypr-agent # AI agent scratchpad (dropdown claude) |
 | `SUPER + ALT + S` | `exec` | $HOME/.local/bin/hypr-record region            # record region (press again to stop) |
 | `SUPER + ALT + SHIFT + S` | `exec` | $HOME/.local/bin/hypr-record output      # record monitor (press again to stop) |
+| `SUPER + ALT + V` | `exec` | cliphist wipe                                    # wipe clipboard history |
 | `SUPER + B` | `exec` | $browser # open the browser |
 | `SUPER + bracketleft` | `workspace` | m-1 |
 | `SUPER + bracketright` | `workspace` | m+1 |
@@ -89,7 +90,6 @@ _Generated 2026-08-28T12:42:43-06:00_
 | `SUPER + SHIFT + S` | `exec` | dms ipc call quickCapture screenshot window edit # screenshot window → annotate |
 | `SUPER + SHIFT + slash` | `exec` | $HOME/.local/bin/laptop-docs # Super+? → open laptop reference site (mdBook). Displaced the previous `movewindow mon:eDP-1` bind below — restore it if you want the comma/period/slash monitor-movement symmetry back. |
 | `SUPER + SHIFT + T` | `exec` | $HOME/.local/bin/hypr-ocr                    # grab text from screen → clipboard |
-| `SUPER + SHIFT + V` | `exec` | cliphist wipe                                  # wipe clipboard history |
 | `SUPER + SHIFT + X` | `exec` | voxtype record cancel                           # dictation: discard recording |
 | `SUPER + slash` | `focusmonitor` | eDP-1 |
 | `SUPER + SPACE` | `exec` | dms ipc call launcher toggle # app launcher (DMS; wofi remains for scripts) |
