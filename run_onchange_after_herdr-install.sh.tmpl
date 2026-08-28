@@ -44,6 +44,17 @@ mkdir -p "$HOME/.local/bin"
 mv -f "$tmp" "$dest"
 echo "    installed: $dest ($HERDR_VERSION)"
 
+# Agent skill, emitted by the binary itself so it always matches the
+# installed version. It teaches Claude Code to drive herdr — inspect
+# neighbouring panes, start agents, read their output, wait on state —
+# and self-gates on HERDR_ENV=1, so it is inert outside a herdr pane.
+skill_dir="$HOME/.claude/skills/herdr"
+if skill="$("$dest" --skill 2>/dev/null)" && [ -n "$skill" ]; then
+  mkdir -p "$skill_dir"
+  printf '%s\n' "$skill" > "$skill_dir/SKILL.md"
+  echo "    skill: $skill_dir/SKILL.md"
+fi
+
 # Pick up the freshly rendered config if a server is already running.
 if pgrep -x herdr >/dev/null 2>&1; then
   "$dest" server reload-config >/dev/null 2>&1 || true

@@ -49,3 +49,24 @@ focus_agent    = "prefix+alt+1..9"
 # Screen-history replay stays OFF (herdr's default): restored panes would
 # re-render old output, and these panes carry 1Password material, tokens
 # and command output. Layout and agent-session resume come back anyway.
+
+# Scratch popup — the tmux `bind -n M-g display-popup -E -w 80% -h 80%`
+# habit, kept. A session-modal terminal that does not disturb the layout;
+# Ctrl+D exits the shell, which closes the popup, exactly as before.
+#
+# Bound BOTH ways deliberately: the bare alt+g matches the old reflex,
+# but alt chords are the first thing a terminal or an outer tmux eats
+# (see the ctrl+h lesson above), so prefix+alt+g is the guaranteed path.
+[[keys.command]]
+key = "alt+g"
+type = "popup"
+command = "{{ .chezmoi.homeDir }}/.local/bin/zsh-popup"
+width = "80%"
+height = "80%"
+
+[[keys.command]]
+key = "prefix+alt+g"
+type = "popup"
+command = "{{ .chezmoi.homeDir }}/.local/bin/zsh-popup"
+width = "80%"
+height = "80%"

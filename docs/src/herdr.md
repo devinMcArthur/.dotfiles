@@ -42,6 +42,8 @@ rendered config.
 | New tab | `prefix+c` |
 | Workspace picker / goto | `prefix+w` / `prefix+g` |
 | Detach | `prefix+q` |
+| Scratch popup | `alt+g` (or `prefix+alt+g`) |
+| Scrollback into nvim | `prefix+e` |
 
 Agent hopping, workspace stepping and indexed switching all ship
 **unbound** upstream; they are set in the managed config.
@@ -88,6 +90,29 @@ colours come from the same palette everything else uses.
 
 `herdr config check` validates; `herdr server reload-config` applies
 without restarting.
+
+## The agent skill
+
+`herdr --skill` emits a Claude Code skill that lets an agent drive herdr
+— inspect neighbouring panes, create layout, start agents and commands,
+read output, wait on state changes. The installer writes it to
+`~/.claude/skills/herdr/SKILL.md` straight from the binary, so it always
+matches the installed version.
+
+It self-gates on `HERDR_ENV=1` and is inert outside a herdr pane, and
+its own description says to use it only when herdr is explicitly
+mentioned — so it will not quietly start spawning agents.
+
+## Worth exploring, not yet configured
+
+- **Worktrees** (`prefix+shift+g`, `herdr worktree create`) — a git
+  worktree opened as its own workspace, so two agents on one repo cannot
+  collide over the working tree. The obvious next step for parallel work
+  on a monorepo.
+- **Notifications and sounds** — `[ui.sound]` plus background popup
+  delivery (`terminal` or `system`) when an agent in a background
+  workspace goes blocked or done. Overlaps with the spoken notifications
+  in [Voice](./voice.md); pick one rather than both.
 
 ## Lessons learned
 

@@ -1,0 +1,7 @@
+#!/usr/bin/env zsh
+# Interactive shell for herdr's scratch popup (alt+g).
+#
+# A login-ish interactive zsh, so aliases, functions and the prompt are
+# all present — a popup with a bare `sh` would be a worse scratchpad than
+# the tmux one it replaces. Ctrl+D exits, which closes the popup.
+exec zsh -i
