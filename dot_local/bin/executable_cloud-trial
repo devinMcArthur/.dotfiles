@@ -111,9 +111,13 @@ CLOUDINIT
   # their own reaper, or the second silently disarms the first.
   local unit="cloud-trial-reaper-$NAME"
   systemctl --user stop "$unit.timer" 2>/dev/null || true
+  # Hand the timer the token we already resolved. The first version made
+  # the reaper call `op read` at fire time — at 4am, with no TTY and
+  # nobody to approve the 1Password prompt, so it failed after 60s and
+  # the box billed on. A safety net that needs a human awake is not one.
   systemd-run --user --unit="$unit" --on-active="${TRIAL_HOURS}h" \
-    env CLOUD_TRIAL_NAME="$NAME" "$HOME/.local/bin/cloud-trial" down --force \
-    >/dev/null 2>&1 || true
+    --setenv=HCLOUD_TOKEN="$HCLOUD_TOKEN" --setenv=CLOUD_TRIAL_NAME="$NAME" \
+    "$HOME/.local/bin/cloud-trial" down --force >/dev/null 2>&1 || true
 
   cat <<INFO
 
@@ -154,6 +158,9 @@ cmd_down() {
     [ "$a" = y ] || { echo "kept"; exit 0; }
   fi
   hcloud server delete "$NAME" >/dev/null && echo "destroyed $NAME"
+  # Say so visibly: an unattended destroy that leaves no trace is
+  # indistinguishable from one that silently failed.
+  notify-send -a "cloud-trial" "Destroyed $NAME" "trial box removed" 2>/dev/null || true
   systemctl --user stop "cloud-trial-reaper-$NAME.timer" 2>/dev/null || true
   systemctl --user reset-failed "cloud-trial-reaper-$NAME.service" 2>/dev/null || true
 }
