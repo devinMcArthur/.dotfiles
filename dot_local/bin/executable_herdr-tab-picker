@@ -58,9 +58,19 @@ for t in d.get("result", {}).get("tabs", []):
 # other character.
 # `transform` is the only way to give one key two meanings — rebind()
 # restores a key's original action, it cannot swap in a different one.
+# Open on the tab you are already in, not on the first row — the useful
+# starting point is "where am I", so a glance shows your neighbours and
+# j/k moves relative to here. The focused row is the one marked "*".
+# Bound to `load` rather than `start`: load fires once the list is fully
+# read, so the position cannot be applied to a half-filled list.
+pos="$(printf '%s\n' "$rows" | grep -nF $'\t*' | head -1 | cut -d: -f1)"
+start_at=()
+[ -n "$pos" ] && start_at=(--bind "load:pos($pos)")
+
 NAV='j,k,g,G,q,ctrl-d,ctrl-u'
 sel="$(printf '%s\n' "$rows" \
-  | fzf --with-nth=2.. --delimiter=$'\t' \
+  | fzf "${start_at[@]}" \
+        --with-nth=2.. --delimiter=$'\t' \
         --height=100% --reverse --prompt='tab > ' \
         --no-input \
         --bind "j:down,k:up,g:first,G:last,q:abort" \
