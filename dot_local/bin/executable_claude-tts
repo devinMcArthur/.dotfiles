@@ -39,6 +39,12 @@ OFF="$STATE/off"
 # one. speaking() already prunes dead process groups, so the only thing
 # left for this to guard is a genuinely hung player.
 WAIT_MAX=1200   # 10 minutes
+
+# voxtype writes "idle" or "recording" here; voxtype-autostop polls the
+# same file. Speaking while the mic is hot is doubly wrong: it talks over
+# the user, and whisper transcribes our own voice back into their input.
+VOXSTATE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/voxtype/state"
+dictating() { [ "$(cat "$VOXSTATE" 2>/dev/null)" = recording ]; }
 # Active voice: name in $STATE/voice (set via `claude-tts voice <name>`).
 # Two engines share the selector: piper voices are onnx basenames
 # (en_US-ryan-high); Kokoro-82M voices carry a kokoro- prefix
@@ -137,6 +143,14 @@ say_text() {
     fi
     return 0
   fi
+  # Hold — do not drop — until the user stops dictating. This sits in
+  # say_text rather than in the waiters because it must cover every path
+  # into speech, including urgent announcements, which deliberately skip
+  # the queue and would otherwise cut in mid-sentence while the mic is
+  # live. The message is spoken once dictation ends.
+  w=0
+  while dictating && [ "$w" -lt "$WAIT_MAX" ]; do sleep 0.5; w=$((w+1)); done
+
   hush
   if [ "$(engine)" = kokoro ]; then
     kokoro_ok || return 0

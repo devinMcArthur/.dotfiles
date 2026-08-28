@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-28T14:38:29-06:00_
+_Generated 2026-08-28T16:40:11-06:00_
 
 ## Hyprland — window manager
 
@@ -90,14 +90,14 @@ _Generated 2026-08-28T14:38:29-06:00_
 | `SUPER + SHIFT + S` | `exec` | dms ipc call quickCapture screenshot window edit # screenshot window → annotate |
 | `SUPER + SHIFT + slash` | `exec` | $HOME/.local/bin/laptop-docs # Super+? → open laptop reference site (mdBook). Displaced the previous `movewindow mon:eDP-1` bind below — restore it if you want the comma/period/slash monitor-movement symmetry back. |
 | `SUPER + SHIFT + T` | `exec` | $HOME/.local/bin/hypr-ocr                    # grab text from screen → clipboard |
-| `SUPER + SHIFT + X` | `exec` | voxtype record cancel                           # dictation: discard recording |
+| `SUPER + SHIFT + X` | `exec` | $HOME/.local/bin/dictate cancel                 # dictation: discard recording |
 | `SUPER + slash` | `focusmonitor` | eDP-1 |
 | `SUPER + SPACE` | `exec` | dms ipc call launcher toggle # app launcher (DMS; wofi remains for scripts) |
 | `SUPER + Tab` | `swapactiveworkspaces` | desc:Acer Technologies KA272 0x13800DD9 desc:Acer Technologies KA272 0x13800FAE |
 | `SUPER + T` | `togglefloating` | # toggle window float / tile |
 | `SUPER + V` | `exec` | cliphist-menu                                        # clipboard history |
 | `SUPER + W` | `exec` | $HOME/.local/bin/win # smart launcher for the win11 KVM VM (starts + attaches virt-viewer) |
-| `SUPER + X` | `exec` | voxtype record toggle                                 # dictation: toggle record/transcribe |
+| `SUPER + X` | `exec` | $HOME/.local/bin/dictate toggle                       # dictation: toggle record/transcribe |
 | `SUPER + Y` | `layoutmsg` | togglesplit # dwindle |
 | `up` | `resizeactive` | 0 -10 |
 | `XF86AudioLowerVolume` | `exec` | wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- |

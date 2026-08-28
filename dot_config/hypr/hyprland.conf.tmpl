@@ -310,8 +310,11 @@ bind = $mainMod CTRL, R, exec, $HOME/.local/bin/hypr-remind                  # s
 # tap again to stop + transcribe into the focused input. Toggle, not
 # hold-to-talk: a release bind on a modifier chord misfires when Super is
 # released before X. Daemon: systemctl --user status voxtype
-bind = SUPER, X, exec, voxtype record toggle                                 # dictation: toggle record/transcribe
-bind = SUPER SHIFT, X, exec, voxtype record cancel                           # dictation: discard recording
+# Via `dictate`, not voxtype directly: it silences any reply already
+# being spoken first, so pressing the key never leaves speech running
+# into your microphone.
+bind = SUPER, X, exec, $HOME/.local/bin/dictate toggle                       # dictation: toggle record/transcribe
+bind = SUPER SHIFT, X, exec, $HOME/.local/bin/dictate cancel                 # dictation: discard recording
 
 # Claude Code spoken replies (claude-tts, local piper TTS): mute/unmute.
 # Same flag the bar's Claude Voice pill flips; muting cuts speech mid-word.

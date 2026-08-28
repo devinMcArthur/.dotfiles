@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# dictate — start/stop voxtype, silencing any spoken reply first.
+#
+#   dictate toggle | cancel
+#
+# claude-tts refuses to START speaking while the mic is hot, but a reply
+# already in progress when you hit the key would keep talking over you —
+# and whisper would transcribe it back into your own input. Reaching for
+# the dictation key means you want to talk, not listen, so in-flight
+# speech is cut rather than queued.
+set -uo pipefail
+"$HOME/.local/bin/claude-tts" stop >/dev/null 2>&1 || true
+exec voxtype record "${1:-toggle}"
