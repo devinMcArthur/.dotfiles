@@ -17,7 +17,9 @@
 #
 # Design: extraction runs inline (fast), playback is DETACHED (setsid -f)
 # so the hook returns immediately — a long read never blocks the next
-# prompt. Each new message kills the previous playback rather than queue.
+# prompt. Within one session the newest message wins, but speech never
+# chops itself off: _wait/_queued wait out playback in flight first, and
+# `say` exposes that same courtesy to other sources (see devbox-speak).
 # Markdown is flattened for the ear: code fences become the words "Code
 # block", links keep their text, headers/bullets/emphasis are stripped.
 
@@ -344,6 +346,15 @@ case "${1:-hook}" in
     # Exit 0 while audio is playing. devbox-speak serializes queued remote
     # replies on this — the pgid protocol stays in one place.
     speaking
+    ;;
+  say)
+    # Speak text WITHOUT cutting off whatever is already talking: the
+    # polite entry point, and the one anything outside this machine's own
+    # session stream must use. Local hooks already queue this way via
+    # _wait/_queued; devbox-speak feeds the box's replies through here so
+    # a remote session cannot chop off a local one mid-sentence.
+    shift || true
+    exec "$0" _queued remote "$*"
     ;;
   test)
     shift || true

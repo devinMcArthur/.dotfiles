@@ -32,7 +32,9 @@ speak() {
   mkdir -p "${LOG%/*}"
   printf '%s  %s\n' "$(date +%H:%M:%S)" "$line" >> "$LOG"
   tail -n 200 "$LOG" > "$LOG.tmp" 2>/dev/null && mv "$LOG.tmp" "$LOG"
-  "$TTS" test "$line"
+  # `say`, not `test`: test cuts off whatever is playing, which meant a
+  # box reply talked over a laptop session. `say` waits its turn.
+  "$TTS" say "$line"
   # Serialize: claude-tts interrupts itself by design, so without waiting,
   # a burst of queued lines would talk over each other and only the last
   # would be heard. Playback is detached, so wait for it to APPEAR (it
