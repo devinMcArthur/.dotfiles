@@ -112,6 +112,11 @@ hush() {
 queue_mode() { [ -n "${CLAUDE_TTS_QUEUE:-}" ] || ! command -v pw-cat >/dev/null 2>&1; }
 
 say_text() {
+  # Mute is enforced HERE, the one point every path reaches. Guarding
+  # only the hook entries left `say` and `test` deaf to it, so muting did
+  # nothing to speech arriving from the box: toggle hushed the current
+  # line and the drainer immediately started the next one.
+  [ -e "$OFF" ] && return 0
   if queue_mode; then
     mkdir -p "$STATE"
     printf '%s\n' "$(printf '%s' "$1" | tr '\n' ' ')" >> "$STATE/say-queue"
