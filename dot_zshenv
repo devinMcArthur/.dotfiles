@@ -1,1 +1,2 @@
-. "$HOME/.cargo/env"
+# Rust is not on every machine this config lands on (servers).
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"

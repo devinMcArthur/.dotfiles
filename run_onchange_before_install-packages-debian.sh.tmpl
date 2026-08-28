@@ -35,9 +35,12 @@ fi
 
 # Claude Code — the point of a remote box: an agent that keeps working
 # when the laptop sleeps, loses Wi-Fi or dies.
-if ! command -v claude >/dev/null 2>&1; then
-  curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1 || \
-    echo "    WARN: claude install failed — run: curl -fsSL https://claude.ai/install.sh | bash"
+if [ ! -x "$HOME/.local/bin/claude" ]; then
+  # Do NOT swallow the output: the first attempt left a versions/ dir and
+  # no launcher, and the error was invisible because it went to /dev/null.
+  curl -fsSL https://claude.ai/install.sh | bash || true
+  [ -x "$HOME/.local/bin/claude" ] \
+    || echo "    WARN: claude did not install — run the installer by hand and read the error"
 fi
 
 # herdr comes from run_onchange_after_herdr-install (no OS gate — the
@@ -46,8 +49,12 @@ fi
 # Debian names a couple of tools differently; bridge them so muscle
 # memory and the shell config keep working.
 mkdir -p "$HOME/.local/bin"
-[ -x /usr/bin/fdfind ] && ln -sf /usr/bin/fdfind "$HOME/.local/bin/fd"
-[ -x /usr/bin/batcat ] && ln -sf /usr/bin/batcat "$HOME/.local/bin/bat"
+# Resolve via command -v rather than assuming /usr/bin: the Debian
+# rename (fdfind/batcat) is what matters, not the path.
+for pair in "fdfind:fd" "batcat:bat"; do
+  src="${pair%%:*}"; dst="${pair##*:}"
+  p="$(command -v "$src" 2>/dev/null)" && ln -sf "$p" "$HOME/.local/bin/$dst"
+done
 
 echo "==> Server packages done. Missing vs the laptop, by design:"
 echo "    desktop (Hyprland/DMS/themes), audio, voice, Framework hardware."

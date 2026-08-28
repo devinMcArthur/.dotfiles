@@ -111,6 +111,7 @@ Pictures
 .local/bin/cliphist-menu
 .local/bin/selfie
 .local/bin/zsh-popup
+.local/bin/cloud-trial
 {{ end }}
 
 # Repo-only files (kept in source, not deployed to $HOME)

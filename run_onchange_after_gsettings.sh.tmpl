@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+{{ if ne .chezmoi.osRelease.id "arch" }}exit 0  # GTK/desktop settings — no schemas on a server{{ end }}
 # Desktop-level gsettings that live in dconf's binary store and therefore
 # aren't captured by chezmoi's file management. Declared here so chezmoi
 # re-asserts them whenever this script's content changes (values are
