@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# herdr-agent-session — run ON THE DEV BOX by devbox-attach. Creates a
+# persistent dtach session for an agent if one is not already there, then
+# attaches this connection to it.
+#
+#   herdr-agent-session <name> [command...]    # default: claude
+#
+# Lives box-side rather than as a long quoted string inside an ssh call:
+# the size-wait below is fiddly enough that nesting it through two levels
+# of shell quoting was its own bug source.
+
+set -uo pipefail
+
+name="${1:-}"; shift || true
+[ -n "$name" ] || { echo "usage: herdr-agent-session <name> [command...]" >&2; exit 2; }
+
+cmd="${*:-$HOME/.local/bin/claude}"
+dir="$HOME/.herdr-agents"
+sock="$dir/$name.dtach"
+work="$HOME/work/bow-mark"
+
+mkdir -p "$dir"
+cd "$work" 2>/dev/null || cd "$HOME" || exit 1
+
+if [ ! -S "$sock" ]; then
+  # -n (create detached), NOT -A (create and attach): with -A the session
+  # master is in the ssh connection's process group, so hanging up the
+  # connection takes the agent down with it — measured, the socket was
+  # simply gone afterwards. A master created with -n is reparented to
+  # init and survives the laptop entirely.
+  setsid dtach -n "$sock" -r winch bash -c '
+    # Wait for a client before starting the agent. dtach creates the pty
+    # at 80x24 and only resizes once someone attaches; an agent started
+    # before that paints at the wrong width, and the partial repaint
+    # afterwards is what leaves herdr reporting "unknown" rather than
+    # idle — the sidebar goes blind even though the pane looks fine.
+    for _ in $(seq 1 60); do
+      case "$(stty size 2>/dev/null)" in
+        "24 80"|"0 0"|"") sleep 0.2 ;;
+        *) break ;;
+      esac
+    done
+    exec '"$cmd"'
+  ' >/dev/null 2>&1
+  sleep 0.3
+fi
+
+exec dtach -a "$sock" -r winch

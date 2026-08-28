@@ -1,3 +1,15 @@
+# herdr pane opened as a viewport onto the dev box (devbox-workspace).
+# herdr can set a new tab's environment but not its command, so the
+# command has to come from here. exec, not call: the pane IS the
+# viewport, and a leftover parent shell would swallow the exit.
+if [[ -n ${HERDR_ATTACH:-} ]]; then
+  exec "$HOME/.local/bin/devbox-attach" "$HERDR_ATTACH"
+fi
+# Same idea, arbitrary command: `herdr tab create --env HERDR_EXEC=...`.
+if [[ -n ${HERDR_EXEC:-} ]]; then
+  exec zsh -ic "$HERDR_EXEC"
+fi
+
 # Prompt: starship (see ~/.config/starship.toml).
 eval "$(starship init zsh)"
 
