@@ -46,10 +46,30 @@ for t in d.get("result", {}).get("tabs", []):
 
 [ -n "$rows" ] || { echo "no tabs" >&2; sleep 2; exit 1; }
 
+# Modal, like vim: the list starts in normal mode with j/k moving, and
+# `/` is what begins a search. Without --no-input every keystroke goes
+# straight into the query, so j and k filter instead of moving — which is
+# the wrong reflex for a list you navigate far more often than you filter.
+#
+# Esc is context-sensitive via FZF_INPUT_STATE: it leaves search mode
+# when searching, and closes the picker when already in normal mode. `q`
+# closes it too, but only in normal mode — it is in $NAV, so search mode
+# unbinds it along with the movement keys and you can type a q like any
+# other character.
+# `transform` is the only way to give one key two meanings — rebind()
+# restores a key's original action, it cannot swap in a different one.
+NAV='j,k,g,G,q,ctrl-d,ctrl-u'
 sel="$(printf '%s\n' "$rows" \
   | fzf --with-nth=2.. --delimiter=$'\t' \
         --height=100% --reverse --prompt='tab > ' \
-        --header='enter: jump   esc: cancel' \
+        --no-input \
+        --bind "j:down,k:up,g:first,G:last,q:abort" \
+        --bind "ctrl-d:half-page-down,ctrl-u:half-page-up" \
+        --bind "/:show-input+unbind($NAV)" \
+        --bind "esc:transform:[ \"\$FZF_INPUT_STATE\" = hidden ] \
+                  && echo abort \
+                  || echo 'clear-query+hide-input+rebind($NAV)'" \
+        --header='j/k move   / search   enter jump   q/esc close' \
   | cut -f1)"
 
 [ -n "$sel" ] || exit 0
