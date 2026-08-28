@@ -6,6 +6,13 @@
 # long-haul-persistence role, where twenty years of tmux beats a young
 # project. herdr owns the local agent workflow.
 
+# herdr writes this key itself after the first run. Left out of the
+# template it causes a permanent conflict — chezmoi prompts "changed
+# since chezmoi last wrote it" on every apply, which on a headless box
+# is a hard failure (no TTY). Same lesson as .pi/agent/settings.json:
+# either do not manage app-written files, or encode what the app writes.
+onboarding = false
+
 [theme]
 {{- $builtin := dict
     "catppuccin-mocha" "catppuccin"
