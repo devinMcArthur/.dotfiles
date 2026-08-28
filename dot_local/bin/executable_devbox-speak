@@ -56,9 +56,23 @@ case "${1:-follow}" in
     exec 9>"${XDG_RUNTIME_DIR:-/tmp}/devbox-speak.lock"
     flock -n 9 || exit 0
     echo "speaking $host replies (Ctrl-C to stop)"
-    # -F so a rotated/truncated queue keeps working; the box appends only.
-    ssh -o ConnectTimeout=10 -o ServerAliveInterval=30 "$host" \
-      "touch $QUEUE; tail -n0 -F $QUEUE 2>/dev/null" | while IFS= read -r l; do speak "$l"; done
+    trap 'exit 0' INT TERM
+    # Reconnect: this link roams and the box's address has changed
+    # overnight before. ServerAliveInterval kills a hung session, and we
+    # come back — but give up eventually rather than retry forever after
+    # the box is destroyed.
+    fails=0
+    while [ "$fails" -lt 20 ]; do
+      # -F so a rotated/truncated queue keeps working; the box appends only.
+      if ssh -o ConnectTimeout=10 -o ServerAliveInterval=30 -o BatchMode=yes "$host" \
+           "touch $QUEUE; tail -n0 -F $QUEUE 2>/dev/null" \
+         | while IFS= read -r l; do speak "$l"; done
+      then fails=0            # clean end: box closed the stream
+      else fails=$((fails+1))
+      fi
+      sleep 15
+    done
+    echo "giving up on $host after repeated connection failures"
     ;;
   *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
