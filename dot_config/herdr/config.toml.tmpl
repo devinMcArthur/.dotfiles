@@ -1,0 +1,51 @@
+# herdr — agent multiplexer. Rendered by chezmoi from .chezmoidata theme
+# tokens, so `theme set` re-themes it like everything else (the theme
+# script calls `herdr server reload-config`, which applies live).
+#
+# tmux is still installed and still works — it keeps the SSH and
+# long-haul-persistence role, where twenty years of tmux beats a young
+# project. herdr owns the local agent workflow.
+
+[theme]
+{{- $builtin := dict
+    "catppuccin-mocha" "catppuccin"
+    "gruvbox"          "gruvbox"
+    "nord"             "nord"
+    "rose-pine"        "rose-pine"
+    "tokyo-night"      "tokyo-night"
+    "matte-black"      "vesper" }}
+name = "{{ if hasKey $builtin .theme.name }}{{ index $builtin .theme.name }}{{ else }}catppuccin{{ end }}"
+
+# Base theme above gets the broad strokes; these pin the tokens that
+# matter to the exact palette this repo is rendering everywhere else.
+[theme.custom]
+sidebar_bg    = "#{{ .theme.colors.mantle }}"
+active_row_bg = "#{{ .theme.colors.surface0 }}"
+selection_bg  = "#{{ .theme.colors.surface1 }}"
+panel_bg      = "#{{ .theme.colors.base }}"
+accent        = "#{{ .theme.colors.accent }}"
+red           = "#{{ .theme.colors.red }}"
+green         = "#{{ .theme.colors.green }}"
+
+[keys]
+# prefix stays ctrl+b. tmux here is ctrl+a, so the two can be nested
+# without fighting — useful while migrating, harmless afterwards.
+#
+# Pane focus (prefix+h/j/k/l) is already herdr's default and matches
+# `bind -r h select-pane -L` in .tmux.conf, so it is left alone.
+#
+# NOT ctrl+h/ctrl+l for anything: ctrl+h is ASCII backspace in a
+# terminal, so the binding can never fire — it silently did nothing.
+previous_workspace = "prefix+shift+h"
+next_workspace     = "prefix+shift+l"
+switch_workspace   = "prefix+shift+1..9"
+
+# Agent hopping — unbound by default, and the whole reason for herdr:
+# walk the sidebar to whichever agent is blocked.
+next_agent     = "prefix+a"
+previous_agent = "prefix+shift+a"
+focus_agent    = "prefix+alt+1..9"
+
+# Screen-history replay stays OFF (herdr's default): restored panes would
+# re-render old output, and these panes carry 1Password material, tokens
+# and command output. Layout and agent-session resume come back anyway.

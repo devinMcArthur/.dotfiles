@@ -1,0 +1,51 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# herdr — agent multiplexer, installed from its GitHub release.
+#
+# Not in the AUR and not a Rust source build here: upstream ships a static
+# x86_64 binary, so this drops it in ~/.local/bin. No sudo, nothing outside
+# $HOME. Bump HERDR_VERSION to upgrade; the script is a no-op when the
+# installed binary already matches (herdr also self-updates via
+# `herdr update`, which will then differ from this pin until it is bumped).
+#
+# Remove: rm ~/.local/bin/herdr ~/.config/herdr/config.toml, and delete
+# this script plus dot_config/herdr from the repo. tmux is untouched and
+# remains fully configured.
+
+set -euo pipefail
+
+HERDR_VERSION="0.8.2"
+dest="$HOME/.local/bin/herdr"
+
+have=""
+[ -x "$dest" ] && have="$($dest --version 2>/dev/null | awk '{print $2}')"
+if [ "$have" = "$HERDR_VERSION" ]; then
+  exit 0
+fi
+
+echo "==> Installing herdr $HERDR_VERSION (have: ${have:-none})..."
+url="https://github.com/herdrdev/herdr/releases/download/v${HERDR_VERSION}/herdr-linux-x86_64"
+tmp="$(mktemp)"
+if ! curl -fsSL -o "$tmp" "$url"; then
+  echo "    WARN: download failed — leaving the existing binary alone" >&2
+  rm -f "$tmp"
+  exit 0
+fi
+# Sanity-check before trusting it: must be an executable that reports the
+# version we asked for.
+chmod +x "$tmp"
+got="$("$tmp" --version 2>/dev/null | awk '{print $2}')" || got=""
+if [ "$got" != "$HERDR_VERSION" ]; then
+  echo "    ERROR: downloaded binary reports '${got:-nothing}'" >&2
+  rm -f "$tmp"
+  exit 1
+fi
+mkdir -p "$HOME/.local/bin"
+mv -f "$tmp" "$dest"
+echo "    installed: $dest ($HERDR_VERSION)"
+
+# Pick up the freshly rendered config if a server is already running.
+if pgrep -x herdr >/dev/null 2>&1; then
+  "$dest" server reload-config >/dev/null 2>&1 || true
+fi
+{{ end -}}

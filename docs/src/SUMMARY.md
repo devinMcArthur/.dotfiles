@@ -7,6 +7,7 @@
 - [Shell — zsh, antidote, prompt](./shell.md)
 - [tmux — sessions, sesh, scratch popup](./tmux.md)
 - [Terminal — Ghostty](./terminal.md)
+- [herdr — agent multiplexer](./herdr.md)
 
 # Desktop
 

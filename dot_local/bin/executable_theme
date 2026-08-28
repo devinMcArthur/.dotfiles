@@ -140,6 +140,13 @@ case "${1:-}" in
     # ghostty (>=1.2) reloads config on SIGUSR2 — the ONLY safe signal
     # (anything else crashes it). Re-themes every open terminal in place.
     pkill -USR2 -x ghostty 2>/dev/null || true
+    # herdr (agent multiplexer): its config is a chezmoi template like
+    # dank-theme.json, so it was just re-rendered; this makes the running
+    # server pick it up without a restart. Guarded on the server actually
+    # running — the CLI would otherwise try to start one.
+    if pgrep -x herdr >/dev/null 2>&1 && command -v herdr >/dev/null 2>&1; then
+      timeout 5 herdr server reload-config >/dev/null 2>&1 || true
+    fi
     # Firefox chrome (tabs/toolbar/URL bar): the Pywalfox extension
     # refetches ~/.cache/wal/colors.json (just re-rendered by chezmoi from
     # the theme tokens). The daemon only exists while Firefox runs — a
