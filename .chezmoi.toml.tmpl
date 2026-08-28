@@ -9,9 +9,25 @@
 # scripts: a server skips Hyprland, the shell, themes, voice and the
 # hardware setup, and keeps the shell, editor, multiplexer and CLI tools.
 {{- $laptop := eq .chezmoi.osRelease.id "arch" -}}
-{{- $machine := promptStringOnce . "machine" "machine class (laptop/server)" (ternary "laptop" "server" $laptop) -}}
-{{- $name := promptStringOnce . "name" "full name" -}}
-{{- $email := promptStringOnce . "email" "git email" }}
+{{- $defMachine := ternary "laptop" "server" $laptop -}}
+{{- $defName := "Devin McArthur" -}}
+{{- $defEmail := "itsdevinmcarthur@gmail.com" -}}
+{{- $machine := $defMachine -}}
+{{- $name := $defName -}}
+{{- $email := $defEmail -}}
+{{- /* Prompt only with a terminal: an unattended bootstrap (ssh, cloud-init)
+       has no /dev/tty, and promptStringOnce hard-fails there — which is
+       exactly the case a server bootstrap must survive. Interactive init
+       still asks, and still reuses whatever the existing config holds. */ -}}
+{{- if stdinIsATTY -}}
+{{-   $machine = promptStringOnce . "machine" "machine class (laptop/server)" $defMachine -}}
+{{-   $name = promptStringOnce . "name" "full name" $defName -}}
+{{-   $email = promptStringOnce . "email" "git email" $defEmail -}}
+{{- else -}}
+{{-   if hasKey . "machine" }}{{ $machine = .machine }}{{ end -}}
+{{-   if hasKey . "name" }}{{ $name = .name }}{{ end -}}
+{{-   if hasKey . "email" }}{{ $email = .email }}{{ end -}}
+{{- end }}
 
 [data]
   name    = {{ $name | quote }}
