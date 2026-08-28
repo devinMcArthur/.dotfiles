@@ -50,6 +50,13 @@ green         = "#{{ .theme.colors.green }}"
 #
 # NOT ctrl+h/ctrl+l for anything: ctrl+h is ASCII backspace in a
 # terminal, so the binding can never fire — it silently did nothing.
+# goto (jump to a pane/agent) takes prefix+s, the tmux choose-tree
+# reflex; settings takes prefix+g in the swap. Nothing else wants either
+# key — prefix+shift+g (new_worktree) is a separate binding and is
+# untouched.
+goto     = "prefix+s"
+settings = "prefix+g"
+
 previous_tab = "prefix+h"
 next_tab     = "prefix+l"
 
