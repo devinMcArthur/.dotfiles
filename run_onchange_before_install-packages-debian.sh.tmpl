@@ -51,6 +51,17 @@ if ! command -v node >/dev/null 2>&1; then
   echo "    node $(node --version 2>/dev/null) installed"
 fi
 
+# dbmate — the migration runner bow-mark's `npm run db:migrate` shells
+# out to. Packaged on Arch (pacman: dbmate), nowhere in Debian, so take
+# the upstream release binary and pin the version the laptop runs.
+DBMATE_VERSION="2.35.0"
+if ! command -v dbmate >/dev/null 2>&1; then
+  sudo curl -fsSL -o /usr/local/bin/dbmate \
+    "https://github.com/amacneil/dbmate/releases/download/v${DBMATE_VERSION}/dbmate-linux-amd64"
+  sudo chmod +x /usr/local/bin/dbmate
+  echo "    dbmate $(dbmate --version 2>/dev/null | head -1) installed"
+fi
+
 # starship: the same prompt as the laptop, so the shell looks like home.
 if ! command -v starship >/dev/null 2>&1; then
   curl -fsSL https://starship.rs/install.sh | sh -s -- --yes >/dev/null
