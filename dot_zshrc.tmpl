@@ -55,13 +55,32 @@ command -v op >/dev/null 2>&1 && {
   # plain alias would leave every restored pane dead on arrival. Claude
   # Code falls back to its own stored login when ANTHROPIC_API_KEY is
   # absent, which is the right outcome for an unattended restore.
+  #
+  # ONE op read per secret, not two. The old form probed with `op read` and
+  # then handed off to with-secrets, which read the same ref again — and both
+  # calls were silenced, so a cold vault showed the approval dialog and then
+  # nothing at all. Measured: 10-32s cold, 1.5-4s warm, and it is not network
+  # (the HTTPS hop to 1Password is 0.5s) — it is the desktop-app round trip.
+  # Silence that long reads as a hung terminal, which is why conversations
+  # went un-restarted for days. Hence the progress line: never stall mutely.
   claude() {
-    local ref
-    ref="$(sed -n 's/^ANTHROPIC_API_KEY=//p' "$HOME/.config/op-dev.env" 2>/dev/null | tr -d '"')"
-    if [[ -n "$ref" ]] && op read "$ref" >/dev/null 2>&1; then
-      with-secrets claude "$@"
+    local key ref val
+    local -a envs
+    if [[ -r "$HOME/.config/op-dev.env" ]]; then
+      print -u2 -n "claude: unlocking 1Password… "
+      while IFS='=' read -r key ref; do
+        [[ "$key" =~ ^[A-Z_][A-Z0-9_]*$ ]] || continue
+        ref=${ref#\"}; ref=${ref%\"}
+        [[ "$ref" == op://* ]] || continue
+        val=$(op read "$ref" 2>/dev/null) || { envs=(); break }
+        [[ -n "$val" ]] && envs+=("$key=$val")
+      done < "$HOME/.config/op-dev.env"
+      (( ${#envs} )) && print -u2 "ok" || print -u2 "locked"
+    fi
+    if (( ${#envs} )); then
+      env "${envs[@]}" claude "$@"
     else
-      print -u2 "claude: 1Password locked — starting without ANTHROPIC_API_KEY"
+      print -u2 "claude: starting without ANTHROPIC_API_KEY"
       command claude "$@"
     fi
   }

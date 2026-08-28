@@ -62,8 +62,12 @@ case "${1:-save}" in
     if have aws; then
       for prof in $(printf '%s\n' "${EKS[@]}" | awk '{print $3}' | sort -u); do
         printf '  aws %-8s ' "$prof:"
-        aws --profile "$prof" sts get-caller-identity --query Arn --output text 2>/dev/null \
-          || echo "credentials rejected"
+        if ! grep -q "\[$prof\]\|\[profile $prof\]" ~/.aws/credentials ~/.aws/config 2>/dev/null; then
+          echo "not configured on this machine"
+        else
+          aws --profile "$prof" sts get-caller-identity --query Arn --output text 2>/dev/null \
+            || echo "credentials rejected"
+        fi
       done
     fi
     have doctl && doctl account get --format Email --no-header 2>/dev/null | sed 's/^/  doctl: /' \
