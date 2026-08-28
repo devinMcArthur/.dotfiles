@@ -65,6 +65,22 @@ fi
 # Cluster tooling. Installed WITHOUT credentials: a rented box gets the
 # binaries so `doctl auth init` / `aws configure` are one interactive
 # step away, but nothing that reaches production is planted here.
+# kubectl comes from the Kubernetes apt repo rather than minikube's
+# bundled copy — the box should be able to reach a real cluster even with
+# no local cluster installed.
+if ! command -v kubectl >/dev/null 2>&1; then
+  curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key \
+    | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes.gpg
+  echo "deb [signed-by=/etc/apt/keyrings/kubernetes.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /" \
+    | sudo tee /etc/apt/sources.list.d/kubernetes.list >/dev/null
+  sudo apt-get update -qq && sudo apt-get install -y -qq kubectl \
+    && echo "    kubectl $(kubectl version --client -o json 2>/dev/null | grep -o '"gitVersion":"[^"]*"' | head -1 | cut -d'"' -f4) installed"
+fi
+if ! command -v helm >/dev/null 2>&1; then
+  curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | sudo bash >/dev/null 2>&1 \
+    && echo "    helm $(helm version --short 2>/dev/null) installed"
+fi
+
 DOCTL_VERSION="1.115.0"
 if ! command -v doctl >/dev/null 2>&1; then
   curl -fsSL "https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz" \

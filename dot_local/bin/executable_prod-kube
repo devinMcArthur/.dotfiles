@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# prod-kube — rebuild the production kubectl contexts from the CLIs.
+#
+#   prod-kube          # (re)create every context below
+#   prod-kube check    # who am I, and can I reach each cluster
+#
+# The kubeconfig itself holds NO secrets: every real cluster authenticates
+# through an exec plugin (`aws eks get-token`, `doctl ... exec-credential`)
+# that mints a short-lived token per call. So contexts are never copied
+# between machines — they are regenerated here from whatever credentials
+# THIS machine has. Authenticate first, interactively:
+#
+#   aws configure        # keys live in ~/.aws/credentials
+#   doctl auth init      # token lives in ~/.config/doctl/config.yaml
+#
+# On a rented box, remember those two files are the whole prod story:
+# `cloud-trial down` destroys the disk, but until then they sit on
+# someone else's hardware. Prefer a scoped key over your everyday one.
+
+set -uo pipefail
+
+# region cluster profile — the profile matters: update-kubeconfig bakes
+# AWS_PROFILE into the context's exec env, which is how the laptop's
+# liverpool-qa context already works.
+EKS=(
+  "ca-central-1 hubsite-production default"
+  "us-east-1    liverpool-qa       bc-qa"
+)
+DO_CLUSTERS=(bow-mark-app)
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+case "${1:-save}" in
+  save)
+    if have aws; then
+      for e in "${EKS[@]}"; do
+        read -r region name profile <<<"$e"
+        if aws --profile "$profile" sts get-caller-identity >/dev/null 2>&1; then
+          aws --profile "$profile" eks update-kubeconfig --region "$region" --name "$name" >/dev/null 2>&1 \
+            && echo "  eks   $name ($region, profile $profile)" \
+            || echo "  eks   $name FAILED — authenticated, but no access to this cluster"
+        else
+          echo "  eks   $name skipped — profile '$profile' has no valid credentials"
+        fi
+      done
+    else
+      echo "  aws   not installed"
+    fi
+
+    if have doctl && doctl account get >/dev/null 2>&1; then
+      for c in "${DO_CLUSTERS[@]}"; do
+        doctl kubernetes cluster kubeconfig save "$c" >/dev/null 2>&1 \
+          && echo "  do    $c" || echo "  do    $c FAILED (no access?)"
+      done
+    else
+      echo "  doctl not authenticated — run: doctl auth init"
+    fi
+    echo
+    kubectl config get-contexts 2>/dev/null
+    ;;
+  check)
+    if have aws; then
+      for prof in $(printf '%s\n' "${EKS[@]}" | awk '{print $3}' | sort -u); do
+        printf '  aws %-8s ' "$prof:"
+        aws --profile "$prof" sts get-caller-identity --query Arn --output text 2>/dev/null \
+          || echo "credentials rejected"
+      done
+    fi
+    have doctl && doctl account get --format Email --no-header 2>/dev/null | sed 's/^/  doctl: /' \
+      || echo "  doctl: not authenticated"
+    echo
+    for ctx in $(kubectl config get-contexts -o name 2>/dev/null); do
+      printf '  %-70s ' "$ctx"
+      # --request-timeout so an unreachable cluster does not hang the loop.
+      if kubectl --context "$ctx" --request-timeout=8s get ns >/dev/null 2>&1; then
+        echo "reachable"
+      else
+        echo "no"
+      fi
+    done
+    ;;
+  *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
