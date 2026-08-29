@@ -108,7 +108,11 @@ PluginComponent {
     ccWidgetIcon: root.iconFor()
     ccWidgetPrimaryText: "Dev box"
     ccWidgetSecondaryText: root.needsAuth ? "tap to authenticate" : root.detail
-    ccWidgetIsActive: root.state === "ok"
+    // Highlighted only when something needs you. Active styling is how the
+    // real toggles (Dark Mode, Keep Awake) say "on", so a permanently lit
+    // informational tile reads as a switch someone left enabled — and the
+    // one state worth noticing across the room stops standing out.
+    ccWidgetIsActive: root.state !== "ok" && root.state !== "unknown"
 
     onCcWidgetToggled: root.act()
 
