@@ -24,13 +24,20 @@ lit() {   # how much of the detail area is not background
   python3 - "$OUT" <<'PY'
 import sys
 from PIL import Image
-im = Image.open(sys.argv[1]).crop((2060, 900, 2870, 1300)).convert("L").resize((80, 40))
+im = Image.open(sys.argv[1]).crop((2060, 820, 2870, 1250)).convert("L").resize((80, 40))
 print(sum(1 for p in im.get_flattened_data() if p > 60))
 PY
 }
 
-[ "$(status)" = visible ] && { dms ipc call control-center close >/dev/null 2>&1; sleep 1; }
-dms ipc call control-center open >/dev/null 2>&1; sleep 2
+# `open` is a TOGGLE, not an idempotent open: calling it on a visible
+# panel HIDES it. Half the "control center would not open" failures were
+# this helper closing the thing it had just opened. Drive it to the state
+# we want and verify, rather than trusting the verb.
+for _ in 1 2 3; do
+  [ "$(status)" = visible ] && break
+  dms ipc call control-center toggle >/dev/null 2>&1
+  sleep 2
+done
 [ "$(status)" = visible ] || { echo "control center would not open" >&2; exit 1; }
 
 for _ in 1 2; do
