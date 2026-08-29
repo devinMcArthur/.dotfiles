@@ -283,8 +283,8 @@ clean_md() {
 # Only the tail is parsed — this session's transcript is 40MB and JSONL is
 # one entry per line, so a tail can't split an entry. fromjson? tolerates
 # partial lines; the format is version-prone, so fail silent, not loud.
-last_entry() {
-  tail -n 400 "$1" 2>/dev/null | jq -rRs '
+last_entry_stdin() {
+  jq -rRs '
     [ split("\n")[] | fromjson?
       | select(.type=="assistant") | select(.isSidechain != true)
       | { u: (.uuid // ""), ts: (.timestamp // ""),
@@ -292,6 +292,10 @@ last_entry() {
       | select(.t | length > 0)
     ] | last // empty | "\(.u)\t\(.ts)\t\(.t)"' 2>/dev/null
 }
+
+# Same extraction, from a file. A remote transcript arrives on stdin
+# instead, so the box needs no jq of its own.
+last_entry() { tail -n 400 "$1" 2>/dev/null | last_entry_stdin; }
 
 case "${1:-hook}" in
   hook|progress)
@@ -426,20 +430,56 @@ case "${1:-hook}" in
     ;;
   read-last)
     # Read the final assistant message of the session you are sitting in.
-    # The focused herdr pane knows which conversation that is, and the
-    # transcript is findable by its session id alone — no need to
-    # reconstruct the project directory's mangled name.
-    sid="$(herdr agent list 2>/dev/null | jq -r '
-      .result.agents[] | select(.focused == true) | .agent_session.value // empty' 2>/dev/null | head -1)"
-    if [ -z "$sid" ]; then
-      echo "no focused agent — is this a herdr pane?" >&2; exit 1
+    #
+    # Three cases, because a herdr pane can be one of three things: a local
+    # agent (the session id is right there), a herdr-mirror pane showing an
+    # agent on the box (the id lives on the FAR side, and the pane's own
+    # process is the only thing that knows which remote pane it mirrors),
+    # or something that is not an agent at all.
+    cur="$(herdr pane current 2>/dev/null)"
+    pane="$(printf '%s' "$cur" | jq -r '.result.pane.pane_id // empty' 2>/dev/null)"
+    sid="$(printf '%s' "$cur" | jq -r '.result.pane.agent_session.value // empty' 2>/dev/null)"
+    [ -n "$pane" ] || { echo "no focused pane — is this a herdr pane?" >&2; exit 1; }
+
+    text=""
+    if [ -n "$sid" ]; then
+      tp="$(ls -1 "$HOME"/.claude/projects/*/"$sid".jsonl 2>/dev/null | head -1)"
+      [ -n "$tp" ] || { echo "no transcript for session $sid" >&2; exit 1; }
+      text="$(last_entry "$tp")"
+    else
+      # No local session: follow the mirror. `pane process-info` reports
+      # the pane's argv, and a mirror pane is literally
+      # `herdr-mirror pane <host> <remote-pane>` — the mapping is not
+      # recorded anywhere else.
+      read -r mhost mpane <<<"$(herdr pane process-info --pane "$pane" 2>/dev/null | jq -r '
+        .result.process_info.foreground_processes[]?.argv
+        | select(. != null)
+        | select(any(.[]; test("herdr-mirror$")))
+        | select(length > 3 and .[1] == "pane")
+        | "\(.[2]) \(.[3])"' 2>/dev/null | head -1)"
+      if [ -z "$mhost" ]; then
+        echo "no agent in this pane" >&2; exit 1
+      fi
+      rsid="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$mhost" \
+              "\$HOME/.local/bin/herdr agent list" 2>/dev/null \
+              | jq -r --arg p "$mpane" '.result.agents[]
+                  | select(.pane_id == $p) | .agent_session.value // empty' 2>/dev/null | head -1)"
+      if [ -z "$rsid" ]; then
+        # herdr only learns a session id at SessionStart, so a conversation
+        # older than the integration on that host is invisible to it.
+        echo "$mhost pane $mpane has no session id yet — herdr learns it at SessionStart," >&2
+        echo "so a conversation started before the integration was installed is invisible." >&2
+        echo "It registers itself the next time that session starts or resumes." >&2
+        exit 1
+      fi
+      text="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$mhost" \
+        "sh -c 'tail -n 400 \$HOME/.claude/projects/*/$rsid.jsonl 2>/dev/null'" 2>/dev/null \
+        | last_entry_stdin)"
     fi
-    tp="$(ls -1 "$HOME"/.claude/projects/*/"$sid".jsonl 2>/dev/null | head -1)"
-    [ -n "$tp" ] || { echo "no transcript for session $sid (a remote agent?)" >&2; exit 1; }
-    entry="$(last_entry "$tp")"
-    [ -n "$entry" ] || { echo "no assistant message to read" >&2; exit 1; }
-    text="$(printf '%s' "${entry#*$'\t'}" | cut -f2- )"
-    spoken="$(printf '%s' "$text" | clean_md)"
+
+    [ -n "$text" ] || { echo "no assistant message to read" >&2; exit 1; }
+    body="$(printf '%s' "${text#*$'\t'}" | cut -f2-)"
+    spoken="$(printf '%s' "$body" | clean_md)"
     [ -n "${spoken//[[:space:]]/}" ] || { echo "nothing readable" >&2; exit 1; }
     hush
     say_text "$spoken"
