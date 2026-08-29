@@ -29,6 +29,9 @@ PluginComponent {
     property int days: 0
     property string authUrl: ""
     property int checkedAt: 0
+    property string rtt: ""
+    property string linkPath: ""
+    property string host: "devbox"
     property bool acting: false
 
     readonly property bool needsAuth: root.ssh === "auth" && root.authUrl !== ""
@@ -106,6 +109,12 @@ PluginComponent {
                     root.authUrl = line.slice(8).trim();
                 else if (line.startsWith("NOW:"))
                     root.checkedAt = parseInt(line.slice(4)) || 0;
+                else if (line.startsWith("RTT:"))
+                    root.rtt = line.slice(4).trim();
+                else if (line.startsWith("PATH:"))
+                    root.linkPath = line.slice(5).trim();
+                else if (line.startsWith("HOST:"))
+                    root.host = line.slice(5).trim() || "devbox";
             }
         }
     }
@@ -125,8 +134,8 @@ PluginComponent {
     ccWidgetPrimaryText: "Dev box"
     ccWidgetSecondaryText: root.needsAuth
         ? "tap to authenticate"
-        : (root.state === "ok" && root.days > 0
-            ? "reachable · key " + root.days + "d"
+        : (root.state === "ok" && root.rtt !== ""
+            ? root.rtt + " away · " + (root.linkPath === "relay" ? "relayed" : "direct")
             : root.detail)
     // Highlighted only when something needs you. Active styling is how the
     // real toggles (Dark Mode, Keep Awake) say "on", so a permanently lit
@@ -149,13 +158,23 @@ PluginComponent {
                 anchors.margins: Theme.spacingL
                 spacing: Theme.spacingM
 
+                // The pill above already says the state, so repeating it
+                // here was two identical lines stacked. This space carries
+                // what the pill cannot: which box, how far, and by what
+                // route — and gives way to the problem when there is one.
                 StyledText {
-                    text: root.detail
-                    color: root.state === "error" ? Theme.error : Theme.surfaceText
-                    font.weight: Font.Bold
+                    text: root.state === "ok"
+                        ? root.host + (root.rtt !== "" ? "  ·  " + root.rtt + "  ·  "
+                            + (root.linkPath === "relay" ? "relayed" : "direct") : "")
+                        : root.detail
+                    color: root.state === "error" ? Theme.error
+                         : (root.state === "warn" ? Theme.warning : Theme.surfaceVariantText)
+                    font.family: root.state === "ok" ? "JetBrainsMono Nerd Font" : Theme.fontFamily
+                    font.pixelSize: root.state === "ok" ? Theme.fontSizeSmall : Theme.fontSizeMedium
+                    font.weight: root.state === "ok" ? Font.Normal : Font.Bold
                     width: parent.width
                     wrapMode: Text.Wrap
-                    maximumLineCount: 3
+                    maximumLineCount: 2
                     elide: Text.ElideRight
                 }
 
@@ -237,71 +256,73 @@ PluginComponent {
                     }
                 }
 
+                // Facts, side by side. The expiry bar was full width at
+                // 179 of 180 days, which renders as a solid rule — a gauge
+                // has to be short enough that the empty part is visible.
                 Row {
                     width: parent.width
+                    spacing: Theme.spacingL
 
-                    StyledText {
-                        text: "1Password"
-                        color: Theme.surfaceVariantText
-                        font.pixelSize: Theme.fontSizeSmall
-                        width: parent.width - opValue.width
-                    }
+                    Column {
+                        width: (parent.width - Theme.spacingL) / 2
+                        spacing: 4
 
-                    StyledText {
-                        id: opValue
-                        text: root.op === "" ? "—" : root.op
-                        color: root.op === "ok" ? Theme.surfaceText
-                             : (root.op === "slow" ? Theme.surfaceVariantText : Theme.warning)
-                        font.family: "JetBrainsMono Nerd Font"
-                        font.pixelSize: Theme.fontSizeSmall
-                    }
-                }
-
-                // ── key expiry ────────────────────────────────────────────
-                // A meter, not a row: this is a quantity of time running out,
-                // and the bar says "plenty" or "soon" before the number is read.
-                Column {
-                    width: parent.width
-                    spacing: 4
-
-                    Row {
-                        width: parent.width
-
-                        StyledText {
-                            text: "node key"
-                            color: Theme.surfaceVariantText
-                            font.pixelSize: Theme.fontSizeSmall
-                            width: parent.width - expiryValue.width
-                        }
-
-                        StyledText {
-                            id: expiryValue
-                            text: root.days > 0 ? root.days + "d" : "no expiry"
-                            color: root.days > 0 && root.days <= 14 ? Theme.warning : Theme.surfaceText
-                            font.family: "JetBrainsMono Nerd Font"
-                            font.pixelSize: Theme.fontSizeSmall
-                        }
-                    }
-
-                    Rectangle {
-                        width: parent.width
-                        height: 4
-                        radius: 2
-                        color: Theme.outlineLight
-
-                        Rectangle {
-                            // 180 days is Tailscale's full term, so the bar
-                            // empties over exactly the life of the key.
-                            width: parent.width * Math.max(0.02, Math.min(1, root.days / 180))
-                            height: parent.height
-                            radius: parent.radius
-                            color: root.days > 0 && root.days <= 14 ? Theme.warning : Theme.primary
-                            opacity: 0.55
-
-                            Behavior on width {
-                                NumberAnimation { duration: Theme.mediumDuration }
+                        Row {
+                            width: parent.width
+                            StyledText {
+                                text: "node key"
+                                color: Theme.surfaceVariantText
+                                font.pixelSize: Theme.fontSizeSmall
+                                width: parent.width - keyVal.width
+                            }
+                            StyledText {
+                                id: keyVal
+                                text: root.days > 0 ? root.days + "d" : "none"
+                                color: root.days > 0 && root.days <= 14 ? Theme.warning : Theme.surfaceText
+                                font.family: "JetBrainsMono Nerd Font"
+                                font.pixelSize: Theme.fontSizeSmall
                             }
                         }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 4
+                            radius: 2
+                            color: Theme.outlineLight
+
+                            Rectangle {
+                                width: parent.width * Math.max(0.02, Math.min(1, root.days / 180))
+                                height: parent.height
+                                radius: parent.radius
+                                color: root.days > 0 && root.days <= 14 ? Theme.warning : Theme.primary
+                                opacity: 0.55
+                                Behavior on width { NumberAnimation { duration: Theme.mediumDuration } }
+                            }
+                        }
+                    }
+
+                    Column {
+                        width: (parent.width - Theme.spacingL) / 2
+                        spacing: 4
+
+                        Row {
+                            width: parent.width
+                            StyledText {
+                                text: "1Password"
+                                color: Theme.surfaceVariantText
+                                font.pixelSize: Theme.fontSizeSmall
+                                width: parent.width - opVal.width
+                            }
+                            StyledText {
+                                id: opVal
+                                text: root.op === "" ? "—" : root.op
+                                color: root.op === "ok" ? Theme.surfaceText
+                                     : (root.op === "slow" ? Theme.surfaceVariantText : Theme.warning)
+                                font.family: "JetBrainsMono Nerd Font"
+                                font.pixelSize: Theme.fontSizeSmall
+                            }
+                        }
+
                     }
                 }
 
@@ -314,37 +335,55 @@ PluginComponent {
                     wrapMode: Text.Wrap
                 }
 
-                StyledText {
-                    text: root.checkedAt > 0
-                        ? "checked " + Qt.formatDateTime(new Date(root.checkedAt * 1000), "HH:mm:ss")
-                        : "checking…"
-                    color: Theme.surfaceVariantText
-                    font.family: "JetBrainsMono Nerd Font"
-                    font.pixelSize: Theme.fontSizeSmall - 1
-                    opacity: 0.7
-                }
-
-                Rectangle {
+                // Stamp and action share the last line. The action is a
+                // quiet text button while nothing is wrong and only becomes
+                // a filled one when it has something to do — a loud
+                // full-width button under a healthy panel is just noise.
+                Item {
                     width: parent.width
-                    height: 36
-                    radius: 10
-                    color: root.needsAuth ? Theme.primary : Theme.surfaceContainerHighest
-                    border.width: root.needsAuth ? 0 : Theme.layerOutlineWidth
-                    border.color: Theme.outlineMedium
-                    opacity: actArea.pressed ? 0.8 : 1.0
+                    height: root.needsAuth ? 38 : 26
 
                     StyledText {
-                        anchors.centerIn: parent
-                        text: root.needsAuth ? "Authenticate in browser" : "Check again"
-                        color: root.needsAuth ? Theme.primaryText : Theme.surfaceText
-                        font.weight: Font.Bold
+                        visible: !root.needsAuth
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root.checkedAt > 0
+                            ? "checked " + Qt.formatDateTime(new Date(root.checkedAt * 1000), "HH:mm:ss")
+                            : "checking…"
+                        color: Theme.surfaceVariantText
+                        font.family: "JetBrainsMono Nerd Font"
+                        font.pixelSize: Theme.fontSizeSmall - 1
+                        opacity: 0.6
                     }
 
-                    MouseArea {
-                        id: actArea
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.act()
+                    Rectangle {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: root.needsAuth ? parent.width : actLabel.implicitWidth + Theme.spacingL
+                        height: root.needsAuth ? 38 : 26
+                        radius: root.needsAuth ? 10 : 13
+                        color: root.needsAuth ? Theme.primary : "transparent"
+                        border.width: root.needsAuth ? 0 : Theme.layerOutlineWidth
+                        border.color: Theme.outlineMedium
+                        opacity: actArea.pressed ? 0.75 : 1.0
+
+                        Behavior on width { NumberAnimation { duration: Theme.shortDuration } }
+
+                        StyledText {
+                            id: actLabel
+                            anchors.centerIn: parent
+                            text: root.needsAuth ? "Authenticate in browser" : "Check again"
+                            color: root.needsAuth ? Theme.primaryText : Theme.surfaceVariantText
+                            font.pixelSize: root.needsAuth ? Theme.fontSizeMedium : Theme.fontSizeSmall
+                            font.weight: root.needsAuth ? Font.Bold : Font.Normal
+                        }
+
+                        MouseArea {
+                            id: actArea
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.act()
+                        }
                     }
                 }
             }

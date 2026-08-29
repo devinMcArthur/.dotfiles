@@ -83,6 +83,24 @@ if [ "$peer" = online ]; then
   esac
 fi
 
+# Round-trip time to the box. The one number that decides whether working
+# on it feels local — which is the question that picked this box in the
+# first place. Tailscale's own ping reports the path too (direct vs a DERP
+# relay), and a relayed path is exactly when typing starts to drag.
+rtt=""; path=""
+if [ "$peer" = online ]; then
+  ping_out="$(timeout 6 tailscale ping --c 1 --timeout 3s "$PEER" 2>/dev/null | head -1)"
+  case "$ping_out" in
+    *" in "*) rtt="$(printf '%s' "$ping_out" | grep -oE '[0-9]+(\.[0-9]+)?ms' | head -1)" ;;
+  esac
+  # "via DERP(xxx)" is a relayed path; anything else "via host:port" went
+  # peer to peer. The word "direct" never appears in the output.
+  case "$ping_out" in
+    *"via DERP"*) path="relay" ;;
+    *" via "*)    path="direct" ;;
+  esac
+fi
+
 # 1Password's agent: keys live there, so a locked vault looks exactly like
 # a permissions problem to git and ssh.
 #
@@ -121,8 +139,9 @@ elif [ "$op" = locked ] || [ "$op" = empty ]; then
   state=warn;  detail="1Password agent has no keys"
 fi
 
-printf 'NOW:%s\nTSD:%s\nPEER:%s\nSSH:%s\nOP:%s\nEXPIRY:%s\nDAYS:%s\nSELFEXPIRY:%s\nSTATE:%s\nDETAIL:%s\nAUTHURL:%s\n' \
-  "$now" "$tsd" "$peer" "$ssh_state" "$op" "$expiry" "$days_left" "$self_expiry" "$state" "$detail" "$authurl"
+printf 'NOW:%s\nTSD:%s\nPEER:%s\nSSH:%s\nOP:%s\nEXPIRY:%s\nDAYS:%s\nSELFEXPIRY:%s\nRTT:%s\nPATH:%s\nHOST:%s\nSTATE:%s\nDETAIL:%s\nAUTHURL:%s\n' \
+  "$now" "$tsd" "$peer" "$ssh_state" "$op" "$expiry" "$days_left" "$self_expiry" \
+  "$rtt" "$path" "$PEER" "$state" "$detail" "$authurl"
 
 printf '%s' "$authurl" > "$STATE_DIR/authurl"
 
