@@ -23,6 +23,18 @@
 set -uo pipefail
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/devbox-health"
+
+# Find the agent ourselves. SSH_AUTH_SOCK is exported from .zshrc, an
+# INTERACTIVE shell file, so anything started by Hyprland's exec-once —
+# DMS, and therefore this script when the pill runs it — inherits nothing
+# and ssh-add reports "Could not open a connection to your authentication
+# agent". That read as a locked vault and the pill warned about a
+# perfectly healthy 1Password. ssh itself was unaffected, because
+# ~/.ssh/config names the socket with IdentityAgent, which is exactly why
+# the two disagreed.
+if [ -z "${SSH_AUTH_SOCK:-}" ] && [ -S "$HOME/.1password/agent.sock" ]; then
+  export SSH_AUTH_SOCK="$HOME/.1password/agent.sock"
+fi
 PEER="${DEVBOX_PEER:-devbox}"
 mkdir -p "$STATE_DIR"
 

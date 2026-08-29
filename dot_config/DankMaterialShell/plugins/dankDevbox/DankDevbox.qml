@@ -131,6 +131,8 @@ PluginComponent {
                     font.weight: Font.Bold
                     width: parent.width
                     wrapMode: Text.Wrap
+                    maximumLineCount: 3
+                    elide: Text.ElideRight
                 }
 
                 Repeater {
@@ -152,12 +154,18 @@ PluginComponent {
                             text: parent.modelData.label
                             color: Theme.surfaceVariantText
                             width: 110
+                            elide: Text.ElideRight
                         }
 
+                        // Bounded and elided: the value is short today, but
+                        // an unbounded label in a fixed-width panel is how a
+                        // row silently pushes past its edge later.
                         StyledText {
                             text: parent.modelData.value
                             color: parent.modelData.warn ? Theme.error : Theme.surfaceText
                             font.weight: Font.Bold
+                            width: parent.width - 110 - Theme.spacingS
+                            elide: Text.ElideRight
                         }
                     }
                 }
