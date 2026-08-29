@@ -73,8 +73,21 @@ fi
 
 # 1Password's agent: keys live there, so a locked vault looks exactly like
 # a permissions problem to git and ssh.
-op=locked
-timeout 8 ssh-add -l >/dev/null 2>&1 && op=ok
+#
+# A TIMEOUT is not the same as "no keys". The agent is answered by the
+# desktop app, which is 5s warm but 10-60s cold, so a short deadline
+# reports a perfectly healthy vault as locked — which it did, on the
+# first real poll. A notifier that cries wolf teaches you to ignore it,
+# so a slow answer is "unknown" and never raises the state.
+op_out="$(timeout 25 ssh-add -l 2>&1)"
+case "$?" in
+  0)   op=ok ;;
+  124) op=slow ;;                       # still thinking; judge nothing
+  *)   case "$op_out" in
+         *"no identities"*)  op=empty ;;
+         *)                  op=locked ;;
+       esac ;;
+esac
 
 days_left=0
 [ "$expiry" -gt 0 ] 2>/dev/null && days_left=$(( (expiry - now) / 86400 ))
@@ -92,7 +105,7 @@ elif [ "$ssh_state" = fail ]; then
   state=error; detail="ssh to $PEER failed"
 elif [ "$expiry" -gt 0 ] && [ "$days_left" -le 14 ]; then
   state=warn;  detail="node key expires in ${days_left}d"
-elif [ "$op" = locked ]; then
+elif [ "$op" = locked ] || [ "$op" = empty ]; then
   state=warn;  detail="1Password agent has no keys"
 fi
 
