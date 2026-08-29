@@ -1,0 +1,13 @@
+{
+    "id": "dankDevbox",
+    "name": "Dev box",
+    "description": "Remote dev box reachability, Tailscale SSH auth, and node key expiry",
+    "version": "1.0.0",
+    "author": "devin + claude",
+    "icon": "dns",
+    "type": "widget",
+    "component": "./DankDevbox.qml",
+    "capabilities": ["control-center"],
+    "permissions": ["process"],
+    "requires_dms": ">=1.4.6"
+}

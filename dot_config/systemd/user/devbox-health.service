@@ -1,0 +1,8 @@
+[Unit]
+Description=Check dev box reachability and surface anything needing a human
+# Notifications only fire on a CHANGE of state, so this can run often
+# without becoming noise.
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/devbox-health notify

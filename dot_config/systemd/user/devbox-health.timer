@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodic dev box health check
+
+[Timer]
+# Five minutes: fast enough that a morning auth wall is announced before
+# you trip over it, slow enough that the ssh probe is nothing.
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=false
+
+[Install]
+WantedBy=timers.target
