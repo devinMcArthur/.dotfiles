@@ -1,0 +1,54 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+{{ if ne .chezmoi.osRelease.id "arch" }}exit 0  # Framework hardware; a laptop concern.{{ end }}
+# Let the desktop session own the Framework's status LED.
+#
+# /sys/class/leds/chromeos:multicolor:charging is root-owned, and unlike the
+# keyboard backlight there is no logind path to it — logind brokers
+# `brightness` for backlight/leds, not `multi_intensity` or `trigger`. So a
+# udev rule hands those three files to the wheel group.
+#
+# Scope is deliberately one LED. A blanket rule over SUBSYSTEM=="leds" would
+# also hand over the panic and disk-activity triggers, which is a lot of
+# machine to give away for a colour.
+#
+# Reversible: `theme-led off` restores the chromeos-auto trigger and the EC
+# resumes showing charge state. Removing this file's rule and rebooting
+# restores the permissions.
+set -euo pipefail
+
+RULE=/etc/udev/rules.d/99-framework-status-led.rules
+LED=/sys/class/leds/chromeos:multicolor:charging
+
+[ -e "$LED/multi_intensity" ] || { echo "    no multicolor status LED here — skipping"; exit 0; }
+
+# Fast path, NO sudo — the normal case. `theme set` applies headlessly on
+# every unlock and must never reach for a password here.
+if [ -f "$RULE" ] && [ -w "$LED/multi_intensity" ] && [ -w "$LED/trigger" ]; then
+  exit 0
+fi
+
+if [ ! -t 0 ]; then
+  echo "ERROR: status-LED access needs sudo — run 'chezmoi apply' in a terminal" >&2
+  exit 1
+fi
+
+echo "==> Granting this session the Framework status LED..."
+sudo install -m644 /dev/stdin "$RULE" <<'RULES'
+# chezmoi: theme-led. The desktop session sets this LED's colour, so the
+# theme can carry over to the light on the side of the laptop.
+SUBSYSTEM=="leds", KERNEL=="chromeos:multicolor:charging", ACTION!="remove", \
+  RUN+="/bin/sh -c 'chgrp wheel /sys/class/leds/%k/multi_intensity /sys/class/leds/%k/brightness /sys/class/leds/%k/trigger; chmod g+w /sys/class/leds/%k/multi_intensity /sys/class/leds/%k/brightness /sys/class/leds/%k/trigger'"
+RULES
+
+sudo udevadm control --reload-rules
+sudo udevadm trigger --subsystem-match=leds --action=change
+sleep 1
+if [ -w "$LED/multi_intensity" ]; then
+  echo "    status LED is yours (theme-led follows the active theme)"
+else
+  # The rule is right but the running device was created before it; a
+  # reboot re-runs it. Say so rather than leaving it looking broken.
+  echo "    rule installed; takes effect for this LED after a reboot"
+fi
+{{ end -}}

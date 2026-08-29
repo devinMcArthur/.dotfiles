@@ -133,6 +133,12 @@ case "${1:-}" in
       killall -q hyprpaper 2>/dev/null || true
       hyprctl dispatch exec hyprpaper >/dev/null 2>&1 || true
     fi
+
+    # The status LED on the side of the laptop takes the theme's accent —
+    # the one part of this machine with real colour, since the keyboard is
+    # a single white zone. Silent when the udev rule is not in place or the
+    # hardware has none: a theme switch must not fail over a light.
+    "$HOME/.local/bin/theme-led" >/dev/null 2>&1 || true
     # Bar + notifications — only when the waybar federation is actually
     # running (during the DMS trial the shell re-themes itself reactively
     # off the re-rendered dank-theme.json; restarting waybar would start a

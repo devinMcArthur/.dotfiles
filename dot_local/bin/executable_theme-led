@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# theme-led — put the active theme's accent on the laptop's status LED.
+#
+#   theme-led            # apply the current theme's accent
+#   theme-led off        # give the LED back to the EC (charge status)
+#   theme-led <#rrggbb>  # a specific colour
+#
+# The Framework 13's side LED is the one part of this machine with real
+# colour — the keyboard is a single white zone. It normally shows charge
+# state under the EC's own `chromeos-auto` trigger, so borrowing it means
+# setting the trigger to `none` first; `off` hands it straight back.
+#
+# Needs the udev rule from run_onchange_after_led-access.sh.
+
+set -uo pipefail
+
+LED=/sys/class/leds/chromeos:multicolor:charging
+SRC="$HOME/.local/share/chezmoi"
+LEVEL="${THEME_LED_LEVEL:-35}"    # a hint, not a beacon
+
+[ -e "$LED/multi_intensity" ] || { echo "no status LED on this machine" >&2; exit 1; }
+[ -w "$LED/multi_intensity" ] || { echo "LED not writable — run 'chezmoi apply' in a terminal" >&2; exit 1; }
+
+active_file() {
+  if [ -f "$SRC/.chezmoidata/zz-theme-override.yaml" ]; then
+    echo "$SRC/.chezmoidata/zz-theme-override.yaml"
+  else
+    echo "$SRC/.chezmoidata/theme.yaml"
+  fi
+}
+
+case "${1:-apply}" in
+  off)
+    printf 'chromeos-auto' > "$LED/trigger" 2>/dev/null || true
+    echo "status LED: back to charge state"
+    exit 0
+    ;;
+  apply) hex="$(sed -n 's/^    accent: *"\{0,1\}#\{0,1\}\([0-9a-fA-F]\{6\}\).*$/\1/p' "$(active_file)" | head -1)" ;;
+  *)     hex="${1#\#}" ;;
+esac
+
+case "$hex" in
+  [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]) ;;
+  *) echo "no usable accent colour (got '${hex:-}')" >&2; exit 1 ;;
+esac
+
+r=$((16#${hex:0:2})); g=$((16#${hex:2:2})); b=$((16#${hex:4:2}))
+# Scale to the channel max so the hue survives; brightness does the dimming.
+max=$(( r > g ? (r > b ? r : b) : (g > b ? g : b) ))
+[ "$max" -gt 0 ] || max=1
+r=$(( r * 100 / max )); g=$(( g * 100 / max )); b=$(( b * 100 / max ))
+
+# The EC's own trigger repaints this LED on every charge event, so it has
+# to be released before a colour will stick.
+printf 'none' > "$LED/trigger" 2>/dev/null || true
+# multi_index order: red green blue yellow white amber
+printf '%d %d %d 0 0 0' "$r" "$g" "$b" > "$LED/multi_intensity"
+printf '%d' "$LEVEL" > "$LED/brightness"
+echo "status LED: #$hex  (r=$r g=$g b=$b @ $LEVEL%)"
