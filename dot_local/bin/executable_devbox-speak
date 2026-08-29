@@ -17,7 +17,17 @@ set -uo pipefail
 
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/devbox/host"
 QUEUE=".local/state/claude-tts/say-queue"
-host="$(tr -d '[:space:]' < "$CONF" 2>/dev/null)"
+# Prefer the ssh alias over the raw address. The alias resolves through
+# ~/.ssh/config to the tailnet, which is stable; the address in this file
+# is the box's PUBLIC ip, and the firewall admits one source ip at a
+# time. Using it directly is what left this drainer retrying a timed-out
+# public address for hours yesterday while the box was perfectly
+# reachable over the tailnet.
+if ssh -G devbox 2>/dev/null | grep -q '^hostname .*\.ts\.net$\|^hostname 100\.'; then
+  host=devbox
+else
+  host="$(tr -d '[:space:]' < "$CONF" 2>/dev/null)"
+fi
 [ -n "$host" ] || { echo "no dev box set: devbox host user@address" >&2; exit 1; }
 
 TTS="$HOME/.local/bin/claude-tts"

@@ -8,8 +8,11 @@ Description=Speak the dev box's Claude replies on this laptop
 # launched by `devbox` (Super+D), and opening that window is no longer
 # part of the workflow. Nothing would have failed loudly — the box would
 # simply have gone quiet.
-After=graphical-session.target
-PartOf=graphical-session.target
+# NOT graphical-session.target: greetd + Hyprland never activates it on
+# this machine, so a unit wanted by it simply never starts — and PartOf
+# would additionally stop the service whenever that target went away.
+# This one only needs the user session: PipeWire is socket-activated and
+# ssh needs nothing from the desktop.
 
 [Service]
 Type=simple
@@ -20,6 +23,10 @@ ExecStart=%h/.local/bin/devbox-speak follow
 # IdentityAgent in ~/.ssh/config, so no SSH_AUTH_SOCK is needed here.
 Restart=always
 RestartSec=30
+# The box being unreachable is normal, not a fault. Without this, a spell
+# of failures can trip systemd's rate limit and leave the drainer dead
+# with no sign of it until someone notices the box has gone quiet.
+StartLimitIntervalSec=0
 
 [Install]
-WantedBy=graphical-session.target
+WantedBy=default.target
