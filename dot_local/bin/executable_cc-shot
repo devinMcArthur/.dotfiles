@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# cc-shot — screenshot a Control Center widget, expanded.
+#
+#   cc-shot <x> <y> [out.png]     # x,y = logical coords of the tile's TEXT
+#
+# Written after hand-sequencing this a dozen times and getting it wrong
+# most of them. Two things make it fiddly, and both are invisible unless
+# you check: `control-center open` is a TOGGLE, so calling it on an open
+# panel closes it; and the detail Component is cached while the panel is
+# expanded, so a plugin reload does NOT take effect until it collapses
+# and re-expands. Every "my change didn't apply" so far was one of these.
+#
+# So: force closed, reopen, verify, expand, verify by measuring how much
+# of the panel is lit, and retry the click once if it collapsed instead.
+
+set -uo pipefail
+
+X="${1:-}"; Y="${2:-}"; OUT="${3:-/tmp/cc-shot.png}"
+case "$X$Y" in (*[!0-9]*|"") echo "usage: cc-shot <x> <y> [out.png]" >&2; exit 2 ;; esac
+
+status() { dms ipc call control-center status 2>/dev/null; }
+lit() {   # how much of the detail area is not background
+  grim "$OUT" 2>/dev/null || return 1
+  python3 - "$OUT" <<'PY'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).crop((2060, 900, 2870, 1300)).convert("L").resize((80, 40))
+print(sum(1 for p in im.get_flattened_data() if p > 60))
+PY
+}
+
+[ "$(status)" = visible ] && { dms ipc call control-center close >/dev/null 2>&1; sleep 1; }
+dms ipc call control-center open >/dev/null 2>&1; sleep 2
+[ "$(status)" = visible ] || { echo "control center would not open" >&2; exit 1; }
+
+for _ in 1 2; do
+  before="$(lit)"
+  click-at "$X" "$Y" >/dev/null 2>&1
+  sleep 3
+  after="$(lit)"
+  [ "$(status)" = visible ] || { dms ipc call control-center open >/dev/null 2>&1; sleep 2; continue; }
+  if [ "${after:-0}" -gt "${before:-0}" ]; then
+    echo "expanded (lit $before -> $after) -> $OUT"
+    exit 0
+  fi
+done
+
+echo "captured, but the panel may not have expanded (lit ${after:-?}) -> $OUT"

@@ -28,9 +28,23 @@ PluginComponent {
     property string op: ""
     property int days: 0
     property string authUrl: ""
+    property int checkedAt: 0
     property bool acting: false
 
     readonly property bool needsAuth: root.ssh === "auth" && root.authUrl !== ""
+
+    // The path, and the first link that is not carrying. Failures happen at
+    // a hop — naming which one is the whole diagnostic, and it is what a
+    // row of labels and values cannot say.
+    readonly property var hops: ["turing", "tailnet", "ssh", "devbox"]
+    readonly property int brokenAt: {
+        if (root.tsd !== "active" || root.peer !== "online")
+            return 1;
+        if (root.ssh !== "ok" && root.ssh !== "unknown")
+            return 2;
+        return -1;
+    }
+    readonly property color breakColor: root.state === "error" ? Theme.error : Theme.warning
 
     function iconFor() {
         if (root.needsAuth)
@@ -90,6 +104,8 @@ PluginComponent {
                     root.days = parseInt(line.slice(5)) || 0;
                 else if (line.startsWith("AUTHURL:"))
                     root.authUrl = line.slice(8).trim();
+                else if (line.startsWith("NOW:"))
+                    root.checkedAt = parseInt(line.slice(4)) || 0;
             }
         }
     }
@@ -107,7 +123,11 @@ PluginComponent {
     // ── Control Center pill ──
     ccWidgetIcon: root.iconFor()
     ccWidgetPrimaryText: "Dev box"
-    ccWidgetSecondaryText: root.needsAuth ? "tap to authenticate" : root.detail
+    ccWidgetSecondaryText: root.needsAuth
+        ? "tap to authenticate"
+        : (root.state === "ok" && root.days > 0
+            ? "reachable · key " + root.days + "d"
+            : root.detail)
     // Highlighted only when something needs you. Active styling is how the
     // real toggles (Dark Mode, Keep Awake) say "on", so a permanently lit
     // informational tile reads as a switch someone left enabled — and the
@@ -139,37 +159,148 @@ PluginComponent {
                     elide: Text.ElideRight
                 }
 
-                Repeater {
-                    model: [
-                        { label: "tailscaled", value: root.tsd,  warn: root.tsd !== "active" },
-                        { label: "tailnet",    value: root.peer, warn: root.peer !== "online" },
-                        { label: "ssh",        value: root.ssh,  warn: root.ssh !== "ok" },
-                        { label: "1Password",  value: root.op,   warn: root.op !== "ok" },
-                        { label: "key expires", value: root.days > 0 ? root.days + " days" : "never",
-                          warn: root.days > 0 && root.days <= 14 }
-                    ]
+                // ── the path ──────────────────────────────────────────
+                // Quiet when it carries. Only the failing link takes colour,
+                // and only its dot moves — everything else holds still so
+                // that one thing is unmistakable across a room.
+                Item {
+                    width: parent.width
+                    height: 34
 
                     Row {
-                        required property var modelData
+                        anchors.fill: parent
+                        spacing: 0
+
+                        Repeater {
+                            model: root.hops.length
+
+                            Item {
+                                required property int index
+                                width: parent.width / root.hops.length
+                                height: parent.height
+
+                                readonly property bool isBreak: root.brokenAt === index
+                                readonly property bool past: root.brokenAt >= 0 && index > root.brokenAt
+                                readonly property color tone: isBreak
+                                    ? root.breakColor
+                                    : (past ? Theme.outlineMedium
+                                            : (root.brokenAt < 0 && index === root.hops.length - 1
+                                                ? Theme.success : Theme.surfaceTextMedium))
+
+                                // The wire into this hop, drawn behind the dot.
+                                Rectangle {
+                                    visible: index > 0
+                                    height: 2
+                                    radius: 1
+                                    color: parent.isBreak ? root.breakColor : Theme.outlineMedium
+                                    opacity: parent.isBreak ? 1.0 : 0.5
+                                    anchors.verticalCenter: dot.verticalCenter
+                                    anchors.right: dot.left
+                                    anchors.rightMargin: 4
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: -(parent.width / 2) + 4
+                                }
+
+                                Rectangle {
+                                    id: dot
+                                    width: parent.isBreak ? 11 : 7
+                                    height: width
+                                    radius: width / 2
+                                    color: parent.tone
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    anchors.top: parent.top
+                                    anchors.topMargin: parent.isBreak ? 2 : 4
+
+                                    Behavior on width {
+                                        NumberAnimation { duration: Theme.shortDuration }
+                                    }
+
+                                    SequentialAnimation on opacity {
+                                        running: parent.isBreak
+                                        loops: Animation.Infinite
+                                        NumberAnimation { to: 0.35; duration: 900; easing.type: Easing.InOutQuad }
+                                        NumberAnimation { to: 1.0;  duration: 900; easing.type: Easing.InOutQuad }
+                                    }
+                                }
+
+                                StyledText {
+                                    text: root.hops[parent.index]
+                                    color: parent.tone
+                                    font.family: "JetBrainsMono Nerd Font"
+                                    font.pixelSize: Theme.fontSizeSmall - 1
+                                    font.weight: parent.isBreak ? Font.Bold : Font.Normal
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    anchors.bottom: parent.bottom
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Row {
+                    width: parent.width
+
+                    StyledText {
+                        text: "1Password"
+                        color: Theme.surfaceVariantText
+                        font.pixelSize: Theme.fontSizeSmall
+                        width: parent.width - opValue.width
+                    }
+
+                    StyledText {
+                        id: opValue
+                        text: root.op === "" ? "—" : root.op
+                        color: root.op === "ok" ? Theme.surfaceText
+                             : (root.op === "slow" ? Theme.surfaceVariantText : Theme.warning)
+                        font.family: "JetBrainsMono Nerd Font"
+                        font.pixelSize: Theme.fontSizeSmall
+                    }
+                }
+
+                // ── key expiry ────────────────────────────────────────────
+                // A meter, not a row: this is a quantity of time running out,
+                // and the bar says "plenty" or "soon" before the number is read.
+                Column {
+                    width: parent.width
+                    spacing: 4
+
+                    Row {
                         width: parent.width
-                        spacing: Theme.spacingS
 
                         StyledText {
-                            text: parent.modelData.label
+                            text: "node key"
                             color: Theme.surfaceVariantText
-                            width: 110
-                            elide: Text.ElideRight
+                            font.pixelSize: Theme.fontSizeSmall
+                            width: parent.width - expiryValue.width
                         }
 
-                        // Bounded and elided: the value is short today, but
-                        // an unbounded label in a fixed-width panel is how a
-                        // row silently pushes past its edge later.
                         StyledText {
-                            text: parent.modelData.value
-                            color: parent.modelData.warn ? Theme.error : Theme.surfaceText
-                            font.weight: Font.Bold
-                            width: parent.width - 110 - Theme.spacingS
-                            elide: Text.ElideRight
+                            id: expiryValue
+                            text: root.days > 0 ? root.days + "d" : "no expiry"
+                            color: root.days > 0 && root.days <= 14 ? Theme.warning : Theme.surfaceText
+                            font.family: "JetBrainsMono Nerd Font"
+                            font.pixelSize: Theme.fontSizeSmall
+                        }
+                    }
+
+                    Rectangle {
+                        width: parent.width
+                        height: 4
+                        radius: 2
+                        color: Theme.outlineLight
+
+                        Rectangle {
+                            // 180 days is Tailscale's full term, so the bar
+                            // empties over exactly the life of the key.
+                            width: parent.width * Math.max(0.02, Math.min(1, root.days / 180))
+                            height: parent.height
+                            radius: parent.radius
+                            color: root.days > 0 && root.days <= 14 ? Theme.warning : Theme.primary
+                            opacity: 0.55
+
+                            Behavior on width {
+                                NumberAnimation { duration: Theme.mediumDuration }
+                            }
                         }
                     }
                 }
@@ -183,16 +314,28 @@ PluginComponent {
                     wrapMode: Text.Wrap
                 }
 
+                StyledText {
+                    text: root.checkedAt > 0
+                        ? "checked " + Qt.formatDateTime(new Date(root.checkedAt * 1000), "HH:mm:ss")
+                        : "checking…"
+                    color: Theme.surfaceVariantText
+                    font.family: "JetBrainsMono Nerd Font"
+                    font.pixelSize: Theme.fontSizeSmall - 1
+                    opacity: 0.7
+                }
+
                 Rectangle {
                     width: parent.width
                     height: 36
                     radius: 10
-                    color: root.needsAuth ? Theme.primary : Theme.surfaceVariant
+                    color: root.needsAuth ? Theme.primary : Theme.surfaceContainerHighest
+                    border.width: root.needsAuth ? 0 : Theme.layerOutlineWidth
+                    border.color: Theme.outlineMedium
                     opacity: actArea.pressed ? 0.8 : 1.0
 
                     StyledText {
                         anchors.centerIn: parent
-                        text: root.needsAuth ? "Authenticate in browser" : "Re-check now"
+                        text: root.needsAuth ? "Authenticate in browser" : "Check again"
                         color: root.needsAuth ? Theme.primaryText : Theme.surfaceText
                         font.weight: Font.Bold
                     }
