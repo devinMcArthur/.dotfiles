@@ -1,0 +1,51 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+{{ if ne .chezmoi.osRelease.id "arch" }}exit 0  # a desktop concern.{{ end }}
+# Let the logged-in session synthesise input (ydotool).
+#
+# uaccess, NOT the `input` group. Both would work, and they are not
+# equivalent: joining `input` grants READ access to every input device on
+# the machine — every keystroke, in any application — which is a
+# keylogger's worth of privilege for a debugging tool. /dev/uinput is
+# write-only in the sense that matters: it creates virtual devices and
+# injects events, it does not observe real ones. uaccess also scopes the
+# grant to whoever is actually logged in at the seat, and needs no group
+# membership, so it takes effect without logging out.
+#
+# ydotool is here so a coding agent can drive this desktop while
+# debugging it: click a Control Center tile, expand a panel, and screenshot
+# the result rather than asking a human to do it and describe what
+# happened.
+set -euo pipefail
+
+RULE=/etc/udev/rules.d/99-uinput-uaccess.rules
+
+if [ -w /dev/uinput ]; then
+  exit 0                                   # already ours
+fi
+
+# sudo -n never prompts, so this stays safe in a headless apply (the
+# unlock hook and boot both run chezmoi with no one watching). Only fall
+# back to asking when there is a terminal to ask in.
+run_root() {
+  if sudo -n true 2>/dev/null; then sudo "$@"
+  elif [ -t 0 ]; then sudo "$@"
+  else
+    echo "ERROR: uinput access needs sudo — run 'chezmoi apply' in a terminal" >&2
+    exit 1
+  fi
+}
+
+echo "==> Granting the session access to /dev/uinput (ydotool)..."
+printf '%s\n' \
+  '# chezmoi: ydotool. uaccess gives the seat'"'"'s active user an ACL on' \
+  '# /dev/uinput — input SYNTHESIS only, no read access to real devices.' \
+  'KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"' \
+  | run_root install -m644 /dev/stdin "$RULE"
+
+run_root udevadm control --reload-rules
+run_root udevadm trigger --name-match=uinput
+sleep 1
+[ -w /dev/uinput ] && echo "    /dev/uinput is writable by this session" \
+                   || echo "    rule installed; effective after the next login"
+{{ end -}}

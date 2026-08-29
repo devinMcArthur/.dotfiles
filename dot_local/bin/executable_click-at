@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# click-at — put the pointer at a LOGICAL coordinate and click.
+#
+#   click-at <x> <y> [button]     # button: left (default) | right | middle
+#   click-at --move <x> <y>       # position only, no click
+#
+# For driving this desktop while debugging it — expanding a panel and
+# screenshotting the result, rather than asking a human to do it and
+# describe what happened.
+#
+# ydotool's coordinates do not match this screen. Absolute mode lands at
+# the edge regardless of input, and relative moves arrive DOUBLED (asked
+# 555, moved 1110) — the monitor is 2880x1920 at scale 1.5, so logical
+# space is 1920x1280 and something applies a factor on top. Rather than
+# hardcode a fudge that breaks on the next monitor or scale change, this
+# homes the pointer to 0,0, then closes the loop: move, measure with
+# hyprctl, correct, repeat. Converges in two or three steps and does not
+# care what the factor is.
+
+set -uo pipefail
+
+command -v ydotool >/dev/null 2>&1 || { echo "ydotool not installed" >&2; exit 1; }
+command -v hyprctl >/dev/null 2>&1 || { echo "needs hyprctl to verify position" >&2; exit 1; }
+
+move_only=0
+[ "${1:-}" = "--move" ] && { move_only=1; shift; }
+
+tx="${1:-}"; ty="${2:-}"; btn="${3:-left}"
+case "$tx$ty" in (*[!0-9]*|"") echo "usage: click-at <x> <y> [left|right|middle]" >&2; exit 2 ;; esac
+
+pos() { hyprctl cursorpos 2>/dev/null | tr -d ' '; }
+
+# Home first: relative moves need a known origin, and a big negative move
+# clamps to the top-left corner on any screen size.
+ydotool mousemove -x -10000 -y -10000 >/dev/null 2>&1
+sleep 0.2
+
+for _ in 1 2 3 4 5; do
+  cur="$(pos)"; cx="${cur%,*}"; cy="${cur#*,}"
+  [ -n "$cx" ] && [ -n "$cy" ] || break
+  dx=$(( tx - cx )); dy=$(( ty - cy ))
+  # Close enough: sub-pixel chasing achieves nothing on a click target.
+  if [ "${dx#-}" -le 2 ] && [ "${dy#-}" -le 2 ]; then break; fi
+  # Halve the request: moves arrive doubled here, and overshooting makes
+  # the loop oscillate instead of converge.
+  ydotool mousemove -x $(( dx / 2 )) -y $(( dy / 2 )) >/dev/null 2>&1
+  sleep 0.25
+done
+
+final="$(pos)"
+if [ "$move_only" = 1 ]; then
+  echo "pointer at $final (target $tx,$ty)"
+  exit 0
+fi
+
+case "$btn" in
+  left)   code=0xC0 ;;
+  right)  code=0xC1 ;;
+  middle) code=0xC2 ;;
+  *) echo "button must be left|right|middle" >&2; exit 2 ;;
+esac
+ydotool click "$code" >/dev/null 2>&1
+echo "clicked $btn at $final (target $tx,$ty)"
