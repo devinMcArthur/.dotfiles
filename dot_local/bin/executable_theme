@@ -107,7 +107,19 @@ case "${1:-}" in
     fi
     cp "$f" "$OVERRIDE"
     echo "==> Applying $name..."
-    chezmoi apply
+    # stdin from /dev/null, ALWAYS. This runs unattended — from Hyprland's
+    # exec-once at boot and from the unlock hook — and there it inherits
+    # /dev/tty1, the virtual console nobody is looking at. chezmoi will
+    # happily prompt on it: `stdinIsATTY` in .chezmoi.toml.tmpl is true for
+    # tty1, and any file edited outside chezmoi asks "changed since chezmoi
+    # last wrote it?". Either blocks forever WHILE HOLDING the persistent
+    # state lock, so every later switch dies with "timeout obtaining
+    # persistent state lock" — and since the override is written above
+    # before this line, `theme current` then reports a theme you are not
+    # looking at. That is exactly how theming froze on 2026-08-28: a
+    # boot-time `theme random` sat on tty1 for 13 minutes. With no tty,
+    # prompts are skipped or fail loudly, and set -e makes it visible.
+    chezmoi apply < /dev/null
 
     echo "==> Reloading desktop..."
     hyprctl reload >/dev/null 2>&1 || true
