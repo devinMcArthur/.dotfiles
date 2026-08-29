@@ -20,6 +20,13 @@ REMOTE_HERDR="/home/dev/.local/bin/herdr"
 
 read_host() { [ -f "$CONF" ] && tr -d '[:space:]' < "$CONF"; }
 
+# What to actually connect to. `devbox host` still shows and sets the
+# address — that is the box's identity — but every connection goes
+# through the tailnet alias when there is one, so a changed public ip
+# cannot lock this hotkey out. mosh included: the tailnet carries its UDP
+# as happily as ssh.
+target() { "$HOME/.local/bin/devbox-target"; }
+
 # Keep `Host devbox` in ~/.ssh/config pointing at the current box. That
 # file is not chezmoi-managed (it holds work hosts), so we edit in place
 # and touch only our own block.
@@ -65,11 +72,11 @@ case "${1:-open}" in
     fi
     ;;
   ssh|shell)
-    h="$(read_host)"; [ -n "$h" ] || { echo "no host set: devbox host user@address" >&2; exit 1; }
+    h="$(target)"; [ -n "$h" ] || { echo "no host set: devbox host user@address" >&2; exit 1; }
     exec ssh "$h"
     ;;
   open)
-    h="$(read_host)"
+    h="$(target)"
     if [ -z "$h" ]; then
       echo "No dev box configured."
       echo "  devbox host dev@1.2.3.4     # then Super+D opens it"

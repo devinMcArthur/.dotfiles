@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# devbox-target — print the ssh target to use for the dev box.
+#
+# One place, because getting this wrong is silent. The `devbox` alias in
+# ~/.ssh/config points at the tailnet and is stable; the address in
+# ~/.config/devbox/host is the box's PUBLIC ip, and the Hetzner firewall
+# admits exactly one source ip at a time. A script that dials the address
+# directly keeps working right up until the laptop's ip changes, and then
+# fails in a way that looks like the box is down — which is precisely how
+# the speech drainer spent a day retrying a timed-out address while the
+# box was perfectly reachable over the tailnet.
+#
+# Falls back to the address when there is no tailnet alias, so a box that
+# has not joined the tailnet yet is still reachable.
+
+set -uo pipefail
+
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/devbox/host"
+
+if ssh -G devbox 2>/dev/null | grep -qE '^hostname (100\.|.*\.ts\.net$)'; then
+  echo devbox
+else
+  tr -d '[:space:]' < "$CONF" 2>/dev/null
+fi
