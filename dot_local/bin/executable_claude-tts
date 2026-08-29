@@ -126,6 +126,14 @@ hush() {
 # (see devbox-speak) — the machine with speakers does the speaking.
 queue_mode() { [ -n "${CLAUDE_TTS_QUEUE:-}" ] || ! command -v pw-cat >/dev/null 2>&1; }
 
+# A nudge you can see with the sound off. Detached, so a hook never waits
+# on an animation, and a no-op wherever there is no keyboard backlight
+# (the dev box, any desktop).
+blink() {
+  [ -x "$HOME/.local/bin/kbd-fx" ] || return 0
+  setsid -f "$HOME/.local/bin/kbd-fx" pulse "${1:-2}" >/dev/null 2>&1 </dev/null || true
+}
+
 say_text() {
   # Mute is enforced HERE, the one point every path reaches. Guarding
   # only the hook entries left `say` and `test` deaf to it, so muting did
@@ -314,13 +322,19 @@ case "${1:-hook}" in
     # talked over the answer being read, and the screen already shows
     # them. What survives is work COMPLETING while you look elsewhere.
     input="$(cat)"
-    [ -e "$OFF" ] && exit 0
     ev="$(jq -r '.hook_event_name // "Notification"' <<<"$input" 2>/dev/null)"
     kind="$(jq -r '.matcher // .notification_type // .type // empty' <<<"$input" 2>/dev/null)"
+    # The mute check moved INSIDE, per action: a keyboard blink is not
+    # speech, and a signal you can see matters MORE when the sound is off.
     case "$kind" in
-      agent_completed)         announce "$ev" "A background session finished." 0 ;;
-      quota_auto_resume_fired) announce "$ev" "Usage limit reset. Continuing." 0 ;;
-      *)                       : ;;   # silent
+      agent_completed)
+        blink 2
+        [ -e "$OFF" ] || announce "$ev" "A background session finished." 0
+        ;;
+      quota_auto_resume_fired)
+        [ -e "$OFF" ] || announce "$ev" "Usage limit reset. Continuing." 0
+        ;;
+      *) : ;;   # silent
     esac
     ;;
   on)     rm -f "$OFF"; echo "claude-tts: enabled" ;;

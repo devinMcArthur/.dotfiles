@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# kbd-fx — animate the keyboard backlight.
+#
+#   kbd-fx breathe [seconds]   # slow sine fade, in and out
+#   kbd-fx pulse [count]       # quick double-blink, for notifications
+#   kbd-fx flash               # one bright flash
+#   kbd-fx level <0-100>       # set and stay
+#
+# The Framework 13 keyboard is ONE zone of white LEDs, 0-100. No per-key
+# and no colour — that lives on the Framework 16. So "animation" here
+# means brightness over time, which is plenty for a breath or a nudge.
+#
+# Writes go through brightnessctl, which talks to logind over D-Bus:
+# /sys/class/leds/.../brightness is root-owned, but logind lets the active
+# session set it. That also means one process per frame, so frame rates
+# stay modest and effects stay short. For a continuous kernel-side breathe
+# with no userspace at all, the `pattern` LED trigger exists — but
+# selecting a trigger needs root, unlike brightness.
+#
+# Whatever the level was is restored on exit, including Ctrl-C: the point
+# is a flourish, not a setting you have to undo.
+
+set -uo pipefail
+
+DEV='chromeos::kbd_backlight'
+LOCK="${XDG_RUNTIME_DIR:-/tmp}/kbd-fx.lock"
+
+have_kbd() { brightnessctl --device="$DEV" get >/dev/null 2>&1; }
+get()  { brightnessctl --device="$DEV" get 2>/dev/null; }
+set_() { brightnessctl -q --device="$DEV" set "$1" 2>/dev/null; }
+
+have_kbd || { echo "no keyboard backlight on this machine" >&2; exit 1; }
+
+# One effect at a time. Two animations fighting over one LED just looks
+# broken, and the loser would restore a level the winner had changed.
+exec 9>"$LOCK"
+flock -n 9 || exit 0
+
+ORIG="$(get)"
+restore() { set_ "$ORIG"; }
+trap restore EXIT INT TERM
+
+case "${1:-breathe}" in
+  breathe)
+    secs="${2:-4}"
+    steps=$(( secs * 12 ))
+    # The whole curve in ONE python call. Computing it per frame meant an
+    # interpreter startup per frame — about a second of CPU to fade a lamp.
+    # Sine, not linear: it eases at both ends, and a linear fade reads as
+    # mechanical, which is the opposite of a breath.
+    mapfile -t levels < <(python3 -c "
+import math
+n = $steps
+for i in range(n):
+    print(int(6 + 94 * (0.5 - 0.5 * math.cos(2 * math.pi * i / n))))
+")
+    for v in "${levels[@]}"; do
+      set_ "$v"
+      sleep 0.08
+    done
+    ;;
+  pulse)
+    n="${2:-2}"
+    for (( i = 0; i < n; i++ )); do
+      set_ 100; sleep 0.09
+      set_ 0;   sleep 0.09
+    done
+    ;;
+  flash)
+    set_ 100; sleep 0.18
+    ;;
+  level)
+    v="${2:-}"; case "$v" in (''|*[!0-9]*) echo "level 0-100" >&2; exit 2 ;; esac
+    trap - EXIT INT TERM        # deliberate change, not a flourish
+    set_ "$v"
+    ;;
+  *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
