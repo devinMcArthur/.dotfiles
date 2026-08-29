@@ -2,6 +2,10 @@
 	name = Devin McArthur
 	email = assortedgerm@gmail.com
 [core]
+	# Global hooks. The hook chains to the repo's own .git/hooks first —
+	# core.hooksPath REPLACES that directory rather than merging with it,
+	# so a global hook silently disables per-repo hooks otherwise.
+	hooksPath = ~/.config/git/hooks
 	editor = nvim
 	pager = delta
 [interactive]

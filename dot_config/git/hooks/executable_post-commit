@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# post-commit — notice round numbers.
+#
+# Global hook (core.hooksPath). Every hundredth commit in a repo gets a
+# small celebration; the rest are silent. Rare enough to still be a
+# surprise years in, and tied to real work rather than a command you run
+# to be amused.
+#
+# FIRST it chains to the repo's own hook. A global core.hooksPath does not
+# merge with .git/hooks, it REPLACES it — so without this, setting a global
+# hook would silently disable husky-less repo hooks (pre-commit, lefthook,
+# anything that installs into .git/hooks). Post-commit exit codes are
+# ignored by git, so nothing here can ever block a commit.
+
+repo_hook="$(git rev-parse --git-path hooks/post-commit 2>/dev/null)"
+if [ -n "$repo_hook" ] && [ -x "$repo_hook" ] && [ "$repo_hook" -ef "$0" ] 2>/dev/null; then
+  :   # would recurse into ourselves
+elif [ -n "$repo_hook" ] && [ -x "$repo_hook" ]; then
+  "$repo_hook" "$@" || true
+fi
+
+n="$(git rev-list --count HEAD 2>/dev/null || echo 0)"
+case "$n" in (*[!0-9]*|"") exit 0 ;; esac
+[ "$n" -gt 0 ] && [ $(( n % 100 )) -eq 0 ] || exit 0
+
+name="$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo repo)")"
+msg="$(printf "%'d commits in %s." "$n" "$name")"
+if command -v fun >/dev/null 2>&1; then
+  fun say "$msg" 2>/dev/null || echo "$msg"
+else
+  echo "$msg"
+fi
+exit 0

@@ -6,6 +6,8 @@
 #   fun matrix     # it's raining green
 #   fun train      # the consequence of typing sl
 #   fun pipes      # screensaver pipes
+#   fun fish       # an aquarium
+#   fun nyan       # you know the one
 #
 # Deliberately a command rather than something wired into shell startup:
 # a fortune on every new prompt stops being charming after about a day,
@@ -38,6 +40,8 @@ case "${1:-random}" in
   say)    shift; say "$@" ;;
   matrix) have cmatrix || missing cmatrix; cmatrix -ab -u 8 ;;
   train)  have sl || missing sl; sl -e ;;
+  fish)   have asciiquarium || missing asciiquarium; asciiquarium ;;
+  nyan)   have nyancat || missing nyancat; nyancat ;;
   pipes)  have pipes.sh && pipes.sh -t 1 -R -p 3 || missing "pipes.sh (AUR)" ;;
   random)
     pick=$((RANDOM % 3))

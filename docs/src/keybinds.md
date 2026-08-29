@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-28T20:22:46-06:00_
+_Generated 2026-08-28T20:31:00-06:00_
 
 ## Hyprland — window manager
 
@@ -142,6 +142,8 @@ Prefix: `C-a`. Bindings shown below assume prefix unless otherwise noted.
 | Alias | Expands to |
 |---|---|
 | `decompress` | `tar -xzvf` |
+| `got` | `gti` |
+| `gut` | `gti` |
 | `la` | `eza -la --group-directories-first --icons=auto --git` |
 | `laptop-docs` | `$HOME/.local/bin/laptop-docs` |
 | `ll` | `eza -l --group-directories-first --icons=auto --git` |

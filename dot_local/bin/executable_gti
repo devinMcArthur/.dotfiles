@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# gti — you meant `git`. A car drives past, then git runs anyway.
+#
+# The good half of the joke is the second half: sl punishes a typo by
+# making you wait, but gti gets on with the work once the car has gone.
+# Also answers to `got` and `gut` (see .zshrc).
+#
+# Silent and instant when stdout is not a terminal, so scripts and pipes
+# that somehow call this are unaffected.
+
+set -uo pipefail
+
+drive() {
+  [ -t 1 ] || return 0
+  command -v tput >/dev/null 2>&1 || return 0
+
+  local cols car w x pad line
+  cols=$(tput cols 2>/dev/null || echo 80)
+  car=(
+    '     ____'
+    ' ___/  | \___'
+    '|__(o)___(o)__|'
+  )
+  w=16
+
+  printf '\n\n\n'                      # room to draw in
+  for (( x = -w; x < cols; x += 4 )); do
+    printf '\033[3A'                   # back to the top of the sprite
+    for line in "${car[@]}"; do
+      if (( x < 0 )); then
+        pad=""
+        line="${line:$(( -x ))}"       # drive in from off-screen left
+      else
+        printf -v pad '%*s' "$x" ''
+      fi
+      printf '\033[2K%s%s\n' "$pad" "${line:0:cols}"
+    done
+    sleep 0.03
+  done
+  printf '\033[3A\033[J'               # tidy up after it leaves
+}
+
+drive
+exec git "$@"
