@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-29T10:25:42-06:00_
+_Generated 2026-08-29T10:33:09-06:00_
 
 ## Hyprland — window manager
 
@@ -40,10 +40,7 @@ _Generated 2026-08-29T10:25:42-06:00_
 | `SUPER + comma` | `focusmonitor` | desc:Acer Technologies KA272 0x13800DD9 |
 | `SUPER + CTRL + comma` | `movecurrentworkspacetomonitor` | desc:Acer Technologies KA272 0x13800DD9 |
 | `SUPER + CTRL + E` | `exec` | wofi-emoji                                    # emoji picker |
-| `SUPER + CTRL + L` | `exec` | claude-tts read-last                             # claude voice: read this session's last reply |
-| `SUPER + CTRL + N` | `exec` | claude-tts skip                                  # claude voice: skip this message |
 | `SUPER + CTRL + period` | `movecurrentworkspacetomonitor` | desc:Acer Technologies KA272 0x13800FAE |
-| `SUPER + CTRL + P` | `exec` | claude-tts pause                                 # claude voice: pause/resume |
 | `SUPER + CTRL + R` | `exec` | $HOME/.local/bin/hypr-remind                  # set a reminder |
 | `SUPER + CTRL + S` | `exec` | dms ipc call quickCapture screenshot output edit  # screenshot monitor → annotate |
 | `SUPER + CTRL + SHIFT + SPACE` | `exec` | $HOME/.local/bin/theme menu                            # theme switcher menu |
@@ -53,6 +50,9 @@ _Generated 2026-08-29T10:25:42-06:00_
 | `SUPER + E` | `exec` | $fileManager # Show the graphical file browser |
 | `SUPER + escape` | `exec` | $lock                                           # lock the screen |
 | `SUPER + F1` | `exec` | $HOME/.local/bin/hypr-cheatsheet                                      # show keybind cheatsheet |
+| `SUPER + F4` | `exec` | claude-tts read-last                                 # claude voice: read this session's last reply |
+| `SUPER + F5` | `exec` | claude-tts pause                                     # claude voice: pause/resume |
+| `SUPER + F6` | `exec` | claude-tts skip                                      # claude voice: skip this message |
 | `SUPER + F` | `fullscreen` | — |
 | `SUPER + grave` | `togglespecialworkspace` | scratch |
 | `SUPER + h` | `movefocus` | l |
@@ -102,6 +102,10 @@ _Generated 2026-08-29T10:25:42-06:00_
 | `SUPER + V` | `exec` | cliphist-menu                                        # clipboard history |
 | `SUPER + W` | `exec` | $HOME/.local/bin/win # smart launcher for the win11 KVM VM (starts + attaches virt-viewer) |
 | `SUPER + X` | `exec` | $HOME/.local/bin/dictate toggle                       # dictation: toggle record/transcribe |
+| `SUPER + XF86AudioMute` | `exec` | claude-tts toggle                         # claude voice: mute + clear queue |
+| `SUPER + XF86AudioNext` | `exec` | claude-tts skip                           # claude voice: skip this message |
+| `SUPER + XF86AudioPlay` | `exec` | claude-tts pause                          # claude voice: pause/resume |
+| `SUPER + XF86AudioPrev` | `exec` | claude-tts read-last                      # claude voice: read this session's last reply |
 | `SUPER + Y` | `layoutmsg` | togglesplit # dwindle |
 | `up` | `resizeactive` | 0 -10 |
 | `XF86AudioLowerVolume` | `exec` | wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- |

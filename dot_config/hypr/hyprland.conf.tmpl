@@ -324,15 +324,26 @@ bind = $mainMod ALT, C, exec, $HOME/.local/bin/ghostty-crt toggle          # ter
 # Voice pill flips. Muting now CLEARS: it stops the sentence in the air
 # and cancels everything queued behind it, which is what "be quiet" means
 # — hushing alone just let the next waiter take its turn.
+# On the media row, one modifier up: bare keys drive system audio, Super
+# drives Claude's voice. The legends already say what each one does —
+# mute, back, play/pause, next — and they mean the same thing here.
+#
+# The KEYSYMS, not F1-F6: this top row emits XF86Audio* (see the bare
+# binds further down), so Super+F1 would need Fn held — and Super+F1 is
+# the cheatsheet anyway.
+bind = SUPER, XF86AudioMute, exec, claude-tts toggle                         # claude voice: mute + clear queue
+bind = SUPER, XF86AudioPlay, exec, claude-tts pause                          # claude voice: pause/resume
+bind = SUPER, XF86AudioNext, exec, claude-tts skip                           # claude voice: skip this message
+bind = SUPER, XF86AudioPrev, exec, claude-tts read-last                      # claude voice: read this session's last reply
+
+# Same four for a keyboard with Fn-lock on, where the row sends F1-F6.
+# F1 is deliberately absent: it is the cheatsheet.
+bind = SUPER, F5, exec, claude-tts pause                                     # claude voice: pause/resume
+bind = SUPER, F6, exec, claude-tts skip                                      # claude voice: skip this message
+bind = SUPER, F4, exec, claude-tts read-last                                 # claude voice: read this session's last reply
+
+# Kept as the mute alternative, since Super+F1 is taken by the cheatsheet.
 bind = SUPER CTRL, V, exec, claude-tts toggle                                # claude voice: mute + clear queue
-# Pause holds the audio exactly where it is (the player is stopped, not
-# killed), so it resumes mid-word with nothing to re-synthesize.
-bind = SUPER CTRL, P, exec, claude-tts pause                                 # claude voice: pause/resume
-# Skip ends this message only; whatever was queued still gets its turn.
-bind = SUPER CTRL, N, exec, claude-tts skip                                  # claude voice: skip this message
-# Read the last reply of the session you are sitting in — for when you
-# looked away, or want to hear it again without waiting for the next one.
-bind = SUPER CTRL, L, exec, claude-tts read-last                             # claude voice: read this session's last reply
 
 # Type an instruction instead of speaking it: same grammar, same local
 # model, same allowlist as the voice commands (see voice-control).
