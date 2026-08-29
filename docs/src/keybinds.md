@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-28T20:31:00-06:00_
+_Generated 2026-08-29T10:25:42-06:00_
 
 ## Hyprland — window manager
 
@@ -40,12 +40,15 @@ _Generated 2026-08-28T20:31:00-06:00_
 | `SUPER + comma` | `focusmonitor` | desc:Acer Technologies KA272 0x13800DD9 |
 | `SUPER + CTRL + comma` | `movecurrentworkspacetomonitor` | desc:Acer Technologies KA272 0x13800DD9 |
 | `SUPER + CTRL + E` | `exec` | wofi-emoji                                    # emoji picker |
+| `SUPER + CTRL + L` | `exec` | claude-tts read-last                             # claude voice: read this session's last reply |
+| `SUPER + CTRL + N` | `exec` | claude-tts skip                                  # claude voice: skip this message |
 | `SUPER + CTRL + period` | `movecurrentworkspacetomonitor` | desc:Acer Technologies KA272 0x13800FAE |
+| `SUPER + CTRL + P` | `exec` | claude-tts pause                                 # claude voice: pause/resume |
 | `SUPER + CTRL + R` | `exec` | $HOME/.local/bin/hypr-remind                  # set a reminder |
 | `SUPER + CTRL + S` | `exec` | dms ipc call quickCapture screenshot output edit  # screenshot monitor → annotate |
 | `SUPER + CTRL + SHIFT + SPACE` | `exec` | $HOME/.local/bin/theme menu                            # theme switcher menu |
 | `SUPER + CTRL + slash` | `movecurrentworkspacetomonitor` | eDP-1 |
-| `SUPER + CTRL + V` | `exec` | claude-tts toggle                                # claude voice: mute/unmute |
+| `SUPER + CTRL + V` | `exec` | claude-tts toggle                                # claude voice: mute + clear queue |
 | `SUPER + D` | `exec` | ghostty --title=devbox -e $HOME/.local/bin/devbox        # remote dev box (herdr) |
 | `SUPER + E` | `exec` | $fileManager # Show the graphical file browser |
 | `SUPER + escape` | `exec` | $lock                                           # lock the screen |

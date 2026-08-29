@@ -40,6 +40,18 @@ OFF="$STATE/off"
 # left for this to guard is a genuinely hung player.
 WAIT_MAX=1200   # 10 minutes
 
+# Speech that has not started yet lives in detached waiters, not in a
+# list — so "shut up and forget the rest" cannot be done by killing a
+# queue. Each waiter records the generation it was spawned in and checks
+# it again before speaking; `clear` bumps the generation and every
+# pending waiter quietly gives up. No pattern-matching processes, which
+# is the trap that keeps killing the wrong thing.
+GEN="$STATE/gen"
+PAUSED="$STATE/paused"
+gen() { cat "$GEN" 2>/dev/null || echo 0; }
+bump_gen() { mkdir -p "$STATE"; printf '%s' "$(( $(gen) + 1 ))" > "$GEN"; }
+stale() { [ "$(gen)" != "$1" ]; }
+
 # voxtype writes "idle" or "recording" here; voxtype-autostop polls the
 # same file. Speaking while the mic is hot is doubly wrong: it talks over
 # the user, and whisper transcribes our own voice back into their input.
@@ -105,11 +117,38 @@ hooklog() {   # event outcome id
 # footgun: "claude-tts/en_US" and "pw-cat -p --raw" match any process whose
 # command line merely MENTIONS them — including a shell testing this script,
 # which is exactly how it kept killing test runs (exit 144).
+# SIGSTOP the player rather than killing it: pw-cat stops consuming and
+# the audio holds exactly where it is, so CONT resumes mid-word. Nothing
+# to re-synthesize and no position to track.
+pause_speech() {
+  local f pg n=0
+  for f in "$STATE"/pgids/*; do
+    [ -e "$f" ] || continue
+    pg="${f##*/}"
+    kill -STOP -"$pg" 2>/dev/null && n=$((n+1))
+  done
+  [ "$n" -gt 0 ] && : > "$PAUSED"
+  return 0
+}
+
+resume_speech() {
+  local f pg
+  for f in "$STATE"/pgids/*; do
+    [ -e "$f" ] || continue
+    pg="${f##*/}"
+    kill -CONT -"$pg" 2>/dev/null
+  done
+  rm -f "$PAUSED"
+  return 0
+}
+
 hush() {
   local f pg
   for f in "$STATE"/pgids/*; do
     [ -e "$f" ] || continue
     pg="${f##*/}"
+    # CONT first: a SIGSTOPped group never processes the TERM.
+    kill -CONT -"$pg" 2>/dev/null
     kill -TERM -"$pg" 2>/dev/null
     rm -f "$f"
   done
@@ -167,6 +206,7 @@ say_text() {
     # is worse than no remainder.
     printf '%s' "$(( $(cat "$STATE/seq" 2>/dev/null || echo 0) + 1 ))" > "$STATE/seq"
     printf '%s' "$1" > "$STATE/current-text"
+    printf '%s' "$1" > "$STATE/last-text"
     setsid -f env TTS_TEXT="$1" TTS_VOICE="${VOICE#kokoro-}" KOKORO="$KOKORO" \
       STATE="$STATE" KOKORO_PROGRESS="$STATE/progress" \
       KOKORO_FROM_UNIT="${TTS_FROM_UNIT:-0}" bash -c '
@@ -278,6 +318,7 @@ case "${1:-hook}" in
     # into an already-voiced message. Messages queue rather than chop each
     # other off; the lock keeps two waiters from talking over each other.
     ev="$2"; tp="$3"
+    mygen="$(gen)"
     deadline=$(( $(date +%s) + 60 ))
     while [ "$(date +%s)" -lt "$deadline" ]; do
       entry="$(last_entry "$tp")"
@@ -289,6 +330,8 @@ case "${1:-hook}" in
         if [ "$uuid" != "$prev_uuid" ] && { [ -z "$prev_ts" ] || [[ "$ts" > "$prev_ts" ]]; }; then
           (
             flock 9
+            # Cleared while we waited: this message is no longer wanted.
+            stale "$mygen" && exit 0
             # Re-check under the lock: another waiter may have claimed it.
             if [ "$uuid" != "$(cat "$STATE/last-uuid" 2>/dev/null)" ]; then
               printf '%s' "$uuid" > "$STATE/last-uuid"
@@ -312,7 +355,9 @@ case "${1:-hook}" in
   _queued)
     # Detached tail of announce(): wait out any speech, then say it.
     ev="$2"; say="$3"
+    mygen="$(gen)"
     w=0; while speaking && [ "$w" -lt "$WAIT_MAX" ]; do sleep 0.5; w=$((w+1)); done
+    stale "$mygen" && exit 0
     hooklog "$ev" spoke "queued"
     say_text "$say"
     ;;
@@ -338,7 +383,7 @@ case "${1:-hook}" in
     esac
     ;;
   on)     rm -f "$OFF"; echo "claude-tts: enabled" ;;
-  off)    touch "$OFF"; hush; echo "claude-tts: disabled" ;;
+  off)    touch "$OFF"; bump_gen; hush; echo "claude-tts: disabled" ;;
   toggle)
     if [ -e "$OFF" ]; then
       rm -f "$OFF"
@@ -351,6 +396,54 @@ case "${1:-hook}" in
     fi
     ;;
   stop)   hush ;;
+  clear)
+    # Silence now AND forget what was lined up. hush alone only ends the
+    # sentence in the air; the waiters behind it would each take their
+    # turn, which is what made muting feel like it did nothing.
+    bump_gen
+    hush
+    rm -f "$STATE/resume-at" "$STATE/resume-text" "$PAUSED"
+    echo "claude-tts: cleared"
+    ;;
+  pause)
+    # Toggle. A pause that needs a different key to undo is a pause you
+    # will forget you pressed.
+    if [ -e "$PAUSED" ]; then resume_speech; echo "claude-tts: resumed"
+    else pause_speech; [ -e "$PAUSED" ] && echo "claude-tts: paused" || echo "claude-tts: nothing playing"; fi
+    ;;
+  skip)
+    # End this message, keep the rest: the generation is untouched, so
+    # whatever was waiting still gets its turn.
+    resume_speech
+    hush
+    echo "claude-tts: skipped"
+    ;;
+  replay)
+    # Say the last thing again, whatever it was.
+    [ -s "$STATE/last-text" ] || { echo "nothing spoken yet" >&2; exit 1; }
+    hush
+    say_text "$(cat "$STATE/last-text")"
+    ;;
+  read-last)
+    # Read the final assistant message of the session you are sitting in.
+    # The focused herdr pane knows which conversation that is, and the
+    # transcript is findable by its session id alone — no need to
+    # reconstruct the project directory's mangled name.
+    sid="$(herdr agent list 2>/dev/null | jq -r '
+      .result.agents[] | select(.focused == true) | .agent_session.value // empty' 2>/dev/null | head -1)"
+    if [ -z "$sid" ]; then
+      echo "no focused agent — is this a herdr pane?" >&2; exit 1
+    fi
+    tp="$(ls -1 "$HOME"/.claude/projects/*/"$sid".jsonl 2>/dev/null | head -1)"
+    [ -n "$tp" ] || { echo "no transcript for session $sid (a remote agent?)" >&2; exit 1; }
+    entry="$(last_entry "$tp")"
+    [ -n "$entry" ] || { echo "no assistant message to read" >&2; exit 1; }
+    text="$(printf '%s' "${entry#*$'\t'}" | cut -f2- )"
+    spoken="$(printf '%s' "$text" | clean_md)"
+    [ -n "${spoken//[[:space:]]/}" ] || { echo "nothing readable" >&2; exit 1; }
+    hush
+    say_text "$spoken"
+    ;;
   status)
     [ -e "$OFF" ] && echo "speech: disabled" || echo "speech: enabled"
     if [ "$(engine)" = kokoro ]; then

@@ -320,9 +320,19 @@ bind = SUPER SHIFT, X, exec, $HOME/.local/bin/dictate cancel                 # d
 # rather than the default (see ghostty-crt).
 bind = $mainMod ALT, C, exec, $HOME/.local/bin/ghostty-crt toggle          # terminal: CRT shader on/off
 
-# Claude Code spoken replies (claude-tts, local piper TTS): mute/unmute.
-# Same flag the bar's Claude Voice pill flips; muting cuts speech mid-word.
-bind = SUPER CTRL, V, exec, claude-tts toggle                                # claude voice: mute/unmute
+# Claude Code spoken replies (claude-tts). Same flag the bar's Claude
+# Voice pill flips. Muting now CLEARS: it stops the sentence in the air
+# and cancels everything queued behind it, which is what "be quiet" means
+# — hushing alone just let the next waiter take its turn.
+bind = SUPER CTRL, V, exec, claude-tts toggle                                # claude voice: mute + clear queue
+# Pause holds the audio exactly where it is (the player is stopped, not
+# killed), so it resumes mid-word with nothing to re-synthesize.
+bind = SUPER CTRL, P, exec, claude-tts pause                                 # claude voice: pause/resume
+# Skip ends this message only; whatever was queued still gets its turn.
+bind = SUPER CTRL, N, exec, claude-tts skip                                  # claude voice: skip this message
+# Read the last reply of the session you are sitting in — for when you
+# looked away, or want to hear it again without waiting for the next one.
+bind = SUPER CTRL, L, exec, claude-tts read-last                             # claude voice: read this session's last reply
 
 # Type an instruction instead of speaking it: same grammar, same local
 # model, same allowlist as the voice commands (see voice-control).
