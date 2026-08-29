@@ -44,16 +44,44 @@ case "$hex" in
   *) echo "no usable accent colour (got '${hex:-}')" >&2; exit 1 ;;
 esac
 
-r=$((16#${hex:0:2})); g=$((16#${hex:2:2})); b=$((16#${hex:4:2}))
-# Scale to the channel max so the hue survives; brightness does the dimming.
-max=$(( r > g ? (r > b ? r : b) : (g > b ? g : b) ))
-[ "$max" -gt 0 ] || max=1
-r=$(( r * 100 / max )); g=$(( g * 100 / max )); b=$(( b * 100 / max ))
+# ONE channel only. The LED is a six-colour picker, not an RGB mixer:
+# with several channels lit it collapses to blue regardless of the
+# weights (observed — an amber accent of "100 61 5" came out blue). A
+# channel sweep confirmed all six work individually, so the job is to
+# choose the nearest, not to blend.
+#
+# Hue bands rather than RGB distance, with a saturation floor for white:
+# a pale accent like rose-pine's #ebbcba is nearer white than red, and
+# RGB distance gets that wrong.
+chan="$(python3 -c "
+import colorsys, sys
+r, g, b = (int('$hex'[i:i+2], 16) / 255 for i in (0, 2, 4))
+h, s, v = colorsys.rgb_to_hsv(r, g, b)
+deg = h * 360
+if s < 0.25:
+    print('white')
+elif deg < 20 or deg >= 340: print('red')
+elif deg < 40:  print('amber')     # matte-black calls its accent amber
+elif deg < 75:  print('yellow')
+elif deg < 160: print('green')
+elif deg < 280: print('blue')
+else:           print('red')
+")"
+
+# multi_index order: red green blue yellow white amber
+case "$chan" in
+  red)    vals="100 0 0 0 0 0" ;;
+  green)  vals="0 100 0 0 0 0" ;;
+  blue)   vals="0 0 100 0 0 0" ;;
+  yellow) vals="0 0 0 100 0 0" ;;
+  white)  vals="0 0 0 0 100 0" ;;
+  amber)  vals="0 0 0 0 0 100" ;;
+  *)      vals="0 0 0 0 100 0" ;;
+esac
 
 # The EC's own trigger repaints this LED on every charge event, so it has
 # to be released before a colour will stick.
 printf 'none' > "$LED/trigger" 2>/dev/null || true
-# multi_index order: red green blue yellow white amber
-printf '%d %d %d 0 0 0' "$r" "$g" "$b" > "$LED/multi_intensity"
+printf '%s' "$vals" > "$LED/multi_intensity"
 printf '%d' "$LEVEL" > "$LED/brightness"
-echo "status LED: #$hex  (r=$r g=$g b=$b @ $LEVEL%)"
+echo "status LED: #$hex -> $chan @ ${LEVEL}%"
