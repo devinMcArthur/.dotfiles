@@ -33,8 +33,9 @@ if not addr:
 p = os.path.expanduser("~/.ssh/config")
 s = open(p).read() if os.path.exists(p) else ""
 block = ("Host devbox\n"
-         "    # Written by `devbox host` — herdr-mirror addresses the box\n"
-         "    # by this alias, so its config never needs editing.\n"
+         "    # Written by `devbox host`. Prefer the tailnet name/IP: the\n"
+         "    # Hetzner firewall admits one source IP, so a public address\n"
+         "    # here breaks every time this laptop's IP changes.\n"
          f"    HostName {addr}\n"
          f"    User {user}\n"
          "    ServerAliveInterval 20\n"

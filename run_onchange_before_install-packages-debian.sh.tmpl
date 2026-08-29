@@ -65,6 +65,16 @@ fi
 # Cluster tooling. Installed WITHOUT credentials: a rented box gets the
 # binaries so `doctl auth init` / `aws configure` are one interactive
 # step away, but nothing that reaches production is planted here.
+# Tailscale. Installed but NOT authenticated — `tailscale up --ssh` is an
+# interactive step, deliberately. It is how this box is reached: the
+# Hetzner firewall admits exactly one source IP, and a changing laptop or
+# phone address locked the box out three times on 2026-08-28 alone.
+# Over the tailnet the address stops mattering entirely.
+if ! command -v tailscale >/dev/null 2>&1; then
+  curl -fsSL https://tailscale.com/install.sh | sudo sh >/dev/null 2>&1 \
+    && echo "    tailscale $(tailscale version 2>/dev/null | head -1) installed (run: sudo tailscale up --ssh)"
+fi
+
 # kubectl comes from the Kubernetes apt repo rather than minikube's
 # bundled copy — the box should be able to reach a real cluster even with
 # no local cluster installed.
