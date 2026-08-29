@@ -316,6 +316,10 @@ bind = $mainMod CTRL, R, exec, $HOME/.local/bin/hypr-remind                  # s
 bind = SUPER, X, exec, $HOME/.local/bin/dictate toggle                       # dictation: toggle record/transcribe
 bind = SUPER SHIFT, X, exec, $HOME/.local/bin/dictate cancel                 # dictation: discard recording
 
+# Terminal phosphor. Purely a mood — costs GPU per frame, so it is opt-in
+# rather than the default (see ghostty-crt).
+bind = $mainMod ALT, C, exec, $HOME/.local/bin/ghostty-crt toggle          # terminal: CRT shader on/off
+
 # Claude Code spoken replies (claude-tts, local piper TTS): mute/unmute.
 # Same flag the bar's Claude Voice pill flips; muting cuts speech mid-word.
 bind = SUPER CTRL, V, exec, claude-tts toggle                                # claude voice: mute/unmute

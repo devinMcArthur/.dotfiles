@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# fun — the toy drawer.
+#
+#   fun            # something at random
+#   fun say [txt]  # a cow says a fortune (or whatever you give it)
+#   fun matrix     # it's raining green
+#   fun train      # the consequence of typing sl
+#   fun pipes      # screensaver pipes
+#
+# Deliberately a command rather than something wired into shell startup:
+# a fortune on every new prompt stops being charming after about a day,
+# and these panes are where real work happens.
+
+set -uo pipefail
+
+have() { command -v "$1" >/dev/null 2>&1; }
+missing() { echo "not installed: $1 (chezmoi apply installs the toy pack)" >&2; exit 1; }
+
+colour() { have lolcat && lolcat || cat; }
+
+say() {
+  local text="${*:-}"
+  if [ -z "$text" ]; then
+    have fortune && text="$(fortune -s)" || text="Everything is fine."
+  fi
+  if have cowsay; then
+    # A different cow each time, from whichever ones this box actually has.
+    local cows cow
+    mapfile -t cows < <(cowsay -l | tail -n +2 | tr ' ' '\n' | grep -v '^$')
+    cow="${cows[RANDOM % ${#cows[@]}]}"
+    printf '%s' "$text" | cowsay -f "$cow" | colour
+  else
+    printf '%s\n' "$text" | colour
+  fi
+}
+
+case "${1:-random}" in
+  say)    shift; say "$@" ;;
+  matrix) have cmatrix || missing cmatrix; cmatrix -ab -u 8 ;;
+  train)  have sl || missing sl; sl -e ;;
+  pipes)  have pipes.sh && pipes.sh -t 1 -R -p 3 || missing "pipes.sh (AUR)" ;;
+  random)
+    pick=$((RANDOM % 3))
+    case "$pick" in
+      0) say ;;
+      1) have cmatrix && cmatrix -ab -u 8 || say ;;
+      2) have sl && sl -e || say ;;
+    esac
+    ;;
+  *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

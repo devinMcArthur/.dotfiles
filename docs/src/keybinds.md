@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-28T16:40:11-06:00_
+_Generated 2026-08-28T20:22:46-06:00_
 
 ## Hyprland — window manager
 
@@ -29,6 +29,7 @@ _Generated 2026-08-28T16:40:11-06:00_
 | `SUPER + 8` | `workspace` | 8 |
 | `SUPER + 9` | `workspace` | 9 |
 | `SUPER + A` | `exec` | $HOME/.local/bin/hypr-agent # AI agent scratchpad (dropdown claude) |
+| `SUPER + ALT + C` | `exec` | $HOME/.local/bin/ghostty-crt toggle          # terminal: CRT shader on/off |
 | `SUPER + ALT + S` | `exec` | $HOME/.local/bin/hypr-record region            # record region (press again to stop) |
 | `SUPER + ALT + SHIFT + S` | `exec` | $HOME/.local/bin/hypr-record output      # record monitor (press again to stop) |
 | `SUPER + ALT + V` | `exec` | cliphist wipe                                    # wipe clipboard history |

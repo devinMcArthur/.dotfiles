@@ -9,6 +9,12 @@
 set -euo pipefail
 
 PACMAN_PKGS=(
+  # Toys. Not useful, and that is the point — a machine you live in
+  # should have some. sl is the load-bearing one: it prints a steam
+  # train when you typo `ls`, which is a better error message than any
+  # correction prompt.
+  sl cmatrix fortune-mod cowsay lolcat
+
   # Shell & prompt
   zsh starship
 
@@ -184,6 +190,8 @@ PACMAN_PKGS=(
 )
 
 AUR_PKGS=(
+  pipes.sh   # screensaver pipes, for `fun pipes`
+
   1password
 
   # zsh plugin manager (note: distinct from the unrelated French app 'antidote')

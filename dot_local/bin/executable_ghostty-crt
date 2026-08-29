@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# ghostty-crt — turn the terminal into a CRT, and back.
+#
+#   ghostty-crt [on|off|toggle]     # default: toggle
+#
+# Ghostty has no runtime shader switch, so this writes an optional include
+# (crt.conf, pulled in by the main config) and then asks every open window
+# to reload. Reload is a keybinding, not a signal — there is no SIGUSR2 —
+# so the shortcut is delivered per window via hyprctl.
+#
+# A mood you opt into: the shader costs GPU on every frame, which is not
+# something a laptop should pay for by default.
+
+set -uo pipefail
+
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/crt.conf"
+SHADER="${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/crt.glsl"
+
+on() {
+  # animation off: the shader ignores iTime, so redrawing continuously
+  # would drain battery to render an identical frame.
+  cat > "$CONF" <<CONF
+custom-shader = $SHADER
+custom-shader-animation = false
+CONF
+}
+off() { : > "$CONF"; }
+
+enabled() { grep -q '^custom-shader' "$CONF" 2>/dev/null; }
+
+reload_all() {
+  command -v hyprctl >/dev/null 2>&1 || return 0
+  hyprctl -j clients 2>/dev/null \
+    | python3 -c '
+import json, sys
+for c in json.load(sys.stdin):
+    if "ghostty" in (c.get("class") or "").lower():
+        print(c["address"])
+' | while read -r addr; do
+    hyprctl dispatch sendshortcut "CTRL SHIFT, comma, address:$addr" >/dev/null 2>&1
+  done
+}
+
+mkdir -p "${CONF%/*}"
+case "${1:-toggle}" in
+  on)     on ;;
+  off)    off ;;
+  toggle) enabled && off || on ;;
+  *)      sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
+
+reload_all
+state=$(enabled && echo "on" || echo "off")
+command -v notify-send >/dev/null 2>&1 \
+  && notify-send -t 1500 "Ghostty CRT" "phosphor $state" || echo "CRT $state"

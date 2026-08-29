@@ -6,3 +6,8 @@ theme = {{ .theme.ghostty }}
 background-opacity=0.8
 window-decoration=false
 confirm-close-surface=false
+
+# Optional include, written by `ghostty-crt` (Super+Alt+C). The leading ?
+# means "load if present" — with the CRT off the file is empty and this
+# line costs nothing.
+config-file = ?crt.conf
