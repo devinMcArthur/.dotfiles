@@ -134,31 +134,55 @@ PluginComponent {
                 anchors.margins: Theme.spacingL
                 spacing: Theme.spacingM
 
-                Repeater {
-                    model: [
-                        { icon: "network_ping", label: "Ping", value: root.ping },
-                        { icon: "arrow_downward", label: "Download", value: root.down },
-                        { icon: "arrow_upward", label: "Upload", value: root.up }
-                    ]
-                    delegate: Row {
-                        required property var modelData
-                        spacing: Theme.spacingS
-                        DankIcon {
-                            name: parent.modelData.icon
-                            size: 18
-                            color: Theme.primary
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                        StyledText {
-                            text: parent.modelData.label + ":  "
-                            color: Theme.surfaceVariantText
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                        StyledText {
-                            text: parent.modelData.value
-                            color: Theme.surfaceText
-                            font.weight: Font.Bold
-                            anchors.verticalCenter: parent.verticalCenter
+                // The three numbers ARE the content, so they are set as a
+                // readout rather than listed as rows: big, in the terminal's
+                // own face, with the unit demoted to a caption. Download
+                // carries the accent because it is the one people came for.
+                Row {
+                    width: parent.width
+
+                    Repeater {
+                        model: [
+                            { label: "download", value: root.down, lead: true },
+                            { label: "upload", value: root.up, lead: false },
+                            { label: "ping", value: root.ping, lead: false }
+                        ]
+
+                        Column {
+                            required property var modelData
+                            width: parent.width / 3
+                            spacing: 2
+
+                            // Number and unit are separated so the figures
+                            // line up and can be compared at a glance; the
+                            // unit is the same on two of the three and does
+                            // not deserve the same weight as the value.
+                            Row {
+                                spacing: 3
+
+                                StyledText {
+                                    text: parent.parent.modelData.value.split(" ")[0]
+                                    color: parent.parent.modelData.lead ? Theme.primary : Theme.surfaceText
+                                    font.family: "JetBrainsMono Nerd Font"
+                                    font.pixelSize: Theme.fontSizeSmall + 7
+                                    font.weight: Font.Bold
+                                }
+
+                                StyledText {
+                                    text: parent.parent.modelData.value.split(" ").slice(1).join(" ")
+                                    color: Theme.surfaceVariantText
+                                    font.family: "JetBrainsMono Nerd Font"
+                                    font.pixelSize: Theme.fontSizeSmall - 1
+                                    anchors.bottom: parent.bottom
+                                    anchors.bottomMargin: 3
+                                }
+                            }
+
+                            StyledText {
+                                text: parent.modelData.label
+                                color: Theme.surfaceVariantText
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                            }
                         }
                     }
                 }
@@ -176,7 +200,9 @@ PluginComponent {
                     visible: root.lastRun !== ""
                     text: (root.testing ? "started " : "last run ") + root.lastRun
                     color: Theme.surfaceVariantText
-                    font.pixelSize: Theme.fontSizeSmall
+                    font.family: "JetBrainsMono Nerd Font"
+                    font.pixelSize: Theme.fontSizeSmall - 1
+                    opacity: 0.7
                 }
 
                 // Per-network ledger (current network first, then the rest).
