@@ -28,6 +28,9 @@ close_remote_on_local_close = false
 # alias pointing at the right place, so this file never needs editing.
 target        = "devbox"
 prefix        = "box"
-remote_bin    = "/home/dev/.local/bin/herdr"
+# A shim, not herdr itself: it adds --takeover to control streams. The
+# plugin never passes it, so after a dropped connection the dead client
+# keeps the pane and this end is stuck read-only. See herdr-mirror-shim.
+remote_bin    = "/home/dev/.local/bin/herdr-mirror-shim"
 enabled       = true
 api_transport = "auto"   # ssh -L socket forward, falling back to socat/python3

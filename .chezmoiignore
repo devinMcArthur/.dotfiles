@@ -76,6 +76,7 @@ openai_api.txt.gpg
 .config/systemd/user/herdr-reap-stale.timer
 .local/bin/attach
 .local/bin/herdr-reap-stale
+.local/bin/herdr-mirror-shim
 {{ end }}
 
 {{ if ne .chezmoi.osRelease.id "arch" }}

@@ -1,0 +1,25 @@
+#!/bin/sh
+# herdr-mirror-shim — herdr, with --takeover on control streams.
+#
+# Runs on the dev box as herdr-mirror's `remote_bin`. The plugin invokes
+#   herdr terminal session control <pane> --cols N --rows N
+# and never passes --takeover, so after a dropped connection the previous
+# control holder still owns the pane. Tailscale SSH does not reap a
+# session whose client vanished, so that holder can sit there for days,
+# and the reconnected mirror is refused and falls back to read-only:
+# "client is already connected", with nothing visible holding it.
+#
+# A control stream is exclusive by definition — one client types. So a
+# NEW control request is always the one that should win; the alternative
+# is a pane nobody can use. Observe streams are left alone: many can
+# coexist, and there is nothing to take.
+#
+# Reversible: point remote_bin back at herdr in hosts.toml.
+
+HERDR="$HOME/.local/bin/herdr"
+
+if [ "$1" = "terminal" ] && [ "$2" = "session" ] && [ "$3" = "control" ]; then
+  exec "$HERDR" "$@" --takeover
+fi
+
+exec "$HERDR" "$@"
