@@ -63,22 +63,22 @@ def main():
         if key not in newest or start > newest[key][1]:
             newest[key] = (pid, start)
 
-    killed = 0
+    doomed = 0
     for pid, mode, pane, ppid, start in found:
         keep = KEEP_NEWEST and newest[(mode, pane)][0] == pid and ppid != 1
         if keep:
             continue
+        doomed += 1
         why = "orphaned" if ppid == 1 else "superseded"
         print(f"  {why:11} {mode:8} {pane:8} pid {pid}")
         if not dry:
             try:
                 os.kill(pid, 9)
-                killed += 1
             except OSError:
                 pass
 
-    live = len(found) - killed
-    print(f"{'would reap' if dry else 'reaped'} {len(found) - live} of {len(found)}; {live} left")
+    verb = "would reap" if dry else "reaped"
+    print(f"{verb} {doomed} of {len(found)}; {len(found) - doomed} attach sessions remain")
     return 0
 
 
