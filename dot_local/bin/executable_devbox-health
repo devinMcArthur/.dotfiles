@@ -151,7 +151,12 @@ if [ "${1:-}" = notify ]; then
     printf '%s' "$state|$detail" > "$STATE_DIR/state"
     case "$state" in
       ok)
-        [ -n "$prev" ] && notify-send -a "Dev box" -t 4000 "Dev box reachable" "$detail"
+        # Only announce coming back from something you were ASKED to fix.
+        # Recovering from an outage needs no announcement, because the
+        # outage itself is no longer announced (below).
+        case "$prev" in
+          warn*) notify-send -a "Dev box" -t 4000 "Dev box ready" "$detail" ;;
+        esac
         # Coming back from unreachable is exactly when the box is holding
         # corpses: every dropped connection leaves an attach behind, and
         # Tailscale SSH never reaps them, so the pane you are trying to
@@ -164,8 +169,15 @@ if [ "${1:-}" = notify ]; then
                '$HOME/.local/bin/herdr-reap-stale' >/dev/null 2>&1 || true ;;
         esac
         ;;
-      warn)  notify-send -a "Dev box" -u normal   -t 8000 "Dev box needs you" "$detail" ;;
-      error) notify-send -a "Dev box" -u critical -t 8000 "Dev box unreachable" "$detail" ;;
+      # warn means something wants a human: re-authenticate, a key about to
+      # expire, a locked vault. Worth interrupting for.
+      warn)  notify-send -a "Dev box" -u normal -t 8000 "Dev box needs you" "$detail" ;;
+      # error is NOT announced. On a laptop that roams, the box being
+      # briefly unreachable is ordinary and self-healing — the link drops
+      # and comes back — and a critical popup for each one teaches you to
+      # dismiss the app, which costs the notifications that do matter. The
+      # pill still carries the state, and the reap on recovery still runs.
+      error) : ;;
     esac
   fi
 fi
