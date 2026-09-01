@@ -2,11 +2,12 @@
 Description=Periodically drop herdr attach sessions with no client
 
 [Timer]
-# Ten minutes: long enough to be invisible, short enough that a pane is
-# never stuck for a whole working session. Only the newest attach per
+# Two minutes. Orphans appear on every dropped connection and each one
+# can block a reconnect, so the window where a pane is unusable should be
+# shorter than the time it takes to notice and ask. Only the newest attach per
 # pane survives, so a live client is never the one reaped.
-OnBootSec=5min
-OnUnitActiveSec=10min
+OnBootSec=2min
+OnUnitActiveSec=2min
 
 [Install]
 WantedBy=timers.target

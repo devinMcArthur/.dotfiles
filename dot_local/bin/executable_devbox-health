@@ -150,7 +150,20 @@ if [ "${1:-}" = notify ]; then
   if [ "$state|$detail" != "$prev" ]; then
     printf '%s' "$state|$detail" > "$STATE_DIR/state"
     case "$state" in
-      ok)    [ -n "$prev" ] && notify-send -a "Dev box" -t 4000 "Dev box reachable" "$detail" ;;
+      ok)
+        [ -n "$prev" ] && notify-send -a "Dev box" -t 4000 "Dev box reachable" "$detail"
+        # Coming back from unreachable is exactly when the box is holding
+        # corpses: every dropped connection leaves an attach behind, and
+        # Tailscale SSH never reaps them, so the pane you are trying to
+        # rejoin refuses with "client is already connected". Clear them at
+        # the moment the link returns, rather than on a timer that fires
+        # long after you have tried and failed.
+        case "$prev" in
+          ok\|*) ;;
+          *) ssh -o BatchMode=yes -o ConnectTimeout=10 "$PEER" \
+               '$HOME/.local/bin/herdr-reap-stale' >/dev/null 2>&1 || true ;;
+        esac
+        ;;
       warn)  notify-send -a "Dev box" -u normal   -t 8000 "Dev box needs you" "$detail" ;;
       error) notify-send -a "Dev box" -u critical -t 8000 "Dev box unreachable" "$detail" ;;
     esac
