@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""herdr-reap-stale — drop attach sessions that no longer have a client.
+
+Runs on the dev box. A herdr pane can be attached by exactly one client,
+so an attach that has lost its connection makes the pane unusable:
+`attach failed... client is already connected`, with nothing visibly
+holding it.
+
+They accumulate because Tailscale SSH, unlike sshd, does not reap a
+session whose client vanished — and sshd's ClientAliveInterval no longer
+applies to anything, since every connection to this box is now Tailscale
+SSH. Observed 2026-09-01: 38 attach processes, some three days old, 14 of
+them on one pane.
+
+The rule is simply that only the newest attach per (mode, pane) can be
+the real one, plus anything reparented to init is certainly dead. Reading
+/proc directly rather than ps|grep, because a pattern that matches
+"herdr terminal session" also matches the shell running the check.
+"""
+
+import os
+import sys
+
+KEEP_NEWEST = True
+
+
+def procs():
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as fh:
+                argv = fh.read().split(b"\0")
+            argv = [a.decode("utf-8", "replace") for a in argv if a]
+            if len(argv) < 4:
+                continue
+            if not argv[0].endswith("herdr"):
+                continue
+            if argv[1:3] != ["terminal", "session"]:
+                continue
+            mode, pane = argv[3], argv[4].strip("'\"") if len(argv) > 4 else ""
+            with open(f"/proc/{pid}/stat", "rb") as fh:
+                stat = fh.read().decode("utf-8", "replace")
+            # comm can contain spaces/parens; fields after the last ')'
+            rest = stat[stat.rindex(")") + 2:].split()
+            ppid = int(rest[1])
+            starttime = int(rest[19])
+            yield int(pid), mode, pane, ppid, starttime
+        except (OSError, ValueError, IndexError):
+            continue
+
+
+def main():
+    dry = "--dry-run" in sys.argv
+    found = list(procs())
+    if not found:
+        print("no attach sessions")
+        return 0
+
+    newest = {}
+    for pid, mode, pane, ppid, start in found:
+        key = (mode, pane)
+        if key not in newest or start > newest[key][1]:
+            newest[key] = (pid, start)
+
+    killed = 0
+    for pid, mode, pane, ppid, start in found:
+        keep = KEEP_NEWEST and newest[(mode, pane)][0] == pid and ppid != 1
+        if keep:
+            continue
+        why = "orphaned" if ppid == 1 else "superseded"
+        print(f"  {why:11} {mode:8} {pane:8} pid {pid}")
+        if not dry:
+            try:
+                os.kill(pid, 9)
+                killed += 1
+            except OSError:
+                pass
+
+    live = len(found) - killed
+    print(f"{'would reap' if dry else 'reaped'} {len(found) - live} of {len(found)}; {live} left")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
