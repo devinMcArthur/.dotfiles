@@ -74,6 +74,8 @@ openai_api.txt.gpg
 # Box-only: the laptop accepts no herdr attach sessions from elsewhere.
 .config/systemd/user/herdr-reap-stale.service
 .config/systemd/user/herdr-reap-stale.timer
+.local/bin/attach
+.local/bin/herdr-reap-stale
 {{ end }}
 
 {{ if ne .chezmoi.osRelease.id "arch" }}

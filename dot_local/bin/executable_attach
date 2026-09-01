@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# attach — attach to a herdr pane on this box, displacing a dead client.
+#
+#   attach            # pick from the agents on this box
+#   attach w1:p5      # straight to one
+#
+# `herdr agent attach` refuses when it believes a client is already
+# connected, and after a dropped connection it believes that for a long
+# time: Tailscale SSH does not reap a session whose client vanished, so
+# the corpse holds the pane. Reconnecting then fails with "client is
+# already connected" and nothing visible is holding it.
+#
+# --takeover is the answer herdr provides, and this makes it the default
+# — the flag is easiest to forget at exactly the moment it is needed. It
+# clears orphaned holders first so the takeover has nothing to argue with.
+
+set -uo pipefail
+
+HERDR="$HOME/.local/bin/herdr"
+[ -x "$HERDR" ] || { echo "herdr not installed" >&2; exit 1; }
+
+target="${1:-}"
+
+if [ -z "$target" ]; then
+  # No argument: show what is here, newest state first.
+  "$HERDR" agent list 2>/dev/null | python3 -c '
+import json, sys
+try:
+    agents = json.load(sys.stdin)["result"]["agents"]
+except Exception:
+    sys.exit(1)
+if not agents:
+    print("no agents on this box")
+    raise SystemExit(1)
+for a in agents:
+    print("  %-8s %-9s %s" % (a["pane_id"], a.get("agent_status", "?"),
+                              (a.get("terminal_title_stripped") or "")[:40]))
+' || exit 1
+  echo
+  echo "attach <pane>"
+  exit 0
+fi
+
+# Orphans first: a holder reparented to init is certainly dead, and
+# clearing it makes the takeover uncontested.
+[ -x "$HOME/.local/bin/herdr-reap-stale" ] && "$HOME/.local/bin/herdr-reap-stale" >/dev/null 2>&1
+
+exec "$HERDR" agent attach "$target" --takeover
