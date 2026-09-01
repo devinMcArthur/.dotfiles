@@ -1,0 +1,10 @@
+[Unit]
+Description=Drop herdr attach sessions that have lost their client
+# Tailscale SSH does not reap a session whose client vanished, and every
+# connection to this box is Tailscale SSH — so sshd's ClientAliveInterval
+# governs nothing here. Without this, stale attaches pile up until a pane
+# refuses new clients with "client is already connected".
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/herdr-reap-stale

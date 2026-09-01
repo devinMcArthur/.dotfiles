@@ -70,6 +70,12 @@ openai_api.txt.gpg
 # it has no compositor, no bar, no themes, no audio and no Framework
 # hardware, so deploying that config would be noise at best and broken
 # services at worst. Detection: Arch here means this workstation.
+{{ if eq .chezmoi.osRelease.id "arch" }}
+# Box-only: the laptop accepts no herdr attach sessions from elsewhere.
+.config/systemd/user/herdr-reap-stale.service
+.config/systemd/user/herdr-reap-stale.timer
+{{ end }}
+
 {{ if ne .chezmoi.osRelease.id "arch" }}
 .config/hypr
 .config/DankMaterialShell

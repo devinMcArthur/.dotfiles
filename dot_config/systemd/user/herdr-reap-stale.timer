@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodically drop herdr attach sessions with no client
+
+[Timer]
+# Ten minutes: long enough to be invisible, short enough that a pane is
+# never stuck for a whole working session. Only the newest attach per
+# pane survives, so a live client is never the one reaped.
+OnBootSec=5min
+OnUnitActiveSec=10min
+
+[Install]
+WantedBy=timers.target
