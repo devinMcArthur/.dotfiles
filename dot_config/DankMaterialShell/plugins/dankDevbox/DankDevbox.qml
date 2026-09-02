@@ -277,7 +277,7 @@ PluginComponent {
                             }
                             StyledText {
                                 id: keyVal
-                                text: root.days > 0 ? root.days + "d" : "none"
+                                text: root.days > 0 ? root.days + "d" : "no expiry"
                                 color: root.days > 0 && root.days <= 14 ? Theme.warning : Theme.surfaceText
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: Theme.fontSizeSmall
@@ -291,11 +291,17 @@ PluginComponent {
                             color: Theme.outlineLight
 
                             Rectangle {
-                                width: parent.width * Math.max(0.02, Math.min(1, root.days / 180))
+                                // With expiry disabled there is no countdown, so the
+                                // bar is full and muted — a 2% sliver from days=0 read
+                                // as "about to expire", the exact opposite of the truth.
+                                width: parent.width * (root.days > 0
+                                    ? Math.max(0.02, Math.min(1, root.days / 180))
+                                    : 1)
                                 height: parent.height
                                 radius: parent.radius
-                                color: root.days > 0 && root.days <= 14 ? Theme.warning : Theme.primary
-                                opacity: 0.55
+                                color: root.days <= 0 ? Theme.outlineMedium
+                                     : (root.days <= 14 ? Theme.warning : Theme.primary)
+                                opacity: root.days <= 0 ? 0.5 : 0.55
                                 Behavior on width { NumberAnimation { duration: Theme.mediumDuration } }
                             }
                         }
