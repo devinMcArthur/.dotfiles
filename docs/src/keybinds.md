@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-08-29T10:33:09-06:00_
+_Generated 2026-09-02T12:56:20-06:00_
 
 ## Hyprland — window manager
 
@@ -46,7 +46,7 @@ _Generated 2026-08-29T10:33:09-06:00_
 | `SUPER + CTRL + SHIFT + SPACE` | `exec` | $HOME/.local/bin/theme menu                            # theme switcher menu |
 | `SUPER + CTRL + slash` | `movecurrentworkspacetomonitor` | eDP-1 |
 | `SUPER + CTRL + V` | `exec` | claude-tts toggle                                # claude voice: mute + clear queue |
-| `SUPER + D` | `exec` | ghostty --title=devbox -e $HOME/.local/bin/devbox        # remote dev box (herdr) |
+| `SUPER + D` | `exec` | ghostty --title=devbox -e $HOME/.local/bin/devbox        # remote dev box (shell) |
 | `SUPER + E` | `exec` | $fileManager # Show the graphical file browser |
 | `SUPER + escape` | `exec` | $lock                                           # lock the screen |
 | `SUPER + F1` | `exec` | $HOME/.local/bin/hypr-cheatsheet                                      # show keybind cheatsheet |

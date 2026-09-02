@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# devbox — open the remote dev box, straight into herdr.
+# devbox — open a shell on the remote dev box.
 #
-#   devbox              # mosh in and attach herdr (Super+D)
+#   devbox              # mosh in to a login shell (Super+D)
 #   devbox ssh          # plain ssh shell, no herdr
 #   devbox host <addr>  # remember a new address (user@host or host)
 #   devbox host         # show the current one
@@ -16,7 +16,6 @@
 set -uo pipefail
 
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/devbox/host"
-REMOTE_HERDR="/home/dev/.local/bin/herdr"
 
 read_host() { [ -f "$CONF" ] && tr -d '[:space:]' < "$CONF"; }
 
@@ -89,14 +88,22 @@ case "${1:-open}" in
 
     # A failed connection must not close the window — otherwise the
     # hotkey just flashes a terminal and you learn nothing.
+    # A plain login shell, not the box's herdr. The box's agents already
+    # appear in this laptop's sidebar through herdr-mirror, so running a
+    # second multiplexer in its own window duplicated them — and nesting
+    # herdr in herdr fights over the prefix. What is actually missing from
+    # the mirror is somewhere to run one-off commands, which is a shell.
     if command -v mosh >/dev/null 2>&1; then
-      mosh "$h" -- "$REMOTE_HERDR" || {
-        echo; echo "mosh failed. If the box is up, your IP may have changed:"
-        echo "  cloud-trial fw      # re-point the firewall at this machine"
+      mosh "$h" || {
+        # Not "your IP changed" any more: connections go over the tailnet,
+        # where the address is stable. devbox-health says which link in the
+        # chain is actually down rather than guessing at one cause.
+        echo; echo "Could not reach the box. What is wrong:"
+        echo "  devbox-health       # tailscaled, tailnet, ssh, 1Password"
         exec "$SHELL"
       }
     else
-      ssh -t "$h" "$REMOTE_HERDR" || exec "$SHELL"
+      ssh -t "$h" || exec "$SHELL"
     fi
     ;;
   *) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
