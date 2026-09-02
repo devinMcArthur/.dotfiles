@@ -116,3 +116,13 @@ type = "popup"
 command = "{{ .chezmoi.homeDir }}/.local/bin/zsh-popup"
 width = "80%"
 height = "80%"
+
+# Images in a pane. Claude Code sends screenshots and diagrams through the
+# Kitty graphics protocol; without this herdr shows the placeholder
+# `[image] /path/...` and the picture never arrives. Ghostty speaks the
+# protocol, so the only missing piece was herdr passing it through.
+#
+# Marked experimental upstream, and it only helps panes rendered locally —
+# a mirrored pane's stream carries no graphics.
+[experimental]
+kitty_graphics = true
