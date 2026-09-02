@@ -10,6 +10,33 @@
 
 set -euo pipefail
 
+# `hypr-screensaver stop` — take the screensaver down.
+#
+# Killing the process does not work: ghostty runs gtk-single-instance
+# (=detect, so on by default in a desktop session), which means these
+# windows belong to the ONE ghostty process and there is no per-window
+# process to signal. `pkill -f 'ghostty --class=screensaver.tui'` matches
+# the launcher, which has already exited. That is why the screensaver
+# outlived the lock screen and sat there until a keypress dismissed it.
+#
+# Closing the windows by class through Hyprland works regardless of which
+# process owns them.
+if [ "${1:-}" = stop ]; then
+  if command -v hyprctl >/dev/null 2>&1; then
+    hyprctl -j clients 2>/dev/null \
+      | jq -r '.[] | select(.class == "screensaver.tui") | .address' 2>/dev/null \
+      | while read -r addr; do
+          [ -n "$addr" ] && hyprctl dispatch closewindow "address:$addr" >/dev/null 2>&1
+        done
+  fi
+  # No pkill fallback. The bracket trick stops the pattern matching its own
+  # text, but it cannot stop it matching a caller whose command line
+  # legitimately contains the real class string — which killed the shell
+  # testing this. closewindow already works whoever owns the window, so the
+  # fallback bought nothing and risked the wrong process.
+  exit 0
+fi
+
 # Missing engine → one clear notification instead of N windows of
 # "command not found" (also keeps idle-triggered runs quiet but visible).
 if ! command -v tte >/dev/null 2>&1; then

@@ -8,5 +8,12 @@
 # Tire of the surprises? `theme random off` (re-enable: `theme random on`).
 
 pidof hyprlock >/dev/null && exit 0
+
+# Clear the screensaver first. Every lock path routes through here — hypridle's
+# lock_cmd, loginctl lock-session, before_sleep, and the Super+Escape bind
+# — so this is the one place that catches all of them. Without it the
+# screensaver windows sit behind the lock screen and are still there after
+# unlocking, closing only when a keypress reaches the TUI.
+"$HOME/.local/bin/hypr-screensaver" stop 2>/dev/null || true
 hyprlock
 exec "$HOME/.local/bin/theme" random
