@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# weather-locate — point the shell's weather at wherever this laptop is.
+#
+#   weather-locate            # update if the city changed
+#   weather-locate --dry-run  # say what it would do
+#
+# DMS has its own auto-location, but it is gated behind a backend
+# "location" capability that this build does not advertise: turning
+# useAutoLocation on changes nothing, silently, and there is no CLI to
+# force it. Meanwhile the weather sat on DMS's built-in default of
+# "New York, NY" — not a bug, just a setting nobody had ever touched.
+#
+# So this does the same job directly, against the same service DMS uses.
+# The location lives in SessionData (~/.local/state/.../session.json), not
+# settings.json, and `dms ipc call settings set` refuses it — SettingsData
+# exposes it read-only. Writing the file works: the shell picks it up live.
+
+set -uo pipefail
+
+SESSION="${XDG_STATE_HOME:-$HOME/.local/state}/DankMaterialShell/session.json"
+API="https://api.bigdatacloud.net/data/reverse-geocode-client"
+
+[ -f "$SESSION" ] || { echo "no DMS session file" >&2; exit 1; }
+
+geo="$(timeout 20 curl -fsS "$API" 2>/dev/null)" || {
+  # Offline is the normal case for a laptop, not an error worth shouting
+  # about: keep whatever was last known and try again next time.
+  exit 0
+}
+
+python3 - "$SESSION" "${1:-}" <<PY
+import json, sys
+
+session, flag = sys.argv[1], sys.argv[2]
+geo = json.loads('''$geo''')
+
+city = geo.get("city") or geo.get("locality") or ""
+region = geo.get("principalSubdivisionCode", "").split("-")[-1] or geo.get("principalSubdivision", "")
+lat, lon = geo.get("latitude"), geo.get("longitude")
+
+if not city or lat is None or lon is None:
+    sys.exit(0)
+
+name = f"{city}, {region}" if region else city
+coords = f"{lat:.4f},{lon:.4f}"
+
+data = json.load(open(session))
+if data.get("weatherLocation") == name:
+    print(f"  unchanged: {name}")
+    sys.exit(0)
+
+print(f"  {data.get('weatherLocation')} -> {name} ({coords})")
+if flag == "--dry-run":
+    sys.exit(0)
+
+data["weatherLocation"] = name
+data["weatherCoordinates"] = coords
+json.dump(data, open(session, "w"), indent=2)
+PY

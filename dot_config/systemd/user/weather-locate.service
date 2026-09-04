@@ -1,0 +1,7 @@
+[Unit]
+Description=Point the shell's weather at this laptop's current location
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/weather-locate

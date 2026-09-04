@@ -1,0 +1,12 @@
+[Unit]
+Description=Keep the weather location current
+
+[Timer]
+# A laptop changes city occasionally, not constantly. Half-hourly costs
+# one small HTTP request and means the weather is right by the time you
+# have opened the lid somewhere new.
+OnBootSec=2min
+OnUnitActiveSec=30min
+
+[Install]
+WantedBy=timers.target
