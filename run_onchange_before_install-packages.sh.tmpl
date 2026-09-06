@@ -118,6 +118,14 @@ PACMAN_PKGS=(
   # runs fwupdmgr as one of its stages)
   fwupd
 
+  # Thunderbolt device authorization. Both TB domains run security=user,
+  # so a peripheral is refused until something approves it — and with no
+  # daemon installed, nothing ever did. The desk KVM advertises Thunderbolt3
+  # (typec svid 8087) and was falling back to plain USB-C DisplayPort alt
+  # mode, which splits the connector's four high-speed pairs two-and-two
+  # with USB 3 and leaves 12.96 Gbps for video. Three monitors need 16.8.
+  bolt
+
   # Btrfs snapshots + auto pre/post around pacman + grub boot-into-snapshot
   snapper snap-pac grub-btrfs inotify-tools
 
