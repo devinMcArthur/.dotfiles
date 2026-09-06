@@ -24,6 +24,13 @@
 # sshd binds to the Tailscale address only. This laptop travels, and an
 # SSH port answering on café wifi is a worse problem than the one being
 # solved. Keys only, no passwords, no root.
+#
+# Port 2222, not 22: tailscaled intercepts 22 for Tailscale SSH, and this
+# tailnet's rule for it carries action "check", which demands a browser
+# re-auth. That is exactly worthless against a frozen laptop — the whole
+# point is to reach a machine that cannot show you a login page. 2222 is
+# not intercepted, so it lands on our own sshd and authenticates with the
+# key alone. Tailscale SSH keeps working normally everywhere else.
 
 set -euo pipefail
 
@@ -55,7 +62,7 @@ want_sshd() {
 # Debug access for when the desktop wedges — see run_onchange_after_debug-access.
 # Tailscale address only: this laptop travels and must not answer on
 # untrusted networks.
-ListenAddress $TS_IP
+ListenAddress $TS_IP:2222
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin no
@@ -84,7 +91,8 @@ if [ -n "$TS_IP" ] \
    && want_sshd   | cmp -s - "$SSHD_CONF" 2>/dev/null \
    && want_unit   | cmp -s - "$SSHD_UNIT" 2>/dev/null \
    && [ "$(cat /proc/sys/kernel/sysrq 2>/dev/null)" = 1 ] \
-   && systemctl is-enabled --quiet sshd 2>/dev/null; then
+   && systemctl is-enabled --quiet sshd 2>/dev/null \
+   && ss -tln 2>/dev/null | grep -q "$TS_IP:2222"; then
   exit 0
 fi
 
@@ -125,7 +133,12 @@ if ! run_root sshd -t; then
 fi
 
 run_root systemctl daemon-reload
-run_root systemctl enable --now sshd
+run_root systemctl enable sshd
+# `enable --now` only starts a *stopped* unit, so a running sshd would go on
+# serving the old ListenAddress with the new config sitting on disk unread.
+# Restart explicitly. In-flight sessions survive; only the listener is
+# replaced.
+run_root systemctl restart sshd
 
-echo "    sysrq=1 (REISUB via Alt+PrtScr), sshd on $TS_IP, keys only."
+echo "    sysrq=1 (REISUB via Alt+PrtScr), sshd on $TS_IP:2222, keys only."
 {{ end -}}
