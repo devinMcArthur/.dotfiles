@@ -46,6 +46,15 @@
 
 set -euo pipefail
 
+# Whether we may prompt for a password. Captured up here, before any
+# pipeline: `[ -t 0 ]` inside run_root sees the pipe rather than the
+# terminal, so a piped call would refuse sudo with the user standing right
+# there. Sampling stdin (not /dev/tty) is deliberate — the headless callers
+# redirect from /dev/null precisely so this stays 0 and never blocks on a
+# password prompt holding the chezmoi lock.
+CAN_PROMPT=0
+[ -t 0 ] && CAN_PROMPT=1
+
 PARAM="i915.enable_dp_mst=0"
 GRUB=/etc/default/grub
 CFG=/boot/grub/grub.cfg
@@ -102,7 +111,7 @@ fi
 
 run_root() {
   if sudo -n true 2>/dev/null; then sudo "$@"
-  elif [ -t 0 ]; then sudo "$@"
+  elif [ "$CAN_PROMPT" = 1 ]; then sudo "$@"
   else
     echo "ERROR: kernel params need sudo — run 'chezmoi apply' in a terminal" >&2
     exit 1
