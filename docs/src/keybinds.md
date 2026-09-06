@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-09-06T12:35:57-06:00_
+_Generated 2026-09-06T12:39:05-06:00_
 
 ## Hyprland — window manager
 
@@ -37,10 +37,10 @@ _Generated 2026-09-06T12:35:57-06:00_
 | `SUPER + bracketleft` | `workspace` | m-1 |
 | `SUPER + bracketright` | `workspace` | m+1 |
 | `SUPER + C` | `exec` | dms ipc call quickCapture screenshot scroll edit   # scrolling capture → annotate |
-| `SUPER + comma` | `focusmonitor` | desc:Acer Technologies KA272 0x13800DD9 |
-| `SUPER + CTRL + comma` | `movecurrentworkspacetomonitor` | desc:Acer Technologies KA272 0x13800DD9 |
+| `SUPER + comma` | `focusmonitor` | -1 |
+| `SUPER + CTRL + comma` | `movecurrentworkspacetomonitor` | -1 |
 | `SUPER + CTRL + E` | `exec` | wofi-emoji                                    # emoji picker |
-| `SUPER + CTRL + period` | `movecurrentworkspacetomonitor` | desc:Acer Technologies KA272 0x13800FAE |
+| `SUPER + CTRL + period` | `movecurrentworkspacetomonitor` | +1 |
 | `SUPER + CTRL + R` | `exec` | $HOME/.local/bin/hypr-remind                  # set a reminder |
 | `SUPER + CTRL + S` | `exec` | dms ipc call quickCapture screenshot output edit  # screenshot monitor → annotate |
 | `SUPER + CTRL + SHIFT + SPACE` | `exec` | $HOME/.local/bin/theme menu                            # theme switcher menu |
@@ -65,7 +65,7 @@ _Generated 2026-09-06T12:35:57-06:00_
 | `SUPER + mouse_up` | `workspace` | e-1 |
 | `SUPER + N` | `exec` | $HOME/.local/bin/hypr-notes # quick notes scratchpad (dropdown nvim) |
 | `SUPER + O` | `exec` | hyprctl clients -j \| grep -q FFPWA-01KT4N89YPWXMQDN8T4TENQ5A6 && hyprctl dispatch focuswindow class:FFPWA-01KT4N89YPWXMQDN8T4TENQ5A6 \|\| firefoxpwa site launch 01KT4N89YPWXMQDN8T4TENQ5A6 # Outlook (work email) — focus or launch |
-| `SUPER + period` | `focusmonitor` | desc:Acer Technologies KA272 0x13800FAE |
+| `SUPER + period` | `focusmonitor` | +1 |
 | `SUPER + P` | `pseudo` | # dwindle |
 | `SUPER + Q` | `killactive` | # close the active window |
 | `SUPER + return` | `exec` | $terminal  #open the terminal |
@@ -97,7 +97,7 @@ _Generated 2026-09-06T12:35:57-06:00_
 | `SUPER + SHIFT + X` | `exec` | $HOME/.local/bin/dictate cancel                 # dictation: discard recording |
 | `SUPER + slash` | `focusmonitor` | eDP-1 |
 | `SUPER + SPACE` | `exec` | dms ipc call launcher toggle # app launcher (DMS; wofi remains for scripts) |
-| `SUPER + Tab` | `swapactiveworkspaces` | desc:Acer Technologies KA272 0x13800DD9 desc:Acer Technologies KA272 0x13800FAE |
+| `SUPER + Tab` | `swapactiveworkspaces` | eDP-1 +1 |
 | `SUPER + T` | `togglefloating` | # toggle window float / tile |
 | `SUPER + V` | `exec` | cliphist-menu                                        # clipboard history |
 | `SUPER + W` | `exec` | $HOME/.local/bin/win # smart launcher for the win11 KVM VM (starts + attaches virt-viewer) |
