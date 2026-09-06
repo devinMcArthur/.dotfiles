@@ -125,6 +125,7 @@ Pictures
 .local/bin/selfie
 .local/bin/zsh-popup
 .local/bin/cloud-trial
+.ssh/authorized_keys
 .local/bin/dock-state
 .local/bin/dock-lid-guard
 .local/bin/idle-profile

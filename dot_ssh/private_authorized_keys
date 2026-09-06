@@ -1,0 +1,8 @@
+# Keys allowed to reach this laptop over Tailscale. sshd binds to the
+# Tailscale address only (see run_onchange_after_debug-access.sh.tmpl), so
+# nothing here is reachable from an untrusted network.
+
+# devbox-trial. Exists to collect dmesg and journal while the laptop is
+# wedged by a KVM MST failure — the freezes take the display stack down
+# with no console, and holding the power button loses the evidence.
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGJy9GYhWy5OSRbvjPOeiU0hJCn4gqE7h0nOUsm9/W8S devbox-trial -> turing debug access

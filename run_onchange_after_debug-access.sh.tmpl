@@ -1,0 +1,115 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+{{ if ne .chezmoi.osRelease.id "arch" }}exit 0  # laptop-only; the box already runs sshd.{{ end }}
+# Keep a way in when the desktop dies.
+#
+# The KVM's MST failures take the display stack down hard: no console, no
+# Ctrl+Alt+F2, and holding the power button destroys the journal before it
+# flushes. Four freezes on 2026-09-05 produced almost no evidence between
+# them — the one that mattered lost its logs to the power cut.
+#
+# Two ways in, because they fail differently:
+#
+#   sysrq  — works from the keyboard when userspace is gone but the kernel
+#            is alive. kernel.sysrq was 16 (sync only), which is not enough
+#            for REISUB; 1 enables the lot. Alt+PrtScr is SysRq on this
+#            keyboard, and R-E-I-S-U-B unwinds cleanly instead of cutting
+#            power. Even knowing whether sysrq responds is a datapoint: it
+#            separates "the compositor died" from "the kernel died".
+#
+#   sshd   — lets the dev box reach in over Tailscale and collect dmesg
+#            while the laptop is still wedged, which is the only way we
+#            get a usable bug report out of one of these.
+#
+# sshd binds to the Tailscale address only. This laptop travels, and an
+# SSH port answering on café wifi is a worse problem than the one being
+# solved. Keys only, no passwords, no root.
+
+set -euo pipefail
+
+SYSCTL=/etc/sysctl.d/99-sysrq.conf
+SSHD_CONF=/etc/ssh/sshd_config.d/10-debug-access.conf
+SSHD_UNIT=/etc/systemd/system/sshd.service.d/10-wait-for-tailscale.conf
+
+TS_IP="$(tailscale ip -4 2>/dev/null | head -1)"
+
+want_sysctl() {
+  cat <<EOF
+# Full magic SysRq. Needed for REISUB when the display stack dies and the
+# only alternative is holding the power button, which loses the journal.
+kernel.sysrq = 1
+EOF
+}
+
+want_sshd() {
+  cat <<EOF
+# Debug access for when the desktop wedges — see run_onchange_after_debug-access.
+# Tailscale address only: this laptop travels and must not answer on
+# untrusted networks.
+ListenAddress $TS_IP
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+AllowUsers {{ .chezmoi.username }}
+EOF
+}
+
+want_unit() {
+  cat <<'EOF'
+[Unit]
+# ListenAddress is the Tailscale IP, which does not exist until tailscaled
+# has brought the interface up. Without this, sshd loses the race at boot
+# and stays down — exactly when it is needed.
+After=tailscaled.service
+Wants=tailscaled.service
+
+[Service]
+Restart=on-failure
+RestartSec=5
+EOF
+}
+
+# Fast path, NO sudo — theme switches apply headlessly on every unlock.
+if [ -n "$TS_IP" ] \
+   && want_sysctl | cmp -s - "$SYSCTL" 2>/dev/null \
+   && want_sshd   | cmp -s - "$SSHD_CONF" 2>/dev/null \
+   && want_unit   | cmp -s - "$SSHD_UNIT" 2>/dev/null \
+   && [ "$(cat /proc/sys/kernel/sysrq 2>/dev/null)" = 1 ] \
+   && systemctl is-enabled --quiet sshd 2>/dev/null; then
+  exit 0
+fi
+
+if [ -z "$TS_IP" ]; then
+  echo "WARNING: no Tailscale IPv4 yet; skipping sshd setup (run 'chezmoi apply' once tailscale is up)" >&2
+  exit 0
+fi
+
+run_root() {
+  if sudo -n true 2>/dev/null; then sudo "$@"
+  elif [ -t 0 ]; then sudo "$@"
+  else
+    echo "ERROR: debug access needs sudo — run 'chezmoi apply' in a terminal" >&2
+    exit 1
+  fi
+}
+
+echo "==> Enabling magic SysRq and Tailscale-only sshd..."
+
+want_sysctl | run_root tee "$SYSCTL" >/dev/null
+run_root sysctl --quiet -w kernel.sysrq=1
+
+run_root mkdir -p "$(dirname "$SSHD_CONF")" "$(dirname "$SSHD_UNIT")"
+want_sshd | run_root tee "$SSHD_CONF" >/dev/null
+want_unit | run_root tee "$SSHD_UNIT" >/dev/null
+
+# Refuse to start a misconfigured sshd rather than find out at 2am.
+if ! run_root sshd -t; then
+  echo "ERROR: sshd config failed validation; not enabling" >&2
+  exit 1
+fi
+
+run_root systemctl daemon-reload
+run_root systemctl enable --now sshd
+
+echo "    sysrq=1 (REISUB via Alt+PrtScr), sshd on $TS_IP, keys only."
+{{ end -}}
