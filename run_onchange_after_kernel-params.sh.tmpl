@@ -16,13 +16,25 @@
 #   desk monitors down one KVM cable, so refusing it costs two of them.
 #   It stays the default because a stable laptop beats a frozen one.
 #
-# THE WAY OUT, and why there is a second menu entry below: kernel 7.1.9 has
-# roughly a year of i915 MST fixes that the 6.18 LTS branch will never get.
-# Testing that means booting with the parameter removed, which otherwise
-# means hand-editing the kernel line at the GRUB prompt on a machine that
-# may be about to freeze. So we generate a menu entry that is the ordinary
-# 7.1.9 entry minus the parameter — select it, test, and if it locks up,
-# reboot and pick the default again. The default is never the risky one.
+# THE TEST ENTRIES, and why they exist: trying anything here means booting
+# with the parameter removed, which otherwise means hand-editing the kernel
+# line at the GRUB prompt on a machine that may be about to freeze. So we
+# generate entries that are the ordinary 'linux' entry minus the parameter.
+# Select one, test, and if it locks up, reboot and pick the default again.
+# The default is never the risky one.
+#
+#   [test] DisplayPort MST enabled
+#     Plain MST on whatever `linux` currently is. Tried 2026-09-05 on 7.1.9:
+#     failed with the identical "Step 2 ... failed: -5" as 6.18.46-lts, so a
+#     year of i915 display work changes nothing here. Kept because it is the
+#     control for the entry below, and re-testing costs one reboot.
+#
+#   [test] MST + xe driver
+#     Hands the GPU to xe, Intel's other driver for this silicon, which has
+#     an entirely separate display path. Both drivers claim 8086:7dd5, so
+#     the handover needs force_probe on both sides: one to refuse, one to
+#     accept. This is the last software variable — if MST still fails under
+#     xe, the fault is in the KVM, and firmware is the remaining lead.
 #
 # ESCAPE HATCH regardless: at any GRUB entry press `e`, edit the `linux`
 # line, F10 to boot it once.
@@ -39,6 +51,9 @@ GRUB=/etc/default/grub
 CFG=/boot/grub/grub.cfg
 CUSTOM=/etc/grub.d/42-mst-test
 TITLE="Arch Linux (linux) - DisplayPort MST enabled [test]"
+TITLE_XE="Arch Linux (linux) - MST + xe driver [test]"
+# 8086:7dd5 = Meteor Lake-P. i915 refuses it, xe takes it.
+XE_PARAMS="i915.force_probe=!7dd5 xe.force_probe=7dd5"
 
 # The 10_linux-generated entry for the non-LTS kernel, which we mirror.
 SOURCE_ENTRY="menuentry 'Arch Linux, with Linux linux'"
@@ -53,16 +68,25 @@ extract_entry() {
   ' "$CFG"
 }
 
+# One entry: the stock 'linux' entry with the MST parameter stripped, a
+# distinct menuentry id so GRUB never confuses it with the real one, and any
+# extra kernel arguments appended to the `linux` line.
+emit_entry() {
+  local title="$1" extra="$2" idtag="$3"
+  local script="s| $PARAM||g
+s|$SOURCE_ENTRY|menuentry '$title'|
+s|gnulinux-linux-advanced-|gnulinux-linux-$idtag-|"
+  [ -n "$extra" ] && script="$script
+/^[[:space:]]*linux[[:space:]]/ s|\$| $extra|"
+  extract_entry | sed -e "$script"
+}
+
 want_custom() {
-  local body
-  body="$(extract_entry)"
-  [ -n "$body" ] || return 1
+  [ -n "$(extract_entry)" ] || return 1
   printf '#!/bin/sh\n'
   printf 'exec tail -n +3 $0\n'
-  printf '%s\n' "$body" \
-    | sed -e "s| $PARAM||g" \
-          -e "s|$SOURCE_ENTRY|menuentry '$TITLE'|" \
-          -e "s|gnulinux-linux-advanced-|gnulinux-linux-mst-test-|"
+  emit_entry "$TITLE"    ""            "mst-test"
+  emit_entry "$TITLE_XE" "$XE_PARAMS"  "xe-test"
 }
 
 # Fast path, NO sudo — the normal case. Theme switches apply headlessly on
@@ -70,6 +94,7 @@ want_custom() {
 if grep -q "$PARAM" "$GRUB" 2>/dev/null \
    && grep -q "$PARAM" "$CFG" 2>/dev/null \
    && grep -qF "$TITLE" "$CFG" 2>/dev/null \
+   && grep -qF "$TITLE_XE" "$CFG" 2>/dev/null \
    && [ -x "$CUSTOM" ] \
    && want_custom 2>/dev/null | cmp -s - "$CUSTOM"; then
   exit 0
@@ -133,8 +158,7 @@ fi
 
 run_root mv "$CFG.new" "$CFG"
 echo "    done ($NOW_ENTRIES boot entries; backup at $CFG.bak.$STAMP)."
-if grep -qF "$TITLE" "$CFG"; then
-  echo "    To test MST, pick this at the GRUB menu:"
-  echo "      $TITLE"
-fi
+for t in "$TITLE" "$TITLE_XE"; do
+  grep -qF "$t" "$CFG" && echo "    GRUB menu now offers: $t"
+done
 {{ end -}}
