@@ -111,6 +111,13 @@ run_root mkdir -p "$(dirname "$SSHD_CONF")" "$(dirname "$SSHD_UNIT")"
 want_sshd | run_root tee "$SSHD_CONF" >/dev/null
 want_unit | run_root tee "$SSHD_UNIT" >/dev/null
 
+# sshd has never run on this laptop, so /etc/ssh has no host keys and
+# `sshd -t` bails with "no hostkeys available" before it ever looks at the
+# config. Arch generates them from sshdgenkeys.service at service start,
+# which is after this check. ssh-keygen -A creates only what is missing and
+# is safe to repeat.
+run_root ssh-keygen -A
+
 # Refuse to start a misconfigured sshd rather than find out at 2am.
 if ! run_root sshd -t; then
   echo "ERROR: sshd config failed validation; not enabling" >&2
