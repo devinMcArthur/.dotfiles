@@ -12,8 +12,16 @@
 # whole incident), so the dock's own USB id is the steadier signal. The
 # display scan stays as a fallback, for a plain monitor with no dock.
 
-# KTMicro "AV Access iDock" — the KVM's control endpoint.
-DOCK_IDS='1d6b:b036'
+# The KVM's own control endpoint (1d6b:b036) is NOT enough on its own: it
+# disappears whenever the KVM is switched to the other input, along with the
+# keyboard and mouse, even though the laptop has not moved. Observed
+# 2026-09-05 with the cable plugged in and the switch on the Windows PC —
+# dock-state said "not docked" at the desk, which is the exact case the lid
+# guard exists to cover.
+#
+# The dock's internal hubs and its Realtek NIC stay enumerated across a
+# switch, so they are what actually answers "is the cable plugged in".
+DOCK_IDS='1d6b:b036 2109:0822 2109:2822 2109:0817 2109:2817 0bda:8153'
 
 for dev in /sys/bus/usb/devices/*; do
     [ -r "$dev/idVendor" ] || continue
