@@ -22,14 +22,43 @@ env = XDG_SESSION_DESKTOP,Hyprland
 
 # Setup monitors
 # See https://wiki.hyprland.org/Configuring/Monitors/
+# Desk (2026-09): an AV Access KVM. Its DisplayPort MST path fails on this
+# GPU — see run_onchange_after_kernel-params.sh.tmpl — so the boot line
+# carries i915.enable_dp_mst=0 and the KVM falls back to a single stream
+# CLONED to every output. Two physical panels, one logical display; both go
+# dark together. Nothing here can give them independent contents, because
+# that is what MST would have been for.
+#
+# The mode is therefore whatever both panels can show. The EDID the KVM
+# presents is the EK271U's (2560x1440), so the 3440x1440 ultrawide displays
+# it pillarboxed. 99.95Hz over 59.95: the panel's own maximum, verified to
+# hold through the KVM with no link errors.
+#
+# Positioned above the laptop and centred: eDP-1 is 2880x1920 at scale 1.5,
+# so 1920x1280 logically, and (1920-2560)/2 = -320.
+monitor=desc:Acer Technologies EK271U E,2560x1440@99.95,-320x-1440,1
+
+# Office, occasional. Left in place; these are matched by description, so
+# they simply do not apply when the monitors are absent.
 monitor=desc:Acer Technologies KA272 0x13800DD9,1920x1080@74.97300,auto,1.0
 monitor=desc:Acer Technologies KA272 0x13800FAE,1920x1080@74.97300,auto,1.0
-monitor=eDP-1,preferred,auto,1.5
+# Explicit 0x0, not auto: the desk monitor above claims negative
+# coordinates, and auto then placed the laptop to its right rather than
+# beneath it.
+monitor=eDP-1,preferred,0x0,1.5
 
 # Workspace assignments
 # (workspace = N, monitor:desc:..., default:true — pins workspace N to a
 # specific output and marks it as the default workspace for that monitor.)
-workspace = 1, monitor:desc:Acer Technologies KA272 0x13800DD9, default:true
+# Desk: the KVM display takes 1 and 2. Without a pin naming a monitor that
+# is actually present, the external landed on workspace 11.
+workspace = 1, monitor:desc:Acer Technologies EK271U E, default:true
+workspace = 2, monitor:desc:Acer Technologies EK271U E
+
+# Office. No default:true on workspace 1 here — two monitors both claiming
+# it as their default is a conflict, and the desk is where this laptop
+# mostly lives. The pin still applies when the KA272s are connected.
+workspace = 1, monitor:desc:Acer Technologies KA272 0x13800DD9
 workspace = 2, monitor:desc:Acer Technologies KA272 0x13800DD9
 workspace = 3, monitor:desc:Acer Technologies KA272 0x13800FAE, default:true
 workspace = 4, monitor:desc:Acer Technologies KA272 0x13800FAE
