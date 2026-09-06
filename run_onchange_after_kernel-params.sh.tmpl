@@ -10,17 +10,22 @@
 #   Twenty seconds later the display pipeline is gone, taking the
 #   compositor, xdg-desktop-portal (segfault in libwayland) and the VTs
 #   with it — Ctrl+Alt+F2 showed nothing because there was no console left
-#   to switch to. Measured 2026-09-05: one MST error in three days, in the
-#   boot that froze.
+#   to switch to. Measured 2026-09-05 on linux-lts 6.18.46.
 #
-#   MST exists for daisy-chaining several displays down one cable. With a
-#   single monitor there is nothing to lose by refusing it, and the worst
-#   case if the KVM insists on MST is no external display — which beats a
-#   frozen laptop.
+#   This is a tourniquet, not a cure: MST is exactly what drives the three
+#   desk monitors down one KVM cable, so refusing it costs two of them.
+#   It stays the default because a stable laptop beats a frozen one.
 #
-# ESCAPE HATCH, same as the resume= parameters: at the GRUB entry press
-# `e`, delete the parameter, F10. To undo permanently, remove it from
-# /etc/default/grub and re-run grub-mkconfig.
+# THE WAY OUT, and why there is a second menu entry below: kernel 7.1.9 has
+# roughly a year of i915 MST fixes that the 6.18 LTS branch will never get.
+# Testing that means booting with the parameter removed, which otherwise
+# means hand-editing the kernel line at the GRUB prompt on a machine that
+# may be about to freeze. So we generate a menu entry that is the ordinary
+# 7.1.9 entry minus the parameter — select it, test, and if it locks up,
+# reboot and pick the default again. The default is never the risky one.
+#
+# ESCAPE HATCH regardless: at any GRUB entry press `e`, edit the `linux`
+# line, F10 to boot it once.
 #
 # /boot is the vfat ESP, so it is outside btrfs snapshots — nothing rolls
 # grub.cfg back for us. Hence: back it up, build the new one beside it,
@@ -32,17 +37,41 @@ set -euo pipefail
 PARAM="i915.enable_dp_mst=0"
 GRUB=/etc/default/grub
 CFG=/boot/grub/grub.cfg
+CUSTOM=/etc/grub.d/42-mst-test
+TITLE="Arch Linux (linux) - DisplayPort MST enabled [test]"
+
+# The 10_linux-generated entry for the non-LTS kernel, which we mirror.
+SOURCE_ENTRY="menuentry 'Arch Linux, with Linux linux'"
+
+# Lift that entry out of the live grub.cfg rather than hardcoding a root
+# UUID here: if the disk is ever reinstalled, this tracks it automatically.
+extract_entry() {
+  awk -v want="$SOURCE_ENTRY" '
+    index($0, want) { inblock = 1 }
+    inblock         { print }
+    inblock && /^[[:space:]]*\}[[:space:]]*$/ { exit }
+  ' "$CFG"
+}
+
+want_custom() {
+  local body
+  body="$(extract_entry)"
+  [ -n "$body" ] || return 1
+  printf '#!/bin/sh\n'
+  printf 'exec tail -n +3 $0\n'
+  printf '%s\n' "$body" \
+    | sed -e "s| $PARAM||g" \
+          -e "s|$SOURCE_ENTRY|menuentry '$TITLE'|" \
+          -e "s|gnulinux-linux-advanced-|gnulinux-linux-mst-test-|"
+}
 
 # Fast path, NO sudo — the normal case. Theme switches apply headlessly on
 # every unlock and must never reach for a password here.
-if grep -q "$PARAM" /proc/cmdline 2>/dev/null && grep -q "$PARAM" "$GRUB" 2>/dev/null; then
-  exit 0
-fi
-
-# Already staged, just not booted into yet: say so rather than rebuilding
-# grub.cfg on every apply until the next reboot.
-if grep -q "$PARAM" "$GRUB" 2>/dev/null && grep -q "$PARAM" "$CFG" 2>/dev/null; then
-  echo "==> $PARAM is staged; takes effect at the next boot"
+if grep -q "$PARAM" "$GRUB" 2>/dev/null \
+   && grep -q "$PARAM" "$CFG" 2>/dev/null \
+   && grep -qF "$TITLE" "$CFG" 2>/dev/null \
+   && [ -x "$CUSTOM" ] \
+   && want_custom 2>/dev/null | cmp -s - "$CUSTOM"; then
   exit 0
 fi
 
@@ -58,15 +87,28 @@ run_root() {
 STAMP="$(date +%Y%m%d%H%M%S)"
 WAS_ENTRIES="$(grep -c '^[[:space:]]*menuentry' "$CFG" 2>/dev/null || echo 0)"
 
-echo "==> Adding $PARAM to the kernel command line..."
 run_root cp -a "$GRUB" "$GRUB.bak.$STAMP"
 # vfat can't carry ownership, so a plain copy for the ESP.
 run_root cp "$CFG" "$CFG.bak.$STAMP"
 
-# Append inside the existing quotes, preserving whatever hibernate-setup
-# and friends have already put there.
-run_root sed -i "s|^\(GRUB_CMDLINE_LINUX_DEFAULT=\"[^\"]*\)\"|\1 $PARAM\"|" "$GRUB"
-grep -q "$PARAM" "$GRUB" || { echo "ERROR: failed to edit $GRUB" >&2; exit 1; }
+if ! grep -q "$PARAM" "$GRUB" 2>/dev/null; then
+  echo "==> Adding $PARAM to the kernel command line..."
+  # Append inside the existing quotes, preserving whatever hibernate-setup
+  # and friends have already put there.
+  run_root sed -i "s|^\(GRUB_CMDLINE_LINUX_DEFAULT=\"[^\"]*\)\"|\1 $PARAM\"|" "$GRUB"
+  grep -q "$PARAM" "$GRUB" || { echo "ERROR: failed to edit $GRUB" >&2; exit 1; }
+fi
+
+if want_custom > /tmp/mst-test.$$ 2>/dev/null && [ -s /tmp/mst-test.$$ ]; then
+  echo "==> Installing the MST test boot entry..."
+  run_root cp /tmp/mst-test.$$ "$CUSTOM"
+  run_root chmod 755 "$CUSTOM"
+  rm -f /tmp/mst-test.$$
+else
+  rm -f /tmp/mst-test.$$
+  echo "WARNING: could not find \"$SOURCE_ENTRY\" in $CFG;" >&2
+  echo "         skipping the MST test entry (is the 'linux' kernel installed?)" >&2
+fi
 
 # Build beside the live config; the running one stays untouched until the
 # new one proves itself.
@@ -90,7 +132,9 @@ if [ "$NOW_ENTRIES" -lt 1 ] || [ "$NOW_ENTRIES" -lt "$WAS_ENTRIES" ] \
 fi
 
 run_root mv "$CFG.new" "$CFG"
-echo "    staged ($NOW_ENTRIES boot entries; backup at $CFG.bak.$STAMP)."
-echo "    Active after the next reboot; verify with:"
-echo "      grep -o '$PARAM' /proc/cmdline"
+echo "    done ($NOW_ENTRIES boot entries; backup at $CFG.bak.$STAMP)."
+if grep -qF "$TITLE" "$CFG"; then
+  echo "    To test MST, pick this at the GRUB menu:"
+  echo "      $TITLE"
+fi
 {{ end -}}
