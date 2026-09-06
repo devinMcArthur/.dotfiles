@@ -1,0 +1,61 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+{{ if ne .chezmoi.osRelease.id "arch" }}exit 0  # this laptop's GPU; not a server concern.{{ end }}
+# Kernel command line: things that must be set before userspace exists.
+#
+# i915.enable_dp_mst=0
+#   The AV Access KVM presents a DisplayPort MST hub, and i915 fails to
+#   allocate the payload for it:
+#     [drm] *ERROR* Step 2 of creating MST payload ... failed: -5
+#   Twenty seconds later the display pipeline is gone, taking the
+#   compositor, xdg-desktop-portal (segfault in libwayland) and the VTs
+#   with it — Ctrl+Alt+F2 showed nothing because there was no console left
+#   to switch to. Measured 2026-09-05: one MST error in three days, in the
+#   boot that froze.
+#
+#   MST exists for daisy-chaining several displays down one cable. With a
+#   single monitor there is nothing to lose by refusing it, and the worst
+#   case if the KVM insists on MST is no external display — which beats a
+#   frozen laptop.
+#
+# ESCAPE HATCH, same as the resume= parameters: at the GRUB entry press
+# `e`, delete the parameter, F10. To undo permanently, remove it from
+# /etc/default/grub and re-run grub-mkconfig.
+
+set -euo pipefail
+
+PARAM="i915.enable_dp_mst=0"
+GRUB=/etc/default/grub
+
+# Fast path, NO sudo — the normal case. Theme switches apply headlessly on
+# every unlock and must never reach for a password here.
+if grep -q "$PARAM" /proc/cmdline 2>/dev/null && grep -q "$PARAM" "$GRUB" 2>/dev/null; then
+  exit 0
+fi
+
+# Already staged, just not booted into yet: say so rather than rebuilding
+# grub.cfg on every apply until the next reboot.
+if grep -q "$PARAM" "$GRUB" 2>/dev/null && grep -q "$PARAM" /boot/grub/grub.cfg 2>/dev/null; then
+  echo "==> $PARAM is staged; takes effect at the next boot"
+  exit 0
+fi
+
+run_root() {
+  if sudo -n true 2>/dev/null; then sudo "$@"
+  elif [ -t 0 ]; then sudo "$@"
+  else
+    echo "ERROR: kernel params need sudo — run 'chezmoi apply' in a terminal" >&2
+    exit 1
+  fi
+}
+
+echo "==> Adding $PARAM to the kernel command line..."
+run_root cp -a "$GRUB" "$GRUB.bak.$(date +%Y%m%d%H%M%S)"
+# Append inside the existing quotes, preserving whatever hibernate-setup
+# and friends have already put there.
+run_root sed -i "s|^\(GRUB_CMDLINE_LINUX_DEFAULT=\"[^\"]*\)\"|\1 $PARAM\"|" "$GRUB"
+grep -q "$PARAM" "$GRUB" || { echo "ERROR: failed to edit $GRUB" >&2; exit 1; }
+run_root grub-mkconfig -o /boot/grub/grub.cfg
+echo "    staged. Active after the next reboot; verify with:"
+echo "      grep -o '$PARAM' /proc/cmdline"
+{{ end -}}
