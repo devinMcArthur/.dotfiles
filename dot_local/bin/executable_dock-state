@@ -1,0 +1,31 @@
+#!/bin/sh
+# Exit 0 when this laptop is sitting at the desk.
+#
+# logind answers the same question from connected external DRM connectors
+# alone, and the AV Access KVM's DisplayPort link drops every time inputs are
+# switched — measured 2026-09-05: DP-2 read `connected`, then all four DP
+# connectors read `disconnected` fifteen minutes later with no cable touched.
+# Each drop looks like an undock, so HandleLidSwitchDocked stops applying and
+# a lid close at the desk suspends the machine mid-session.
+#
+# The KVM's USB tree survives those drops (it stayed enumerated across the
+# whole incident), so the dock's own USB id is the steadier signal. The
+# display scan stays as a fallback, for a plain monitor with no dock.
+
+# KTMicro "AV Access iDock" — the KVM's control endpoint.
+DOCK_IDS='1d6b:b036'
+
+for dev in /sys/bus/usb/devices/*; do
+    [ -r "$dev/idVendor" ] || continue
+    id="$(cat "$dev/idVendor" 2>/dev/null):$(cat "$dev/idProduct" 2>/dev/null)"
+    for want in $DOCK_IDS; do
+        [ "$id" = "$want" ] && exit 0
+    done
+done
+
+for conn in /sys/class/drm/card*-*; do
+    case "${conn##*/}" in *eDP*|*LVDS*|*DSI*) continue ;; esac
+    [ "$(cat "$conn/status" 2>/dev/null)" = connected ] && exit 0
+done
+
+exit 1

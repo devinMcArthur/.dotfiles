@@ -1,0 +1,13 @@
+[Unit]
+Description=Ignore the lid switch while docked at a desk
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/dock-lid-guard
+Restart=always
+RestartSec=5
+
+# graphical-session.target is inactive under greetd+Hyprland, so this must
+# hang off default.target or it silently never starts (see devbox-speak).
+[Install]
+WantedBy=default.target

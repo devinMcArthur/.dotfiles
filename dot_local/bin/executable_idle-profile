@@ -1,0 +1,15 @@
+#!/bin/sh
+# Which hypridle timings apply: "relaxed" or "aggressive".
+#
+# Aggressive (dim 2.5min, screen off 5.5min) is right for a laptop on battery
+# on a couch. It is wrong for one docked at a desk: the screen blanks
+# mid-thought and, with a KVM in the path that needs a moment to relight, is
+# indistinguishable from a frozen machine — which is exactly how it was read
+# on 2026-09-05.
+#
+# Docking therefore counts as relaxed whatever the battery says. This dock
+# supplies no power (ACAD/online stayed 0 with the KVM attached), so AC state
+# on its own never notices the desk at all.
+[ "$(cat /sys/class/power_supply/ACAD/online 2>/dev/null)" = 1 ] && { echo relaxed; exit 0; }
+"$HOME/.local/bin/dock-state" && { echo relaxed; exit 0; }
+echo aggressive

@@ -1,0 +1,36 @@
+#!/bin/sh
+# Hold a lid-switch inhibitor for as long as the laptop is docked.
+#
+# systemd's HandleLidSwitchDocked=ignore is meant to cover this, but logind
+# re-reads "docked" from live DRM connector state every time the lid moves,
+# and the KVM drops that link constantly. An inhibitor taken while the dock is
+# present survives the drops: logind cannot act on the lid at all until it is
+# released.
+#
+# Polling rather than udev: the dock enumerates as a tree of hubs whose device
+# paths vary by port, and a single missed remove event would wedge the
+# inhibitor on forever — the laptop would then never suspend on the lid again,
+# a worse failure than the one being fixed. A 10s poll always reconverges.
+
+INTERVAL=10
+inhibitor=
+
+release() {
+    [ -n "$inhibitor" ] && kill "$inhibitor" 2>/dev/null
+    inhibitor=
+}
+trap 'release; exit 0' TERM INT
+
+while :; do
+    if "$HOME/.local/bin/dock-state"; then
+        if [ -z "$inhibitor" ] || ! kill -0 "$inhibitor" 2>/dev/null; then
+            systemd-inhibit --what=handle-lid-switch --mode=block \
+                --who="dock-lid-guard" --why="Docked at a desk" \
+                sleep infinity &
+            inhibitor=$!
+        fi
+    else
+        release
+    fi
+    sleep "$INTERVAL"
+done

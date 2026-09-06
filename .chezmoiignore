@@ -125,6 +125,10 @@ Pictures
 .local/bin/selfie
 .local/bin/zsh-popup
 .local/bin/cloud-trial
+.local/bin/dock-state
+.local/bin/dock-lid-guard
+.local/bin/idle-profile
+.config/systemd/user/dock-lid-guard.service
 .config/herdr-mirror
 {{ end }}
 
