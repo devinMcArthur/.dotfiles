@@ -1,0 +1,46 @@
+#!/bin/sh
+# Record DisplayPort/MST state to disk, once a second, with an fsync after
+# every write.
+#
+# Four freezes on 2026-09-05 produced almost no evidence: the display stack
+# dies, the power button is the only way out, and journald never flushes.
+# The two-monitor MST attempt — the most informative one — logged nothing
+# at all. Anything learned about MST has to be on disk before the machine
+# goes, not buffered somewhere waiting for a clean shutdown.
+#
+# Usage: run it, switch the KVM, and read ~/.cache/drm-trace.log afterwards
+# (it survives a hard power cut). Ctrl-C to stop.
+
+LOG="${1:-$HOME/.cache/drm-trace.log}"
+mkdir -p "$(dirname "$LOG")"
+
+say() { printf '%s\n' "$*" >> "$LOG"; }
+
+say "=== drm-trace started $(date -Is) ==="
+say "kernel: $(uname -r)"
+say "cmdline: $(cat /proc/cmdline)"
+
+prev=""
+while :; do
+    now="$(
+        for c in /sys/class/drm/card*-*/status; do
+            [ -r "$c" ] || continue
+            printf '%s=%s ' "$(basename "$(dirname "$c")")" "$(cat "$c" 2>/dev/null)"
+        done
+    )"
+
+    # Only write on change, so the log stays readable, plus a heartbeat.
+    if [ "$now" != "$prev" ]; then
+        say "$(date -Is)  $now"
+        for m in /sys/class/drm/card*-*/modes; do
+            [ -r "$m" ] || continue
+            first="$(head -1 "$m" 2>/dev/null)"
+            [ -n "$first" ] && say "    $(basename "$(dirname "$m")") top mode: $first"
+        done
+        prev="$now"
+        # The whole point: on disk before the display stack can take the
+        # machine down with it.
+        sync
+    fi
+    sleep 1
+done

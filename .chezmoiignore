@@ -126,6 +126,7 @@ Pictures
 .local/bin/zsh-popup
 .local/bin/cloud-trial
 .ssh/authorized_keys
+.local/bin/drm-trace
 .local/bin/dock-state
 .local/bin/dock-lid-guard
 .local/bin/idle-profile
