@@ -22,11 +22,20 @@ API="https://api.bigdatacloud.net/data/reverse-geocode-client"
 
 [ -f "$SESSION" ] || { echo "no DMS session file" >&2; exit 1; }
 
-geo="$(timeout 20 curl -fsS "$API" 2>/dev/null)" || {
-  # Offline is the normal case for a laptop, not an error worth shouting
-  # about: keep whatever was last known and try again next time.
-  exit 0
-}
+# -L because the service answers 307 and redirects; without it curl
+# returns an EMPTY BODY and exit 0, since -f only fails on 4xx/5xx. That
+# fed "" to the parser and crashed the unit — a redirect looked exactly
+# like success.
+geo="$(timeout 20 curl -fsSL "$API" 2>/dev/null)" || geo=""
+
+# Anything that is not a JSON object means "no answer right now": offline,
+# redirected, rate-limited, a captive portal serving HTML. All of them are
+# ordinary for a laptop and none is worth failing a timer over — keep the
+# last known city and try again in half an hour.
+case "$geo" in
+  \{*) ;;
+  *) exit 0 ;;
+esac
 
 python3 - "$SESSION" "${1:-}" <<PY
 import json, sys
