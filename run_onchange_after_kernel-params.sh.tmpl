@@ -21,11 +21,17 @@
 # ESCAPE HATCH, same as the resume= parameters: at the GRUB entry press
 # `e`, delete the parameter, F10. To undo permanently, remove it from
 # /etc/default/grub and re-run grub-mkconfig.
+#
+# /boot is the vfat ESP, so it is outside btrfs snapshots — nothing rolls
+# grub.cfg back for us. Hence: back it up, build the new one beside it,
+# and only move it into place once it verifies. A failed grub-mkconfig
+# then costs an error message rather than a bootable machine.
 
 set -euo pipefail
 
 PARAM="i915.enable_dp_mst=0"
 GRUB=/etc/default/grub
+CFG=/boot/grub/grub.cfg
 
 # Fast path, NO sudo — the normal case. Theme switches apply headlessly on
 # every unlock and must never reach for a password here.
@@ -35,7 +41,7 @@ fi
 
 # Already staged, just not booted into yet: say so rather than rebuilding
 # grub.cfg on every apply until the next reboot.
-if grep -q "$PARAM" "$GRUB" 2>/dev/null && grep -q "$PARAM" /boot/grub/grub.cfg 2>/dev/null; then
+if grep -q "$PARAM" "$GRUB" 2>/dev/null && grep -q "$PARAM" "$CFG" 2>/dev/null; then
   echo "==> $PARAM is staged; takes effect at the next boot"
   exit 0
 fi
@@ -49,13 +55,42 @@ run_root() {
   fi
 }
 
+STAMP="$(date +%Y%m%d%H%M%S)"
+WAS_ENTRIES="$(grep -c '^[[:space:]]*menuentry' "$CFG" 2>/dev/null || echo 0)"
+
 echo "==> Adding $PARAM to the kernel command line..."
-run_root cp -a "$GRUB" "$GRUB.bak.$(date +%Y%m%d%H%M%S)"
+run_root cp -a "$GRUB" "$GRUB.bak.$STAMP"
+# vfat can't carry ownership, so a plain copy for the ESP.
+run_root cp "$CFG" "$CFG.bak.$STAMP"
+
 # Append inside the existing quotes, preserving whatever hibernate-setup
 # and friends have already put there.
 run_root sed -i "s|^\(GRUB_CMDLINE_LINUX_DEFAULT=\"[^\"]*\)\"|\1 $PARAM\"|" "$GRUB"
 grep -q "$PARAM" "$GRUB" || { echo "ERROR: failed to edit $GRUB" >&2; exit 1; }
-run_root grub-mkconfig -o /boot/grub/grub.cfg
-echo "    staged. Active after the next reboot; verify with:"
+
+# Build beside the live config; the running one stays untouched until the
+# new one proves itself.
+if ! run_root grub-mkconfig -o "$CFG.new"; then
+  run_root rm -f "$CFG.new"
+  run_root cp -a "$GRUB.bak.$STAMP" "$GRUB"
+  echo "ERROR: grub-mkconfig failed; $GRUB and $CFG left as they were" >&2
+  exit 1
+fi
+
+NOW_ENTRIES="$(grep -c '^[[:space:]]*menuentry' "$CFG.new" 2>/dev/null || echo 0)"
+if [ "$NOW_ENTRIES" -lt 1 ] || [ "$NOW_ENTRIES" -lt "$WAS_ENTRIES" ] \
+   || ! grep -q "$PARAM" "$CFG.new" \
+   || ! grep -q 'vmlinuz' "$CFG.new"; then
+  run_root rm -f "$CFG.new"
+  run_root cp -a "$GRUB.bak.$STAMP" "$GRUB"
+  echo "ERROR: generated grub.cfg failed inspection" >&2
+  echo "       (menuentries was $WAS_ENTRIES, now $NOW_ENTRIES)" >&2
+  echo "       Nothing was replaced; the working $CFG is still in place." >&2
+  exit 1
+fi
+
+run_root mv "$CFG.new" "$CFG"
+echo "    staged ($NOW_ENTRIES boot entries; backup at $CFG.bak.$STAMP)."
+echo "    Active after the next reboot; verify with:"
 echo "      grep -o '$PARAM' /proc/cmdline"
 {{ end -}}
