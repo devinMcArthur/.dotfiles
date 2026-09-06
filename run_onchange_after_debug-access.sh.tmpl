@@ -17,9 +17,13 @@
 #            power. Even knowing whether sysrq responds is a datapoint: it
 #            separates "the compositor died" from "the kernel died".
 #
-#   sshd   — lets the dev box reach in over Tailscale and collect dmesg
-#            while the laptop is still wedged, which is the only way we
-#            get a usable bug report out of one of these.
+#   sshd   — lets the dev box reach in over Tailscale and collect the
+#            kernel log while the laptop is still wedged, which is the only
+#            way we get a usable bug report out of one of these. Use
+#            `journalctl -k`, not dmesg: kernel.dmesg_restrict is 1, but
+#            wheel membership grants journal access, so journalctl reads the
+#            same ring buffer without needing a password over a batch ssh
+#            session that has no tty to prompt on.
 #
 # sshd binds to the Tailscale address only. This laptop travels, and an
 # SSH port answering on café wifi is a worse problem than the one being
