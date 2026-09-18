@@ -64,6 +64,22 @@ TITLE_XE="Arch Linux (linux) - MST + xe driver [test]"
 # 8086:7dd5 = Meteor Lake-P. i915 refuses it, xe takes it.
 XE_PARAMS="i915.force_probe=!7dd5 xe.force_probe=7dd5"
 
+# These entries exist ONLY to debug the KVM's MST failure, so they carry the
+# instrumentation that makes it legible. Every prior attempt left us just one
+# line — "creating MST payload ... failed: -5" — and nothing about why.
+#   drm.debug=0x16   DRIVER|KMS|ATOMIC: logs DP link training (rate/lanes),
+#                    the MST bandwidth + DSC decision in compute_config, and
+#                    where exactly the payload/ACT handshake fails. This is
+#                    what tells bandwidth (→ DSC/fewer displays) apart from a
+#                    sideband/AUX fault (→ retimer firmware) apart from a
+#                    driver bug. Noisy (eDP-1 compositing spams ATOMIC), hence:
+#   log_buf_len=16M  so the burst around the KVM switch cannot wrap before
+#                    journald drains it to /var/log/journal, which survives
+#                    the (ACPI-clean) shutdown these crashes actually do.
+# Not on the default entries — this verbosity is a debugging cost, not a
+# daily one. Drop DEBUG_PARAMS once MST is understood.
+DEBUG_PARAMS="drm.debug=0x16 log_buf_len=16M"
+
 # The 10_linux-generated entry for the non-LTS kernel, which we mirror.
 SOURCE_ENTRY="menuentry 'Arch Linux, with Linux linux'"
 
@@ -94,8 +110,8 @@ want_custom() {
   [ -n "$(extract_entry)" ] || return 1
   printf '#!/bin/sh\n'
   printf 'exec tail -n +3 $0\n'
-  emit_entry "$TITLE"    ""            "mst-test"
-  emit_entry "$TITLE_XE" "$XE_PARAMS"  "xe-test"
+  emit_entry "$TITLE"    "$DEBUG_PARAMS"              "mst-test"
+  emit_entry "$TITLE_XE" "$XE_PARAMS $DEBUG_PARAMS"   "xe-test"
 }
 
 # Fast path, NO sudo — the normal case. Theme switches apply headlessly on

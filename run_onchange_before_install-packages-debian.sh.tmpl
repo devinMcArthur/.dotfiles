@@ -62,6 +62,39 @@ if ! command -v dbmate >/dev/null 2>&1; then
   echo "    dbmate $(dbmate --version 2>/dev/null | head -1) installed"
 fi
 
+# Codex CLI. npm global rather than apt — OpenAI ships no Debian package.
+# Auth is deliberately NOT done here: `codex login --device-auth` prints a
+# code to type into a browser, which is an interactive step and the box has
+# no browser. Run it over ssh when the box is rebuilt.
+if ! command -v codex >/dev/null 2>&1; then
+  sudo npm install -g @openai/codex@latest --no-fund --no-audit >/dev/null 2>&1
+  echo "    codex $(codex --version 2>/dev/null | head -1) installed"
+fi
+
+# Codex's workspace-write sandbox is bubblewrap, and bubblewrap needs user
+# namespaces. Ubuntu 24.04 ships kernel.apparmor_restrict_unprivileged_userns=1
+# and denies them, so every agent edit fails with "the environment denied file
+# writes" while `codex doctor` still reports sandbox: workspace-write — it
+# looks configured and does nothing. Measured 2026-09-18.
+#
+# Grant the capability to /usr/bin/bwrap alone. Setting the sysctl to 0 would
+# lift the restriction for every binary on a box that is reachable from the
+# internet; this lifts it for one.
+if [ ! -f /etc/apparmor.d/bwrap ] && command -v bwrap >/dev/null 2>&1; then
+  sudo tee /etc/apparmor.d/bwrap >/dev/null <<'BWRAP_PROFILE'
+abi <abi/4.0>,
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+
+  include if exists <local/bwrap>
+}
+BWRAP_PROFILE
+  sudo apparmor_parser -r /etc/apparmor.d/bwrap 2>/dev/null \
+    && echo "    apparmor: bwrap may create user namespaces (Codex sandbox)"
+fi
+
 # Cluster tooling. Installed WITHOUT credentials: a rented box gets the
 # binaries so `doctl auth init` / `aws configure` are one interactive
 # step away, but nothing that reaches production is planted here.
