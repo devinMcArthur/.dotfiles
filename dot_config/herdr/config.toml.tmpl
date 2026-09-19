@@ -50,17 +50,28 @@ green         = "#{{ .theme.colors.green }}"
 #
 # NOT ctrl+h/ctrl+l for anything: ctrl+h is ASCII backspace in a
 # terminal, so the binding can never fire — it silently did nothing.
-# prefix+s is the tmux choose-tree reflex. It opens herdr-tab-picker
-# rather than herdr's own `goto` (see [[keys.command]] below), because
-# goto bottoms out at PANES and the useful leaf here is the tab — nearly
-# every tab holds one agent, so the pane level is just noise. goto's
-# depth is not configurable in 0.8.2, so the picker is rebuilt over the
-# socket API instead.
 #
-# goto keeps a home on prefix+shift+s for the rarer case of jumping
-# within a split. settings took prefix+g in the original swap;
-# prefix+shift+g (new_worktree) is a separate binding and is untouched.
-goto     = "prefix+shift+s"
+# prefix+s is the tmux choose-tree reflex, and as of 2026-09-19 it is
+# herdr's OWN goto again, with our herdr-tab-picker moved out to
+# prefix+shift+s. The swap is about machines, not taste.
+#
+# A keybinding can only run something of ours as a popup, and a popup is a
+# separate process that speaks the socket API. That API has no machine
+# concept at all — 103 methods, not one `machine.*` — because "which
+# machine am I viewing" is state inside the CLIENT, and no server can
+# change it. So our picker can LIST the box's tabs (`--machine box tab
+# list` proxies to the box's server) but focusing one only moves focus
+# over there; this client never budges. Measured on 0.9.1 for tab focus,
+# workspace focus and agent focus alike.
+#
+# goto is the client, so it can cross machines. That is the one thing our
+# picker cannot do, and it outranks goto bottoming out at panes — which is
+# still not configurable in 0.9.1, and remains the reason the picker was
+# written at all. herdr-mirror sidestepped this by copying the box's panes
+# into the LOCAL server, which is why focusing them used to work.
+#
+# settings keeps prefix+g; prefix+shift+g (new_worktree) is untouched.
+goto     = "prefix+s"
 settings = "prefix+g"
 
 previous_tab = "prefix+h"
@@ -92,12 +103,12 @@ focus_agent    = "prefix+alt+1..9"
 # Bound BOTH ways deliberately: the bare alt+g matches the old reflex,
 # but alt chords are the first thing a terminal or an outer tmux eats
 # (see the ctrl+h lesson above), so prefix+alt+g is the guaranteed path.
-# Tab picker on the tmux choose-tree key. A popup, because that is the
-# only way a keybinding can run something of ours: it lists every tab
-# across all workspaces — including the box's mirrored ones — and focuses
-# the chosen one.
+# Our tab picker, now on prefix+shift+s. Lists every tab on every machine
+# and focuses the chosen one — a local tab jumps, a box tab can only be
+# pre-positioned (see the goto note above). Kept because tabs, not panes,
+# are the useful leaf.
 [[keys.command]]
-key = "prefix+s"
+key = "prefix+shift+s"
 type = "popup"
 command = "{{ .chezmoi.homeDir }}/.local/bin/herdr-tab-picker"
 width = "60%"
