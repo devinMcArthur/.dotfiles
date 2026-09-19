@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# herdr-tab-picker — jump to a TAB, not a pane.
+# herdr-tab-picker — jump to a TAB, not a pane, across every machine.
 #
 # herdr's built-in `goto` picker bottoms out at panes, which is the wrong
 # leaf here: nearly every tab holds a single agent, so the pane level is
 # noise. Its depth is not configurable (checked against the full default
-# config and the docs for 0.8.2), so this rebuilds the picker over the
-# socket API instead — `tab list` already reports everything the rows
-# need, and `tab focus` does the jump.
+# config and the docs for 0.8.2 and 0.9.1), so this rebuilds the picker
+# over the socket API instead — `tab list` already reports everything the
+# rows need, and `tab focus` does the jump.
+#
+# Since 0.9.1 the box is a saved SSH machine rather than a mirrored
+# workspace, and `herdr tab list` only ever reports the LOCAL server — so
+# the box's tabs simply vanished from this picker. Each enabled machine is
+# now queried too, with `herdr --machine <label> tab list`.
 #
 # Runs inside a herdr popup (see [[keys.command]] in config.toml), so it
 # exits when a choice is made and the popup closes with it.
@@ -15,20 +20,31 @@ set -uo pipefail
 
 command -v fzf >/dev/null 2>&1 || { echo "fzf not installed" >&2; sleep 2; exit 1; }
 
-rows="$(herdr tab list 2>/dev/null | python3 -c '
-import json, sys
+# Rows are TSV: machine, tab_id, display. machine is empty for local, and
+# both leading fields are hidden from fzf (--with-nth=3..) because they are
+# the selection payload, not something to read.
+collect() {
+  local machine="$1"
+  local -a cmd=(herdr)
+  [ -n "$machine" ] && cmd+=(--machine "$machine")
+
+  # A machine is reached over ssh, so it can be slow or down. Never let one
+  # unreachable box stop the picker from opening on local tabs.
+  timeout 6 "${cmd[@]}" tab list 2>/dev/null | MACHINE="$machine" python3 -c '
+import json, os, subprocess, sys
+
+machine = os.environ.get("MACHINE", "")
 try:
     d = json.load(sys.stdin)
 except Exception:
-    sys.exit(1)
+    sys.exit(0)
 
 # Workspace labels are not on the tab records, so join them in — a bare
 # "w3" tells you nothing when three workspaces are open.
 names = {}
 try:
-    import subprocess
-    w = json.loads(subprocess.run(["herdr", "workspace", "list"],
-                                  capture_output=True, text=True).stdout)
+    cmd = ["herdr"] + (["--machine", machine] if machine else []) + ["workspace", "list"]
+    w = json.loads(subprocess.run(cmd, capture_output=True, text=True, timeout=6).stdout)
     for ws in w.get("result", {}).get("workspaces", []):
         names[ws["workspace_id"]] = ws.get("label") or ws["workspace_id"]
 except Exception:
@@ -38,11 +54,26 @@ GLYPH = {"working": "◐", "blocked": "!", "done": "✓", "idle": "·", "unknown
 for t in d.get("result", {}).get("tabs", []):
     ws = names.get(t["workspace_id"], t["workspace_id"])
     st = t.get("agent_status", "unknown")
-    here = "*" if t.get("focused") else " "
-    # tab_id first: the selection is split off it, the rest is display.
-    print("%s\t%s %s %-18s %-22s %s" % (
-        t["tab_id"], here, GLYPH.get(st, " "), ws[:18], t.get("label", "")[:22], st))
-')"
+    # Only a LOCAL tab can be the one you are sitting in; a remote focus is
+    # the box focusing itself, which is not "here" and must not win the
+    # opening cursor position.
+    here = "*" if (t.get("focused") and not machine) else " "
+    label = ("%s:%s" % (machine, ws))[:18] if machine else ws[:18]
+    print("%s\t%s\t%s %s %-18s %-22s %s" % (
+        machine, t["tab_id"], here, GLYPH.get(st, " "),
+        label, t.get("label", "")[:22], st))
+'
+}
+
+rows="$(collect "")"
+
+# Enabled machines only — a disabled one is deliberately out of the way.
+while IFS=$'\t' read -r _id label _target _session state; do
+  [ "${state:-}" = "enabled" ] || continue
+  [ -n "${label:-}" ] || continue
+  more="$(collect "$label")"
+  [ -n "$more" ] && rows="$rows"$'\n'"$more"
+done < <(herdr machine list 2>/dev/null)
 
 [ -n "$rows" ] || { echo "no tabs" >&2; sleep 2; exit 1; }
 
@@ -70,7 +101,7 @@ start_at=()
 NAV='j,k,g,G,q,ctrl-d,ctrl-u'
 sel="$(printf '%s\n' "$rows" \
   | fzf "${start_at[@]}" \
-        --with-nth=2.. --delimiter=$'\t' \
+        --with-nth=3.. --delimiter=$'\t' \
         --height=100% --reverse --prompt='tab > ' \
         --no-input \
         --bind "j:down,k:up,g:first,G:last,q:abort" \
@@ -79,8 +110,22 @@ sel="$(printf '%s\n' "$rows" \
         --bind "esc:transform:[ \"\$FZF_INPUT_STATE\" = hidden ] \
                   && echo abort \
                   || echo 'clear-query+hide-input+rebind($NAV)'" \
-        --header='j/k move   / search   enter jump   q/esc close' \
-  | cut -f1)"
+        --header='j/k move   / search   enter jump   q/esc close')"
 
 [ -n "$sel" ] || exit 0
-herdr tab focus "$sel" >/dev/null 2>&1
+machine="$(printf '%s' "$sel" | cut -f1)"
+tab="$(printf '%s' "$sel" | cut -f2)"
+
+if [ -z "$machine" ]; then
+  herdr tab focus "$tab" >/dev/null 2>&1
+else
+  # Focusing a remote tab sets the focus ON THAT MACHINE; it does not pull
+  # this client across — measured on 0.9.1, for both `tab focus` and
+  # `workspace focus`, and there is no API method that does (herdr api
+  # exposes only snapshot and schema). Switching machines is a sidebar
+  # action. So pre-position the box and say so, rather than silently
+  # appearing to do nothing.
+  herdr --machine "$machine" tab focus "$tab" >/dev/null 2>&1
+  printf '\n  %s is now on that tab — switch to it in the sidebar.\n' "$machine"
+  sleep 1.6
+fi
