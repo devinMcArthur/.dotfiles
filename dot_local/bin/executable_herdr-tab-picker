@@ -13,6 +13,12 @@
 # the box's tabs simply vanished from this picker. Each enabled machine is
 # now queried too, with `herdr --machine <label> tab list`.
 #
+# Those queries cross ssh and cost ~1.4s each — measured 2.7s for the box's
+# two calls, which made prefix+s look broken: three seconds of nothing, then
+# a picker. So the rows are STREAMED into fzf rather than collected first.
+# Local tabs are ready in ~10ms and the picker opens on them immediately;
+# the box's rows append underneath when they arrive.
+#
 # Runs inside a herdr popup (see [[keys.command]] in config.toml), so it
 # exits when a choice is made and the popup closes with it.
 
@@ -65,17 +71,22 @@ for t in d.get("result", {}).get("tabs", []):
 '
 }
 
-rows="$(collect "")"
+local_rows="$(collect "")"
 
-# Enabled machines only — a disabled one is deliberately out of the way.
-while IFS=$'\t' read -r _id label _target _session state; do
-  [ "${state:-}" = "enabled" ] || continue
-  [ -n "${label:-}" ] || continue
-  more="$(collect "$label")"
-  [ -n "$more" ] && rows="$rows"$'\n'"$more"
-done < <(herdr machine list 2>/dev/null)
+[ -n "$local_rows" ] || { echo "no tabs" >&2; sleep 2; exit 1; }
 
-[ -n "$rows" ] || { echo "no tabs" >&2; sleep 2; exit 1; }
+# Local first, then each enabled machine — a disabled one is deliberately
+# out of the way. Ordering matters beyond tidiness: the focused local row is
+# always in the first chunk, so its line number is known before any remote
+# query has returned and the opening cursor can be placed immediately.
+stream_rows() {
+  printf '%s\n' "$local_rows"
+  while IFS=$'\t' read -r _id label _target _session state; do
+    [ "${state:-}" = "enabled" ] || continue
+    [ -n "${label:-}" ] || continue
+    collect "$label"
+  done < <(herdr machine list 2>/dev/null)
+}
 
 # Modal, like vim: the list starts in normal mode with j/k moving, and
 # `/` is what begins a search. Without --no-input every keystroke goes
@@ -92,14 +103,15 @@ done < <(herdr machine list 2>/dev/null)
 # Open on the tab you are already in, not on the first row — the useful
 # starting point is "where am I", so a glance shows your neighbours and
 # j/k moves relative to here. The focused row is the one marked "*".
-# Bound to `load` rather than `start`: load fires once the list is fully
-# read, so the position cannot be applied to a half-filled list.
-pos="$(printf '%s\n' "$rows" | grep -nF $'\t*' | head -1 | cut -d: -f1)"
+# Bound to `start`, not `load`: load waits for every machine to answer, so
+# the cursor would sit at the top for a second and then jump out from under
+# you. The target row is in the local chunk, which fzf has already read.
+pos="$(printf '%s\n' "$local_rows" | grep -nF $'\t*' | head -1 | cut -d: -f1)"
 start_at=()
-[ -n "$pos" ] && start_at=(--bind "load:pos($pos)")
+[ -n "$pos" ] && start_at=(--bind "start:pos($pos)")
 
 NAV='j,k,g,G,q,ctrl-d,ctrl-u'
-sel="$(printf '%s\n' "$rows" \
+sel="$(stream_rows \
   | fzf "${start_at[@]}" \
         --with-nth=3.. --delimiter=$'\t' \
         --height=100% --reverse --prompt='tab > ' \
