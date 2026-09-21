@@ -120,11 +120,13 @@ exec-once = $HOME/.local/bin/voxtype-autostop
 # already back in place instead of rebuilding it by hand. Headless: no
 # window appears until you attach.
 exec-once = $HOME/.local/bin/herdr server
-# herdr-mirror daemon: puts the dev box's agents in this sidebar. The
-# plugin also starts it when a mirrored workspace is focused, but after a
-# reboot there is no mirrored workspace to focus until the daemon has run
-# once — it creates them. So start it here too.
-exec-once = $HOME/.local/bin/herdr-mirror start
+# herdr-mirror is retired (2026-09-19): the box is a native herdr machine
+# now, saved with `herdr machine add`. This used to `exec-once` the mirror
+# daemon, and that line outlived `herdr plugin disable` — a Hyprland
+# exec-once is outside herdr's plugin system entirely, so the mirror came
+# straight back after the next reboot with the plugin still marked
+# disabled. If the mirror is ever wanted again, re-enable the plugin AND
+# put this back; one without the other is how it was silently half-alive.
 
 # Voice commands: say "turing, workspace three" (wake word + fixed
 # grammar, all local). Off: voice-control off | spoken "turing sleep"
@@ -377,7 +379,7 @@ bind = SUPER CTRL, V, exec, claude-tts toggle                                # c
 # Type an instruction instead of speaking it: same grammar, same local
 # model, same allowlist as the voice commands (see voice-control).
 # Remote dev box: a shell over mosh. Not the box's herdr — its agents are
-# already in this sidebar via herdr-mirror, so this is for one-off
+# already in this sidebar as the `box` machine, so this is for one-off
 # commands rather than a second multiplexer. The address
 # lives in ~/.config/devbox/host so rebuilding the box does not mean
 # editing this file — `devbox host dev@<ip>`.
