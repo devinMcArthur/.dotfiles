@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-09-20T19:54:07-06:00_
+_Generated 2026-09-22T08:19:42-06:00_
 
 ## Hyprland — window manager
 
@@ -84,6 +84,7 @@ _Generated 2026-09-20T19:54:07-06:00_
 | `SUPER + SHIFT + B` | `exec` | ghostty --class=tui.bluetooth -e bluetui # bluetooth manager (bluetui TUI) |
 | `SUPER + SHIFT + C` | `exec` | hyprpicker -a                                  # pick color under cursor |
 | `SUPER + SHIFT + comma` | `movewindow` | mon:desc:Acer Technologies KA272 0x13800DD9 |
+| `SUPER + SHIFT + F4` | `exec` | claude-tts read-last box                       # claude voice: read the dev box's focused agent |
 | `SUPER + SHIFT + grave` | `movetoworkspace` | special:scratch |
 | `SUPER + SHIFT + H` | `movewindow` | l |
 | `SUPER + SHIFT + J` | `movewindow` | d  |

@@ -429,57 +429,80 @@ case "${1:-hook}" in
     say_text "$(cat "$STATE/last-text")"
     ;;
   read-last)
-    # Read the final assistant message of the session you are sitting in.
+    # Read the last assistant message of the session you are looking at.
     #
-    # Three cases, because a herdr pane can be one of three things: a local
-    # agent (the session id is right there), a herdr-mirror pane showing an
-    # agent on the box (the id lives on the FAR side, and the pane's own
-    # process is the only thing that knows which remote pane it mirrors),
-    # or something that is not an agent at all.
+    # "Looking at" is the hard part. A herdr client can be viewing its own
+    # server or a saved SSH machine, and WHICH is client-side state that no
+    # server knows — there is no machine.* method in the socket API at all.
+    # So this cannot simply ask. Until 2026-09-19 it did not have to: the box
+    # arrived through herdr-mirror as LOCAL panes, and the pane's own argv
+    # (`herdr-mirror pane <host> <remote-pane>`) carried the mapping. Native
+    # machines removed both the local pane and that argv, which is what broke
+    # Super+F4 for box sessions.
+    #
+    # Recency was tried and is wrong: a local agent mid-reply is always the
+    # most recent thing, so Super+F4 read THIS session while the box was the
+    # one being watched. And there is no signal to fall back on —
+    # `herdr pane current` reports the local pane as focused=true even while
+    # the client is displaying a machine, and the session snapshot carries no
+    # client or machine field.
+    #
+    # So it is explicit, which at least never surprises:
+    #   claude-tts read-last          the local focused pane
+    #   claude-tts read-last box      that machine's focused agent
+    target_machine="${2:-}"
     cur="$(herdr pane current 2>/dev/null)"
-    pane="$(printf '%s' "$cur" | jq -r '.result.pane.pane_id // empty' 2>/dev/null)"
     sid="$(printf '%s' "$cur" | jq -r '.result.pane.agent_session.value // empty' 2>/dev/null)"
-    [ -n "$pane" ] || { echo "no focused pane — is this a herdr pane?" >&2; exit 1; }
 
-    text=""
-    if [ -n "$sid" ]; then
+    best_ts=""; best_text=""; best_from=""
+
+    consider() {   # ts, text, label — keep the newest
+      [ -n "${1:-}" ] || return 0
+      [ -n "${2:-}" ] || return 0
+      if [ -z "$best_ts" ] || [[ "$1" > "$best_ts" ]]; then
+        best_ts="$1"; best_text="$2"; best_from="$3"
+      fi
+    }
+
+    if [ -z "$target_machine" ] && [ -n "$sid" ]; then
       tp="$(ls -1 "$HOME"/.claude/projects/*/"$sid".jsonl 2>/dev/null | head -1)"
-      [ -n "$tp" ] || { echo "no transcript for session $sid" >&2; exit 1; }
-      text="$(last_entry "$tp")"
-    else
-      # No local session: follow the mirror. `pane process-info` reports
-      # the pane's argv, and a mirror pane is literally
-      # `herdr-mirror pane <host> <remote-pane>` — the mapping is not
-      # recorded anywhere else.
-      read -r mhost mpane <<<"$(herdr pane process-info --pane "$pane" 2>/dev/null | jq -r '
-        .result.process_info.foreground_processes[]?.argv
-        | select(. != null)
-        | select(any(.[]; test("herdr-mirror$")))
-        | select(length > 3 and .[1] == "pane")
-        | "\(.[2]) \(.[3])"' 2>/dev/null | head -1)"
-      if [ -z "$mhost" ]; then
-        echo "no agent in this pane" >&2; exit 1
+      if [ -n "$tp" ]; then
+        e="$(last_entry "$tp")"
+        [ -n "$e" ] && consider "$(printf '%s' "$e" | cut -f2)" \
+                                "$(printf '%s' "$e" | cut -f3-)" "local"
       fi
-      rsid="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$mhost" \
-              "\$HOME/.local/bin/herdr agent list" 2>/dev/null \
-              | jq -r --arg p "$mpane" '.result.agents[]
-                  | select(.pane_id == $p) | .agent_session.value // empty' 2>/dev/null | head -1)"
-      if [ -z "$rsid" ]; then
-        # herdr only learns a session id at SessionStart, so a conversation
-        # older than the integration on that host is invisible to it.
-        echo "$mhost pane $mpane has no session id yet — herdr learns it at SessionStart," >&2
-        echo "so a conversation started before the integration was installed is invisible." >&2
-        echo "It registers itself the next time that session starts or resumes." >&2
-        exit 1
-      fi
-      text="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$mhost" \
-        "sh -c 'tail -n 400 \$HOME/.claude/projects/*/$rsid.jsonl 2>/dev/null'" 2>/dev/null \
-        | last_entry_stdin)"
     fi
 
-    [ -n "$text" ] || { echo "no assistant message to read" >&2; exit 1; }
-    body="$(printf '%s' "${text#*$'\t'}" | cut -f2-)"
-    spoken="$(printf '%s' "$body" | clean_md)"
+    # Each machine's focused agent. `herdr machine list` is tab separated:
+    # id, label, ssh target, session, state.
+    while IFS=$'\t' read -r _mid mlabel mtarget _msession mstate; do
+      [ "${mstate:-}" = "enabled" ] || continue
+      [ -n "${mtarget:-}" ] || continue
+      # Named a machine? only that one. Named none? none of them.
+      [ -n "$target_machine" ] || continue
+      [ "$mlabel" = "$target_machine" ] || continue
+      rsid="$(herdr --machine "$mlabel" agent list 2>/dev/null \
+              | jq -r '.result.agents[]? | select(.focused == true)
+                       | .agent_session.value // empty' 2>/dev/null | head -1)"
+      [ -n "$rsid" ] || continue
+      e="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$mtarget" \
+            "sh -c 'tail -n 400 \$HOME/.claude/projects/*/$rsid.jsonl 2>/dev/null'" 2>/dev/null \
+          | last_entry_stdin)"
+      [ -n "$e" ] && consider "$(printf '%s' "$e" | cut -f2)" \
+                              "$(printf '%s' "$e" | cut -f3-)" "$mlabel"
+    done < <(herdr machine list 2>/dev/null)
+
+    if [ -z "$best_text" ]; then
+      if [ -n "$target_machine" ]; then
+        echo "no focused agent on machine '$target_machine'" >&2
+        echo "machines: $(herdr machine list 2>/dev/null | cut -f2 | tr '\n' ' ')" >&2
+      else
+        echo "no assistant message in this pane — for a box session:" >&2
+        echo "  claude-tts read-last box   (Super+Shift+F4)" >&2
+      fi
+      exit 1
+    fi
+    spoken="$(printf '%s' "$best_text" | clean_md)"
     [ -n "${spoken//[[:space:]]/}" ] || { echo "nothing readable" >&2; exit 1; }
     hush
     say_text "$spoken"

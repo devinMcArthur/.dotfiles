@@ -12,6 +12,17 @@
 # Direction matters: the laptop pulls. The box cannot reach back through
 # NAT, and an ssh tunnel in that direction would break every time the
 # address changes (it changed overnight during the trial).
+#
+# The link drops often — a roaming laptop, and tailscale keys that expire.
+# That is accepted; what is not is losing what was said meanwhile. This
+# used to follow with `tail -n0`, which restarts at END OF FILE on every
+# reconnect, so a disconnect silently swallowed every reply inside it.
+# Measured 2026-09-22: eight service restarts overnight and an eight-hour
+# hole in spoken-remote.log, 00:04 to 07:56, which read as "TTS is dead"
+# rather than "TTS reconnected and skipped the backlog".
+#
+# So the read position is persisted as a BYTE OFFSET into the box's queue
+# and the tail resumes from it.
 
 set -uo pipefail
 
@@ -25,6 +36,44 @@ host="$("$HOME/.local/bin/devbox-target")"
 TTS="$HOME/.local/bin/claude-tts"
 
 LOG="${XDG_STATE_HOME:-$HOME/.local/state}/claude-tts/spoken-remote.log"
+
+# How far into the box's queue we have spoken. Survives restarts, which is
+# the entire point — systemd restarted this eight times in one night.
+OFFSET="${XDG_STATE_HOME:-$HOME/.local/state}/claude-tts/devbox-queue-offset"
+
+# Ceiling on how much backlog a reconnect will replay, in bytes. Lines run
+# ~100 bytes and each takes several seconds to speak, so an uncapped catch-up
+# after a long outage would hold the speakers for many minutes and bury
+# whatever is being said NOW. Roughly twenty lines.
+BACKLOG_CAP=2000
+
+# Where to resume from. Echoes a byte offset; needs one ssh round trip to
+# learn the queue's current size.
+resume_offset() {
+  local size saved start
+  size="$(ssh -o ConnectTimeout=10 -o BatchMode=yes "$host" \
+            "stat -c %s $QUEUE 2>/dev/null || echo 0" 2>/dev/null)" || return 1
+  case "$size" in ''|*[!0-9]*) return 1 ;; esac
+
+  saved="$(cat "$OFFSET" 2>/dev/null)"
+  case "$saved" in ''|*[!0-9]*) saved="" ;; esac
+
+  if [ -z "$saved" ]; then
+    # First ever run: start at the end. Speaking the whole historical queue
+    # (143KB when this was written) would be hours of monologue.
+    start="$size"
+  elif [ "$saved" -gt "$size" ]; then
+    # Queue truncated or rotated under us — the offset means nothing now.
+    start=0
+  else
+    start="$saved"
+  fi
+
+  if [ "$size" -gt "$BACKLOG_CAP" ] && [ "$start" -lt $(( size - BACKLOG_CAP )) ]; then
+    start=$(( size - BACKLOG_CAP ))
+  fi
+  printf '%s' "$start"
+}
 
 speak() {
   local line="$1"
@@ -75,12 +124,23 @@ case "${1:-follow}" in
     # overnight before. ServerAliveInterval kills a hung session, and we
     # come back — but give up eventually rather than retry forever after
     # the box is destroyed.
+    mkdir -p "${OFFSET%/*}"
     fails=0
     while [ "$fails" -lt 20 ]; do
-      # -F so a rotated/truncated queue keeps working; the box appends only.
+      start="$(resume_offset)" || { fails=$((fails+1)); sleep 15; continue; }
+      # -c +N resumes at the byte we stopped at, rather than -n0's "whatever
+      # arrives from now on". -F so a rotated queue still works; the box
+      # only ever appends.
       if ssh -o ConnectTimeout=10 -o ServerAliveInterval=30 -o BatchMode=yes "$host" \
-           "touch $QUEUE; tail -n0 -F $QUEUE 2>/dev/null" \
-         | while IFS= read -r l; do speak "$l"; done
+           "touch $QUEUE; tail -c +$((start + 1)) -F $QUEUE 2>/dev/null" \
+         | while IFS= read -r l; do
+             speak "$l"
+             # AFTER speaking, so a crash mid-line repeats it rather than
+             # dropping it. wc -c not ${#l}: the box's text is UTF-8 and
+             # ${#l} counts characters, which would drift the offset.
+             start=$(( start + $(printf '%s\n' "$l" | LC_ALL=C wc -c) ))
+             printf '%s' "$start" > "$OFFSET"
+           done
       then fails=0            # clean end: box closed the stream
       else fails=$((fails+1))
       fi
