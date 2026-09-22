@@ -365,14 +365,20 @@ bind = $mainMod ALT, C, exec, $HOME/.local/bin/ghostty-crt toggle          # ter
 bind = SUPER, XF86AudioMute, exec, claude-tts toggle                         # claude voice: mute + clear queue
 bind = SUPER, XF86AudioPlay, exec, claude-tts pause                          # claude voice: pause/resume
 bind = SUPER, XF86AudioNext, exec, claude-tts skip                           # claude voice: skip this message
-bind = SUPER, XF86AudioPrev, exec, claude-tts read-last                      # claude voice: read this session's last reply
+bind = SUPER, XF86AudioPrev, exec, claude-tts read-last box                  # claude voice: read the dev box's focused agent
 
 # Same four for a keyboard with Fn-lock on, where the row sends F1-F6.
 # F1 is deliberately absent: it is the cheatsheet.
 bind = SUPER, F5, exec, claude-tts pause                                     # claude voice: pause/resume
 bind = SUPER, F6, exec, claude-tts skip                                      # claude voice: skip this message
-bind = SUPER, F4, exec, claude-tts read-last                                 # claude voice: read this session's last reply
-bind = SUPER SHIFT, F4, exec, claude-tts read-last box                       # claude voice: read the dev box's focused agent
+# F4 reads the BOX, not this laptop. The agents worth listening to run
+# there; the local session is the one already on screen being read. Which
+# machine the client is VIEWING cannot be detected — measured 2026-09-22:
+# over 14 samples the local focused flag stayed on this workspace the whole
+# time the client was displaying the box, while the box's own focus tracked
+# the move live. So the target is a keybinding, not a guess.
+bind = SUPER, F4, exec, claude-tts read-last box                             # claude voice: read the dev box's focused agent
+bind = SUPER SHIFT, F4, exec, claude-tts read-last                           # claude voice: read THIS laptop session's last reply
 
 # Kept as the mute alternative, since Super+F1 is taken by the cheatsheet.
 bind = SUPER CTRL, V, exec, claude-tts toggle                                # claude voice: mute + clear queue

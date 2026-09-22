@@ -7,7 +7,7 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-09-22T08:19:42-06:00_
+_Generated 2026-09-22T08:42:42-06:00_
 
 ## Hyprland — window manager
 
@@ -50,7 +50,7 @@ _Generated 2026-09-22T08:19:42-06:00_
 | `SUPER + E` | `exec` | $fileManager # Show the graphical file browser |
 | `SUPER + escape` | `exec` | $lock                                           # lock the screen |
 | `SUPER + F1` | `exec` | $HOME/.local/bin/hypr-cheatsheet                                      # show keybind cheatsheet |
-| `SUPER + F4` | `exec` | claude-tts read-last                                 # claude voice: read this session's last reply |
+| `SUPER + F4` | `exec` | claude-tts read-last box                             # claude voice: read the dev box's focused agent |
 | `SUPER + F5` | `exec` | claude-tts pause                                     # claude voice: pause/resume |
 | `SUPER + F6` | `exec` | claude-tts skip                                      # claude voice: skip this message |
 | `SUPER + F` | `fullscreen` | — |
@@ -84,7 +84,7 @@ _Generated 2026-09-22T08:19:42-06:00_
 | `SUPER + SHIFT + B` | `exec` | ghostty --class=tui.bluetooth -e bluetui # bluetooth manager (bluetui TUI) |
 | `SUPER + SHIFT + C` | `exec` | hyprpicker -a                                  # pick color under cursor |
 | `SUPER + SHIFT + comma` | `movewindow` | mon:desc:Acer Technologies KA272 0x13800DD9 |
-| `SUPER + SHIFT + F4` | `exec` | claude-tts read-last box                       # claude voice: read the dev box's focused agent |
+| `SUPER + SHIFT + F4` | `exec` | claude-tts read-last                           # claude voice: read THIS laptop session's last reply |
 | `SUPER + SHIFT + grave` | `movetoworkspace` | special:scratch |
 | `SUPER + SHIFT + H` | `movewindow` | l |
 | `SUPER + SHIFT + J` | `movewindow` | d  |
@@ -106,7 +106,7 @@ _Generated 2026-09-22T08:19:42-06:00_
 | `SUPER + XF86AudioMute` | `exec` | claude-tts toggle                         # claude voice: mute + clear queue |
 | `SUPER + XF86AudioNext` | `exec` | claude-tts skip                           # claude voice: skip this message |
 | `SUPER + XF86AudioPlay` | `exec` | claude-tts pause                          # claude voice: pause/resume |
-| `SUPER + XF86AudioPrev` | `exec` | claude-tts read-last                      # claude voice: read this session's last reply |
+| `SUPER + XF86AudioPrev` | `exec` | claude-tts read-last box                  # claude voice: read the dev box's focused agent |
 | `SUPER + Y` | `layoutmsg` | togglesplit # dwindle |
 | `up` | `resizeactive` | 0 -10 |
 | `XF86AudioLowerVolume` | `exec` | wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- |
