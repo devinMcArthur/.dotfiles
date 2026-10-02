@@ -24,7 +24,9 @@ mid-recording.
 Frames are high-passed before measuring RMS: this laptop's fan sits at a
 loud but low-frequency noise floor that would swamp a plain energy
 threshold, while speech survives the filter. The floor is tracked
-adaptively (falls fast, rises slowly).
+adaptively (falls fast, rises slowly) but ONLY while you are not speaking —
+adapting it during speech walks it up into the voice and ends the dictation
+mid-sentence. See the note in watch_recording.
 """
 
 import os
@@ -161,12 +163,30 @@ def watch_recording() -> None:
 
             if floor is None:
                 floor = rms
-            elif rms < floor:
-                floor = 0.7 * floor + 0.3 * rms      # drop fast
-            else:
-                floor = 0.995 * floor + 0.005 * rms  # rise slowly
 
-            if rms > max(floor * THRESHOLD_MULT, MIN_THRESHOLD):
+            # Classify FIRST, against the floor as it stands, then adapt the
+            # floor only on frames that were not speech.
+            #
+            # Updating it on every frame — which is what this did until
+            # 2026-10-02 — let sustained speech drag the floor up into the
+            # speech itself. Speech needs rms > floor*2.5, so once the floor
+            # passed ~40% of speaking level the voice stopped counting as
+            # speech, silent_ms began accumulating WHILE STILL TALKING, and
+            # the walk-away timer expired. At 0.5% per 100ms frame the floor
+            # covers that distance in ~9s; plus the 20s limit, dictation died
+            # after ~30s of continuous speech. Exactly the reported symptom.
+            #
+            # Freezing the floor during speech is self-correcting: a floor
+            # set too low classifies more frames as speech and so stops
+            # rising, which is the direction that keeps the mic open.
+            is_speech = rms > max(floor * THRESHOLD_MULT, MIN_THRESHOLD)
+            if not is_speech:
+                if rms < floor:
+                    floor = 0.7 * floor + 0.3 * rms      # drop fast
+                else:
+                    floor = 0.995 * floor + 0.005 * rms  # rise slowly
+
+            if is_speech:
                 speech_ms += 100
                 silent_ms = 0
                 checked = False

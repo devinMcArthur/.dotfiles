@@ -3,38 +3,44 @@
 {{ if ne .chezmoi.osRelease.id "arch" }}exit 0  # this laptop's GPU; not a server concern.{{ end }}
 # Kernel command line: things that must be set before userspace exists.
 #
-# i915.enable_dp_mst=0
-#   The AV Access KVM presents a DisplayPort MST hub, and i915 fails to
-#   allocate the payload for it:
-#     [drm] *ERROR* Step 2 of creating MST payload ... failed: -5
-#   Twenty seconds later the display pipeline is gone, taking the
-#   compositor, xdg-desktop-portal (segfault in libwayland) and the VTs
-#   with it — Ctrl+Alt+F2 showed nothing because there was no console left
-#   to switch to. Measured 2026-09-05 on linux-lts 6.18.46.
+# MST IS ON BY DEFAULT, and the exception is a menu entry.
 #
-#   This is a tourniquet, not a cure: MST is exactly what drives the three
-#   desk monitors down one KVM cable, so refusing it costs two of them.
-#   It stays the default because a stable laptop beats a frozen one.
+# i915.enable_dp_mst=0 was the default until 2026-09-25, because the AV Access
+# KVM at home fails to allocate an MST payload and takes the display pipeline
+# down with it:
+#   [drm] *ERROR* Step 2 of creating MST payload ... failed: -5
+# Twenty seconds later the compositor, xdg-desktop-portal (segfault in
+# libwayland) and the VTs are gone — Ctrl+Alt+F2 showed nothing because there
+# was no console left to switch to. Measured 2026-09-05 on linux-lts 6.18.46.
 #
-# THE TEST ENTRIES, and why they exist: trying anything here means booting
-# with the parameter removed, which otherwise means hand-editing the kernel
-# line at the GRUB prompt on a machine that may be about to freeze. So we
-# generate entries that are the ordinary 'linux' entry minus the parameter.
-# Select one, test, and if it locks up, reboot and pick the default again.
-# The default is never the risky one.
+# What that missed: a kernel parameter is global, and the two desks want
+# opposite settings.
 #
-#   [test] DisplayPort MST enabled
-#     Plain MST on whatever `linux` currently is. Tried 2026-09-05 on 7.1.9:
-#     failed with the identical "Step 2 ... failed: -5" as 6.18.46-lts, so a
-#     year of i915 display work changes nothing here. Kept because it is the
-#     control for the entry below, and re-testing costs one reboot.
+#   office   MST on   -> two independent monitors
+#            MST off  -> the SAME two monitors, MIRRORED (one stream cloned)
+#   home     MST on   -> payload fails; no externals at all, plus the freeze
+#            MST off  -> one stream cloned to the panels; degraded but stable
 #
-#   [test] MST + xe driver
-#     Hands the GPU to xe, Intel's other driver for this silicon, which has
-#     an entirely separate display path. Both drivers claim 8086:7dd5, so
-#     the handover needs force_probe on both sides: one to refuse, one to
-#     accept. This is the last software variable — if MST still fails under
-#     xe, the fault is in the KVM, and firmware is the remaining lead.
+# Disabling it globally quietly broke the office, which is where this laptop
+# mostly lives. So the default is now plain MST, and home is the entry you
+# pick — the location you are at less often is the one that costs a keypress.
+#
+# There is no runtime toggle to avoid that keypress:
+# /sys/module/i915/parameters/enable_dp_mst is mode 0400, read-only once the
+# module is loaded. Changing it means reloading i915, which means tearing
+# down the display stack.
+#
+# THE REAL FIX, untested: the KVM negotiates only 2 DP lanes (12.96 Gbps) and
+# the three home monitors need 16.8, because the cable is passive and not
+# e-marked so the link falls back to DP Alt Mode sharing wires with USB 3.
+# The dock itself advertises Thunderbolt 3 (typec svid 8087) and this laptop
+# has two TB4 controllers. A certified 40 Gbps cable should give a real
+# Thunderbolt link with DisplayPort tunnelled — enough for all three. If that
+# works, MST stays on everywhere and the home entry below can be deleted.
+#
+# Ruled out by testing, so no longer offered: kernel 7.1.9 (identical
+# "Step 2 ... failed: -5" as 6.18.46-lts) and the xe driver (same failure
+# again, which is what moved suspicion from the driver to the KVM).
 #
 # ESCAPE HATCH regardless: at any GRUB entry press `e`, edit the `linux`
 # line, F10 to boot it once.
@@ -59,67 +65,73 @@ PARAM="i915.enable_dp_mst=0"
 GRUB=/etc/default/grub
 CFG=/boot/grub/grub.cfg
 CUSTOM=/etc/grub.d/42-mst-test
-TITLE="Arch Linux (linux) - DisplayPort MST enabled [test]"
-TITLE_XE="Arch Linux (linux) - MST + xe driver [test]"
-# 8086:7dd5 = Meteor Lake-P. i915 refuses it, xe takes it.
-XE_PARAMS="i915.force_probe=!7dd5 xe.force_probe=7dd5"
+TITLE="Arch Linux (linux-lts) - MST disabled [home KVM]"
+TITLE_DEBUG="Arch Linux (linux) - MST + debug logging [diagnose]"
 
-# These entries exist ONLY to debug the KVM's MST failure, so they carry the
-# instrumentation that makes it legible. Every prior attempt left us just one
-# line — "creating MST payload ... failed: -5" — and nothing about why.
+# Instrumentation for the next attempt at the KVM, kept off the entries used
+# daily. Every prior attempt left one line — "creating MST payload ...
+# failed: -5" — and nothing about why.
 #   drm.debug=0x16   DRIVER|KMS|ATOMIC: logs DP link training (rate/lanes),
 #                    the MST bandwidth + DSC decision in compute_config, and
 #                    where exactly the payload/ACT handshake fails. This is
-#                    what tells bandwidth (→ DSC/fewer displays) apart from a
-#                    sideband/AUX fault (→ retimer firmware) apart from a
+#                    what tells bandwidth (-> DSC/fewer displays) apart from a
+#                    sideband/AUX fault (-> retimer firmware) apart from a
 #                    driver bug. Noisy (eDP-1 compositing spams ATOMIC), hence:
 #   log_buf_len=16M  so the burst around the KVM switch cannot wrap before
 #                    journald drains it to /var/log/journal, which survives
 #                    the (ACPI-clean) shutdown these crashes actually do.
-# Not on the default entries — this verbosity is a debugging cost, not a
-# daily one. Drop DEBUG_PARAMS once MST is understood.
 DEBUG_PARAMS="drm.debug=0x16 log_buf_len=16M"
 
-# The 10_linux-generated entry for the non-LTS kernel, which we mirror.
-SOURCE_ENTRY="menuentry 'Arch Linux, with Linux linux'"
+# The home entry mirrors the LTS entry, because that is what the default
+# boots: at home you want the same kernel you always run, only without MST.
+# The diagnose entry mirrors the non-LTS one, so a future attempt gets the
+# newer display code for free.
+SOURCE_LTS="menuentry 'Arch Linux, with Linux linux-lts'"
+SOURCE_LINUX="menuentry 'Arch Linux, with Linux linux'"
 
-# Lift that entry out of the live grub.cfg rather than hardcoding a root
+# Lift the entry out of the live grub.cfg rather than hardcoding a root
 # UUID here: if the disk is ever reinstalled, this tracks it automatically.
 extract_entry() {
-  awk -v want="$SOURCE_ENTRY" '
+  awk -v want="$1" '
     index($0, want) { inblock = 1 }
     inblock         { print }
     inblock && /^[[:space:]]*\}[[:space:]]*$/ { exit }
   ' "$CFG"
 }
 
-# One entry: the stock 'linux' entry with the MST parameter stripped, a
-# distinct menuentry id so GRUB never confuses it with the real one, and any
-# extra kernel arguments appended to the `linux` line.
+# One entry: a stock entry with extra kernel arguments appended to the
+# `linux` line and a distinct menuentry id so GRUB never confuses it with
+# the real one. The MST parameter is now an ADDITION, not a removal — the
+# default no longer carries it.
 emit_entry() {
-  local title="$1" extra="$2" idtag="$3"
+  local source="$1" title="$2" extra="$3" idtag="$4"
+  # Strip the parameter before appending it. On the first run after the
+  # inversion the live grub.cfg still carries it on every entry, so without
+  # this the home entry would get it twice and the fast path's byte
+  # comparison would not settle until a second regeneration had cleaned the
+  # source. Stripping first makes the output depend only on $extra.
   local script="s| $PARAM||g
-s|$SOURCE_ENTRY|menuentry '$title'|
-s|gnulinux-linux-advanced-|gnulinux-linux-$idtag-|"
-  [ -n "$extra" ] && script="$script
+s|$source|menuentry '$title'|
+s|gnulinux-linux-lts-advanced-|gnulinux-linux-$idtag-|
+s|gnulinux-linux-advanced-|gnulinux-linux-$idtag-|
 /^[[:space:]]*linux[[:space:]]/ s|\$| $extra|"
-  extract_entry | sed -e "$script"
+  extract_entry "$source" | sed -e "$script"
 }
 
 want_custom() {
-  [ -n "$(extract_entry)" ] || return 1
+  [ -n "$(extract_entry "$SOURCE_LTS")" ] || return 1
   printf '#!/bin/sh\n'
   printf 'exec tail -n +3 $0\n'
-  emit_entry "$TITLE"    "$DEBUG_PARAMS"              "mst-test"
-  emit_entry "$TITLE_XE" "$XE_PARAMS $DEBUG_PARAMS"   "xe-test"
+  emit_entry "$SOURCE_LTS"   "$TITLE"       "$PARAM"                 "mst-off"
+  emit_entry "$SOURCE_LINUX" "$TITLE_DEBUG" "$DEBUG_PARAMS"          "mst-debug"
 }
 
 # Fast path, NO sudo — the normal case. Theme switches apply headlessly on
-# every unlock and must never reach for a password here.
-if grep -q "$PARAM" "$GRUB" 2>/dev/null \
-   && grep -q "$PARAM" "$CFG" 2>/dev/null \
+# every unlock and must never reach for a password here. Note the inverted
+# first test: the DEFAULT command line must NOT carry the parameter now.
+if ! grep -q "$PARAM" "$GRUB" 2>/dev/null \
    && grep -qF "$TITLE" "$CFG" 2>/dev/null \
-   && grep -qF "$TITLE_XE" "$CFG" 2>/dev/null \
+   && grep -qF "$TITLE_DEBUG" "$CFG" 2>/dev/null \
    && [ -x "$CUSTOM" ] \
    && want_custom 2>/dev/null | cmp -s - "$CUSTOM"; then
   exit 0
@@ -141,23 +153,26 @@ run_root cp -a "$GRUB" "$GRUB.bak.$STAMP"
 # vfat can't carry ownership, so a plain copy for the ESP.
 run_root cp "$CFG" "$CFG.bak.$STAMP"
 
-if ! grep -q "$PARAM" "$GRUB" 2>/dev/null; then
-  echo "==> Adding $PARAM to the kernel command line..."
-  # Append inside the existing quotes, preserving whatever hibernate-setup
-  # and friends have already put there.
-  run_root sed -i "s|^\(GRUB_CMDLINE_LINUX_DEFAULT=\"[^\"]*\)\"|\1 $PARAM\"|" "$GRUB"
-  grep -q "$PARAM" "$GRUB" || { echo "ERROR: failed to edit $GRUB" >&2; exit 1; }
+# Migration from the old arrangement: take the parameter OFF the default
+# line. Both spellings, since it may sit mid-line or at the end.
+if grep -q "$PARAM" "$GRUB" 2>/dev/null; then
+  echo "==> Removing $PARAM from the default kernel command line..."
+  run_root sed -i -e "s| $PARAM||g" -e "s|$PARAM ||g" -e "s|$PARAM||g" "$GRUB"
+  if grep -q "$PARAM" "$GRUB"; then
+    echo "ERROR: failed to remove $PARAM from $GRUB" >&2
+    exit 1
+  fi
 fi
 
-if want_custom > /tmp/mst-test.$$ 2>/dev/null && [ -s /tmp/mst-test.$$ ]; then
-  echo "==> Installing the MST test boot entry..."
-  run_root cp /tmp/mst-test.$$ "$CUSTOM"
+if want_custom > /tmp/mst-entries.$$ 2>/dev/null && [ -s /tmp/mst-entries.$$ ]; then
+  echo "==> Installing the MST boot entries..."
+  run_root cp /tmp/mst-entries.$$ "$CUSTOM"
   run_root chmod 755 "$CUSTOM"
-  rm -f /tmp/mst-test.$$
+  rm -f /tmp/mst-entries.$$
 else
-  rm -f /tmp/mst-test.$$
-  echo "WARNING: could not find \"$SOURCE_ENTRY\" in $CFG;" >&2
-  echo "         skipping the MST test entry (is the 'linux' kernel installed?)" >&2
+  rm -f /tmp/mst-entries.$$
+  echo "WARNING: could not find \"$SOURCE_LTS\" in $CFG;" >&2
+  echo "         skipping the MST entries" >&2
 fi
 
 # Build beside the live config; the running one stays untouched until the
@@ -169,21 +184,36 @@ if ! run_root grub-mkconfig -o "$CFG.new"; then
   exit 1
 fi
 
+# The parameter must now appear ONLY in the home entry, never in the default
+# one — that inversion is the whole point of this change, so verify it rather
+# than assume grub-mkconfig did as asked.
 NOW_ENTRIES="$(grep -c '^[[:space:]]*menuentry' "$CFG.new" 2>/dev/null || echo 0)"
+# The FIRST kernel line in the file is the default entry's, and it is the only
+# one that must be clean. Checking a whole menuentry block instead would be
+# wrong: our generated entries keep the tab indentation they were lifted with,
+# so a block scan anchored on ^menuentry never terminates and would read the
+# home entry's parameter as the default's.
+DEFAULT_KERNEL_LINE="$(grep -m1 -E '^[[:space:]]*linux[[:space:]]+/vmlinuz' "$CFG.new" 2>/dev/null || true)"
+DEFAULT_HAS_PARAM=0
+case "$DEFAULT_KERNEL_LINE" in *"$PARAM"*) DEFAULT_HAS_PARAM=1 ;; esac
 if [ "$NOW_ENTRIES" -lt 1 ] || [ "$NOW_ENTRIES" -lt "$WAS_ENTRIES" ] \
-   || ! grep -q "$PARAM" "$CFG.new" \
-   || ! grep -q 'vmlinuz' "$CFG.new"; then
+   || ! grep -q 'vmlinuz' "$CFG.new" \
+   || ! grep -qF "$TITLE" "$CFG.new" \
+   || [ "$DEFAULT_HAS_PARAM" = 1 ]; then
   run_root rm -f "$CFG.new"
   run_root cp -a "$GRUB.bak.$STAMP" "$GRUB"
   echo "ERROR: generated grub.cfg failed inspection" >&2
-  echo "       (menuentries was $WAS_ENTRIES, now $NOW_ENTRIES)" >&2
+  echo "       (menuentries was $WAS_ENTRIES, now $NOW_ENTRIES;" >&2
+  echo "        default carries $PARAM: $DEFAULT_HAS_PARAM, wanted 0)" >&2
   echo "       Nothing was replaced; the working $CFG is still in place." >&2
   exit 1
 fi
 
 run_root mv "$CFG.new" "$CFG"
 echo "    done ($NOW_ENTRIES boot entries; backup at $CFG.bak.$STAMP)."
-for t in "$TITLE" "$TITLE_XE"; do
-  grep -qF "$t" "$CFG" && echo "    GRUB menu now offers: $t"
+echo "    DEFAULT now boots with MST ON — two independent monitors at the office."
+for t in "$TITLE" "$TITLE_DEBUG"; do
+  grep -qF "$t" "$CFG" && echo "    GRUB menu also offers: $t"
 done
+echo "    Takes effect at the next reboot."
 {{ end -}}
