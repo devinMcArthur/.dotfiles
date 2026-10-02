@@ -15,6 +15,14 @@
 !.cache/wal/colors.json
 .local/state
 .local/share/Trash
+# Python bytecode. py_compile drops __pycache__ next to the script it
+# checks, and under dot_local/bin/ chezmoi treats that as a target: two
+# stray .pyc files were tracked from 2026-08-25 and deployed to
+# ~/.local/bin/__pycache__/ ever since — marked EXECUTABLE, because the
+# source names inherited the executable_ prefix of the scripts they came
+# from. Ignore the path so a stray artifact can never be deployed again;
+# .gitignore keeps them out of the repo in the first place.
+.local/bin/__pycache__
 
 # App-managed state we never want to track
 .config/chromium

@@ -13,3 +13,9 @@ pkgbuilds/kpeoplevcard-qt6/kpeoplevcard/
 # (incl. each unlock) — merges over the tracked .chezmoidata/theme.yaml
 # default; tracking it would keep the repo permanently dirty.
 .chezmoidata/zz-theme-override.yaml
+
+# py_compile drops these next to the script it checks; they are build
+# artifacts, and under dot_local/bin/ chezmoi would DEPLOY them to
+# ~/.local/bin/__pycache__/.
+**/__pycache__/
+*.pyc
