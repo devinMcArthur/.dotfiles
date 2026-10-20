@@ -138,6 +138,7 @@ Pictures
 .local/bin/dock-state
 .local/bin/dock-lid-guard
 .local/bin/idle-profile
+.local/bin/dms-settings-diff
 .config/systemd/user/dock-lid-guard.service
 .config/herdr-mirror
 {{ end }}

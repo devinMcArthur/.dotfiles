@@ -1,11 +1,28 @@
 {{- if eq .chezmoi.os "linux" -}}
 {{- if eq .chezmoi.osRelease.id "arch" -}}
 #!/usr/bin/env bash
-# DankMaterialShell trial setup: point DMS at the chezmoi-rendered custom
-# theme (dank-theme.json — a template over .chezmoidata/theme.yaml, so
-# `theme set`/`theme random` re-render it and DMS hot-reloads reactively).
-# settings.json is DMS-owned (it rewrites it constantly), so we only merge
-# our two keys in rather than chezmoi-managing the file.
+# DankMaterialShell settings: merge the TRACKED subset into the live file.
+#
+# settings.json is DMS-owned — its Settings UI rewrites the whole file on
+# every change — so chezmoi never manages it outright. A managed file would
+# be reverted by the headless `chezmoi apply` that theme switching runs on
+# every unlock, undoing whatever you just changed in the UI.
+#
+# Instead, .chezmoidata/dms.json lists the keys worth keeping:
+#   settings  top-level keys, deep-merged over the live values
+#   bars      bar configs matched BY ID and merged key-by-key, so tracking
+#             the main bar's look never touches another bar; a tracked id
+#             missing from the live file is appended
+# Everything else stays the UI's. This runs only when that list changes
+# (its JSON is embedded below, which is what run_onchange hashes), so
+# applying never fights a UI tweak. To promote a UI change into the list:
+# `dms-settings-diff`, then `dms-settings-diff add <key>`.
+#
+# The theme keys are always set here: they point DMS at dank-theme.json, a
+# template over .chezmoidata/theme.yaml that `theme set` re-renders and DMS
+# hot-reloads.
+#
+# Tracked list hash: {{ .dmsSettings | toJson | sha256sum }}
 
 set -euo pipefail
 
@@ -13,25 +30,37 @@ S="$HOME/.config/DankMaterialShell/settings.json"
 THEME_FILE="$HOME/.config/DankMaterialShell/dank-theme.json"
 mkdir -p "${S%/*}"
 
-if [ -f "$S" ]; then
-  if ! grep -q 'dank-theme.json' "$S"; then
-    tmp="$(mktemp)"
-    jq --arg f "$THEME_FILE" \
-      '.currentThemeName = "custom" | .customThemeFile = $f' "$S" > "$tmp" \
-      && mv "$tmp" "$S"
-    echo "==> DMS: custom theme wired into existing settings.json"
-  fi
+TRACKED=$(cat <<'JSON'
+{{ .dmsSettings | toJson }}
+JSON
+)
+
+if [ -s "$S" ]; then
+  # Refuse to touch a file jq cannot parse; DMS itself won't overwrite one
+  # either, and a half-written merge would lose the UI's settings.
+  jq -e . "$S" >/dev/null || { echo "ERROR: $S is not valid JSON; not merging" >&2; exit 1; }
+  BASE="$S"
 else
-  # Fresh seed: custom theme + the preferred bar look (transparent bar
-  # strip, per-widget pills — transparency 0 / widgetTransparency 1 /
-  # noBackground false; note noBackground=true removes the WIDGET pills,
-  # not the strip). settings.json is DMS-owned after this — day-to-day
-  # changes happen in its Settings UI, not chezmoi.
-  printf '{\n  "currentThemeName": "custom",\n  "customThemeFile": "%s"\n}\n' "$THEME_FILE" > "$S"
-  tmp="$(mktemp)"
-  jq '.barConfigs = [{"id":"default","enabled":true,"transparency":0,"widgetTransparency":1,"noBackground":false}]' \
-    "$S" > "$tmp" && mv "$tmp" "$S"
-  echo "==> DMS: settings.json seeded (custom theme, transparent bar + pills)"
+  BASE=/dev/null
 fi
+
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+jq -n --argjson t "$TRACKED" --arg f "$THEME_FILE" --slurpfile live <(cat "$BASE" 2>/dev/null || true) '
+  (($live[0] // {}) * $t.settings)
+  | .currentThemeName = "custom"
+  | .customThemeFile = $f
+  | .barConfigs = reduce $t.bars[] as $b ((.barConfigs // []);
+      if any(.[]; .id == $b.id)
+      then map(if .id == $b.id then . * $b else . end)
+      else . + [$b] end)
+' > "$tmp"
+
+if [ -s "$S" ] && cmp -s <(jq -S . "$S") <(jq -S . "$tmp"); then
+  exit 0
+fi
+# Write in place rather than mv: DMS watches the path and reloads on change.
+cat "$tmp" > "$S"
+echo "==> DMS: tracked settings merged into settings.json"
 {{ end -}}
 {{ end -}}

@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""dms-settings-diff — compare DMS's live settings with the tracked list.
+
+  dms-settings-diff                 what the UI changed that chezmoi doesn't track
+  dms-settings-diff --all           also list every untracked bar key
+  dms-settings-diff add KEY...      copy live values into the tracked list
+        KEY is a top-level setting (lowerDisplayRefreshRateOnBattery),
+        a bar key (bar:default.fontScale), or a whole bar (bar:default)
+
+The tracked list is .chezmoidata/dms.json in the chezmoi source;
+run_onchange_after_dms-setup.sh merges it into settings.json whenever it
+changes. Changing a setting in the DMS UI only changes the live file, so
+this is how a change you want to keep gets into the repo. After `add`,
+review and commit with git as usual.
+"""
+
+import json
+import os
+import subprocess
+import sys
+
+LIVE = os.path.expanduser("~/.config/DankMaterialShell/settings.json")
+# Machine state or set by the setup script itself: never worth tracking.
+IGNORE = {"barConfigs", "configVersion", "displayPreviousRefreshModes",
+          "currentThemeName", "customThemeFile"}
+
+
+def source_file() -> str:
+    src = subprocess.run(["chezmoi", "source-path"], capture_output=True,
+                         text=True, check=True).stdout.strip()
+    return os.path.join(src, ".chezmoidata", "dms.json")
+
+
+def load(path):
+    with open(path) as f:
+        return json.load(f)
+
+
+def short(v) -> str:
+    s = json.dumps(v)
+    return s if len(s) <= 70 else s[:67] + "..."
+
+
+def diff(show_all: bool) -> int:
+    live = load(LIVE)
+    tracked = load(source_file())["dmsSettings"]
+    t_set, t_bars = tracked["settings"], {b["id"]: b for b in tracked["bars"]}
+    found = 0
+
+    print("Settings:")
+    for k in sorted(live):
+        if k in IGNORE:
+            continue
+        if k not in t_set:
+            print(f"  + {k} = {short(live[k])}   (untracked)")
+            found += 1
+        elif live[k] != t_set[k]:
+            print(f"  ~ {k}: tracked {short(t_set[k])}, live {short(live[k])}")
+            found += 1
+    for k in sorted(set(t_set) - set(live)):
+        print(f"  - {k}: tracked but absent from the live file")
+        found += 1
+
+    print("Bars:")
+    live_bars = {b.get("id"): b for b in live.get("barConfigs", [])}
+    for bid, lb in live_bars.items():
+        tb = t_bars.get(bid)
+        if tb is None:
+            print(f"  + bar:{bid} ({lb.get('name', '')})   (untracked bar)")
+            found += 1
+            continue
+        for k in sorted(lb):
+            if k in tb:
+                if lb[k] != tb[k]:
+                    print(f"  ~ bar:{bid}.{k}: tracked {short(tb[k])}, live {short(lb[k])}")
+                    found += 1
+            elif show_all and k != "id":
+                print(f"    bar:{bid}.{k} = {short(lb[k])}   (untracked)")
+    for bid in sorted(set(t_bars) - set(live_bars)):
+        print(f"  - bar:{bid}: tracked but absent from the live file")
+        found += 1
+
+    if not found:
+        print("  (nothing to report: the live file matches the tracked list)")
+    elif not show_all:
+        print("\nKeep a change:  dms-settings-diff add <key> [...]")
+    return 0
+
+
+def add(keys) -> int:
+    live = load(LIVE)
+    path = source_file()
+    data = load(path)
+    tracked = data["dmsSettings"]
+    live_bars = {b.get("id"): b for b in live.get("barConfigs", [])}
+    for key in keys:
+        if key.startswith("bar:"):
+            bid, _, bkey = key[4:].partition(".")
+            lb = live_bars.get(bid)
+            if lb is None:
+                print(f"no live bar with id {bid!r}", file=sys.stderr)
+                return 1
+            tb = next((b for b in tracked["bars"] if b["id"] == bid), None)
+            if tb is None:
+                tb = {"id": bid}
+                tracked["bars"].append(tb)
+            if bkey:
+                if bkey not in lb:
+                    print(f"bar:{bid} has no key {bkey!r}", file=sys.stderr)
+                    return 1
+                tb[bkey] = lb[bkey]
+            else:
+                tb.update(lb)
+        else:
+            if key not in live:
+                print(f"no live setting {key!r}", file=sys.stderr)
+                return 1
+            if key in IGNORE:
+                print(f"{key} is machine state or script-owned; not tracking it",
+                      file=sys.stderr)
+                return 1
+            tracked["settings"][key] = live[key]
+        print(f"tracked: {key}")
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+    print(f"\nUpdated {path}. Review and commit:\n  git -C {os.path.dirname(os.path.dirname(path))} diff .chezmoidata/dms.json")
+    return 0
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    if args and args[0] == "add":
+        if len(args) < 2:
+            print(__doc__.strip(), file=sys.stderr)
+            return 2
+        return add(args[1:])
+    if args and args[0] in ("-h", "--help"):
+        print(__doc__.strip())
+        return 0
+    return diff(show_all="--all" in args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
