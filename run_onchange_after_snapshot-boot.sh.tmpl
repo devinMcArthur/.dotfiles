@@ -1,0 +1,88 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+{{ if ne .chezmoi.osRelease.id "arch" }}exit 0  # btrfs/snapper boot entries are this laptop's.{{ end }}
+# Make booting into a snapper snapshot actually usable.
+#
+# grub-btrfs puts every snapshot in the GRUB menu (grub-btrfsd keeps
+# /boot/grub/grub-btrfs.cfg current), but a snapshot is read-only, and
+# without help the system boots from it as-is. Plenty wants to write at boot
+# — journald, greetd, Hyprland's state — so a snapshot boot lands at a
+# console or a half-working desktop: no good for the one moment you need it.
+#
+# grub-btrfs-overlayfs fixes that in the initramfs: it lays a tmpfs overlay
+# over the read-only snapshot, so the system boots normally and every change
+# made while running from it evaporates at reboot. Booting a snapshot stays
+# a look, never a rollback. Appended LAST in HOOKS, per the grub-btrfs
+# docs, so it acts on the root that the earlier hooks have already mounted.
+#
+# Limit it does not lift: /boot is vfat, outside btrfs, so it always holds
+# the CURRENT kernel. A snapshot from before a kernel upgrade has older
+# modules in /usr/lib/modules, so it boots the new kernel without matching
+# modules (GPU, Wi-Fi). Snapshot boot rescues a bad userspace upgrade, not a
+# bad kernel — for that, the second kernel under Advanced options.
+#
+# The other hook editors in this repo (boot-theming adds plymouth after
+# udev; hibernate-setup matches " resume ") anchor on their own positions,
+# so appending at the end does not disturb them.
+
+set -euo pipefail
+
+# Sampled before any pipeline, so headless callers redirecting from
+# /dev/null read as "cannot prompt" — see run_onchange_after_kernel-params.
+CAN_PROMPT=0
+[ -t 0 ] && CAN_PROMPT=1
+
+HOOK="grub-btrfs-overlayfs"
+CONF=/etc/mkinitcpio.conf
+
+# Fast path, NO sudo.
+if grep -qE "^HOOKS=\(.*\b$HOOK\b.*\)" "$CONF" 2>/dev/null; then
+  exit 0
+fi
+
+if [ ! -f "/usr/lib/initcpio/install/$HOOK" ]; then
+  echo "WARNING: $HOOK not installed (package grub-btrfs); skipping" >&2
+  exit 0
+fi
+
+run_root() {
+  if sudo -n true 2>/dev/null; then sudo "$@"
+  elif [ "$CAN_PROMPT" = 1 ]; then sudo "$@"
+  else
+    echo "ERROR: mkinitcpio needs sudo — run 'chezmoi apply' in a terminal" >&2
+    exit 1
+  fi
+}
+
+STAMP="$(date +%Y%m%d%H%M%S)"
+BAK="/boot/initramfs-bak-$STAMP"
+
+echo "==> Adding $HOOK to mkinitcpio HOOKS..."
+run_root cp -a "$CONF" "$CONF.bak.$STAMP"
+
+# The initramfs images live on the ESP, outside snapshots. Keep the working
+# ones so a failed rebuild costs a restore, not a boot.
+run_root mkdir -p "$BAK"
+run_root cp /boot/initramfs-*.img "$BAK"/
+
+run_root sed -i -E "s/^(HOOKS=\(.*)\)/\1 $HOOK)/" "$CONF"
+if ! grep -qE "^HOOKS=\(.*\b$HOOK\)" "$CONF"; then
+  run_root cp -a "$CONF.bak.$STAMP" "$CONF"
+  run_root rm -rf "$BAK"
+  echo "ERROR: failed to edit HOOKS in $CONF; left as it was" >&2
+  exit 1
+fi
+grep -E '^HOOKS=' "$CONF" | sed 's/^/    /'
+
+echo "==> Rebuilding initramfs (mkinitcpio -P)..."
+if ! run_root mkinitcpio -P; then
+  echo "ERROR: mkinitcpio failed — restoring the previous config and images" >&2
+  run_root cp -a "$CONF.bak.$STAMP" "$CONF"
+  run_root cp "$BAK"/initramfs-*.img /boot/
+  exit 1
+fi
+
+run_root rm -rf "$BAK"
+echo "    done. Snapshots now boot writable (changes discarded at reboot)."
+echo "    Config backup: $CONF.bak.$STAMP"
+{{ end -}}
