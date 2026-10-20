@@ -106,6 +106,47 @@ command -v op >/dev/null 2>&1 && {
 # affected, errors and other warnings still surface.
 export NODE_OPTIONS="--disable-warning=ExperimentalWarning${NODE_OPTIONS:+ $NODE_OPTIONS}"
 
+# --- Editor ------------------------------------------------------------------
+# Unset until 2026-10-19, so anything that shells out to an editor guessed.
+# Hyprland exports the same in its env block, which is what reaches herdr's
+# server (started from Hyprland, not from a shell) and so prefix+e.
+if command -v nvim >/dev/null 2>&1; then
+  export EDITOR=nvim VISUAL=nvim SUDO_EDITOR=nvim
+fi
+
+# --- History -----------------------------------------------------------------
+# Until 2026-10-19 none of this was set, so zsh ran on its built-in defaults:
+# HISTFILE unset, SAVEHIST=0, HISTSIZE=30. Nothing was written to disk, and
+# Up-arrow only ever saw the last 30 commands of the current shell. The file
+# below is the oh-my-zsh era history, which stopped growing on 19 May when
+# that framework (and the HISTFILE it set) was removed; it is reused rather
+# than replaced. atuin still owns Ctrl+R; this is what Up and Down search.
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=100000
+SAVEHIST=100000
+setopt EXTENDED_HISTORY      # timestamp each entry
+setopt SHARE_HISTORY         # write as you go; other shells see it at their next prompt
+setopt HIST_IGNORE_ALL_DUPS  # a repeated command replaces its older copy
+setopt HIST_IGNORE_SPACE     # a leading space keeps a command out of history
+setopt HIST_REDUCE_BLANKS
+setopt HIST_VERIFY           # !! and friends expand for review instead of running
+
+# --- Completion --------------------------------------------------------------
+# No zstyle at all until 2026-10-19: case-sensitive, no menu. Case-insensitive
+# matching (and partial matching around . _ -), a selectable menu, and hjkl to
+# move through it — the vim-motion half of what Omarchy's inputrc gives bash.
+zmodload zsh/complist
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=*'
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+zstyle ':completion:*' group-name ''
+zstyle ':completion:*:descriptions' format '%F{8}-- %d --%f'
+bindkey -M menuselect 'h' vi-backward-char
+bindkey -M menuselect 'j' vi-down-line-or-history
+bindkey -M menuselect 'k' vi-up-line-or-history
+bindkey -M menuselect 'l' vi-forward-char
+bindkey -M menuselect '^[[Z' reverse-menu-complete   # Shift+Tab
+
 # Initialize completion system. Required before antidote loads plugins that
 # register completions via `compdef` (e.g. omz git plugin).
 autoload -Uz compinit && compinit
@@ -123,6 +164,17 @@ ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=#{{ .theme.colors.overlay0 }}'
 ZSH_AUTOSUGGEST_STRATEGY=(history completion)
 # Accept full suggestion with Ctrl-Space (in addition to default → and End).
 bindkey '^ ' autosuggest-accept
+
+# zsh-history-substring-search was in the plugin list but bound to nothing, so
+# it did nothing. Up/Down now search history for whatever is already typed.
+# Both escape forms, because terminals send Up as ^[[A or, in application
+# mode, ^[OA.
+if (( $+functions[history-substring-search-up] )); then
+  bindkey '^[[A' history-substring-search-up
+  bindkey '^[OA' history-substring-search-up
+  bindkey '^[[B' history-substring-search-down
+  bindkey '^[OB' history-substring-search-down
+fi
 
 # --- ls replacement: eza ----------------------------------------------------
 if command -v eza >/dev/null 2>&1; then
@@ -145,6 +197,24 @@ alias laptop-docs='$HOME/.local/bin/laptop-docs'
 # --- fzf: colors from the shared palette (.chezmoidata/theme.yaml) ----------
 # bg:-1 keeps fzf transparent so ghostty's background shows through.
 export FZF_DEFAULT_OPTS="--color=bg:-1,bg+:#{{ .theme.colors.surface0 }},fg:#{{ .theme.colors.text }},fg+:#{{ .theme.colors.text }},hl:#{{ .theme.colors.red }},hl+:#{{ .theme.colors.red }},info:#{{ .theme.colors.mauve }},prompt:#{{ .theme.colors.mauve }},pointer:#{{ .theme.colors.rosewater }},marker:#{{ .theme.colors.lavender }},spinner:#{{ .theme.colors.rosewater }},header:#{{ .theme.colors.red }}"
+
+# --- fzf key bindings: Ctrl+T files, Alt+C directories --------------------------
+# Never loaded until 2026-10-19: Ctrl+T was transpose-chars and Alt+C
+# capitalize-word. Only the key bindings, not fzf's completion script, which
+# is the slow part (Omarchy makes the same cut). Sourced BEFORE atuin: both
+# bind Ctrl+R and the last one wins, which should be atuin.
+for _fzf_kb in /usr/share/fzf/key-bindings.zsh \
+               /usr/share/doc/fzf/examples/key-bindings.zsh; do
+  [[ -r $_fzf_kb ]] && { source "$_fzf_kb"; break; }
+done
+unset _fzf_kb
+if command -v fd >/dev/null 2>&1; then
+  # fd honours .gitignore and is far quicker than find on big trees.
+  export FZF_CTRL_T_COMMAND='fd --type f --hidden --follow --exclude .git'
+  export FZF_ALT_C_COMMAND='fd --type d --hidden --follow --exclude .git'
+fi
+command -v bat >/dev/null 2>&1 && \
+  export FZF_CTRL_T_OPTS="--preview 'bat --color=always --style=numbers --line-range=:200 {}'"
 
 # --- zoxide: smarter cd (`z <partial>` jumps to frecent dirs, `zi` fuzzy) ---
 # Sesh already uses zoxide's db for session matching; this exposes `z`/`zi`

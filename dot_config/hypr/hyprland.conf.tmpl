@@ -14,6 +14,11 @@ env = PATH,$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.nix-profile/bin:/nix/var/nix
 env = XDG_CURRENT_DESKTOP,Hyprland
 env = XDG_SESSION_TYPE,wayland
 env = XDG_SESSION_DESKTOP,Hyprland
+# The herdr server starts from Hyprland (exec-once), not from a shell, so the
+# zshrc export never reaches it. This is what gives its prefix+e
+# (scrollback in editor) nvim.
+env = EDITOR,nvim
+env = VISUAL,nvim
 
 
 ################
