@@ -177,9 +177,10 @@ exec-once = wl-paste --watch $HOME/.local/bin/clip-normalize
 exec-once = $HOME/.local/bin/win-monitor-watch
 
 # Surprise theme every boot (hypr-lock does the same after every unlock).
-# The sleep lets waybar/hyprpaper/swaync come up first so the switch's
-# kill-and-relaunch lands on running daemons. Disable: theme random off
-exec-once = sleep 3 && $HOME/.local/bin/theme random
+# No startup delay: `theme set` waits for DMS itself and confirms the
+# wallpaper took, which a fixed sleep could only guess at.
+# Disable: theme random off
+exec-once = $HOME/.local/bin/theme random
 
 #####################
 ### LOOK AND FEEL ###
