@@ -153,8 +153,15 @@ autoload -Uz compinit && compinit
 
 # Plugin manager: antidote (https://getantidote.github.io/).
 # Plugin list: ~/.zsh_plugins.txt
-source /usr/share/zsh-antidote/antidote.zsh
-antidote load
+# Arch ships it as a package; anywhere else (the Ubuntu box) it is a git
+# clone in ~/.antidote. The package path alone printed two errors on every
+# box login from Sep 1 to Sep 25 and silently loaded no plugins.
+if [[ -r /usr/share/zsh-antidote/antidote.zsh ]]; then
+  source /usr/share/zsh-antidote/antidote.zsh
+elif [[ -r "$HOME/.antidote/antidote.zsh" ]]; then
+  source "$HOME/.antidote/antidote.zsh"
+fi
+(( $+functions[antidote] )) && antidote load
 
 # zsh-autosuggestions tuning ---------------------------------------------------
 # Default fg=8 is invisible on many terminals. Use the theme's overlay0
