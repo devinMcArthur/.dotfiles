@@ -2,11 +2,16 @@
 {{- if eq .chezmoi.osRelease.id "arch" -}}
 #!/usr/bin/env bash
 # Boot + login theming (Omarchy-inspired), managed as one migration:
-#   Greeter : regreet in cage — Catppuccin Mocha GTK theme, Papirus icons,
-#             JetBrainsMono, wallpaper background, Catppuccin card CSS.
-#             Drops cage's `-m last` (non-deterministic output on
-#             multi-monitor; the old config warned against it yet used it) —
-#             cage's default extends the greeter to every output.
+#   Greeter : DMS greeter (greetd-dms-greeter-bin, AUR) under Hyprland,
+#             since 2026-10-22. It is DankMaterialShell's lock screen used as
+#             the login screen, so it matches the desktop. `dms-greeter sync`
+#             (run below, once) adds you to the `greeter` group, grants the
+#             greeter read ACLs on your DMS state and wallpapers, and links
+#             your per-user slot LIVE to that state: every `theme set` reaches
+#             the login screen with no further sync and no sudo. Check with
+#             `dms-greeter status`.
+#             ReGreet (cage + Catppuccin card) was the greeter before; its
+#             files below stay in place as the fallback.
 #   Splash  : Plymouth `bgrt` theme (firmware logo + spinner), hook added to
 #             mkinitcpio, `splash` kernel param. greetd already orders itself
 #             After=plymouth-quit-wait.service, so handoff is native.
@@ -21,15 +26,62 @@
 #     To disable: at the GRUB entry press `e`, remove `splash`, add
 #     `plymouth.enable=0`, F10 to boot; then remove `splash` from
 #     /etc/default/grub + `plymouth` from mkinitcpio HOOKS and rebuild.
-#   - Broken greeter: Ctrl+Alt+F2 for a TTY, restore
-#     /etc/greetd/config.toml from its .bak (tuigreet fallback:
-#     config.toml.bak.tuigreet), `systemctl restart greetd`.
+#   - Broken greeter: Ctrl+Alt+F2 for a TTY, log in, then
+#       sudo cp /etc/greetd/config.toml.regreet /etc/greetd/config.toml
+#       sudo systemctl restart greetd
+#     That is the ReGreet setup this replaced. (Older fallback:
+#     config.toml.bak.tuigreet.) To make it stick, revert this script's
+#     greeter section in git too, or the next full run rewrites it.
 
 set -euo pipefail
 
+GREETD_WANT='# greetd config — DMS greeter under Hyprland.
+# Managed by chezmoi (run_onchange_after_boot-theming.sh). The ReGreet setup
+# this replaced is kept at /etc/greetd/config.toml.regreet; copy it back over
+# this file to revert (see the script header).
+
+[terminal]
+vt = 1
+
+[default_session]
+command = "/usr/bin/dms-greeter --command hyprland --cache-dir /var/cache/dms-greeter"
+user = "greeter"'
+
+# Whether we may prompt for a password. Sampled from stdin before any
+# pipeline; the headless callers (theme switching on every unlock) redirect
+# from /dev/null so this stays 0 and sudo is refused, never left waiting.
+CAN_PROMPT=0
+[ -t 0 ] && CAN_PROMPT=1
+
+in_greeter_group() { id -nG "$USER" 2>/dev/null | tr ' ' '\n' | grep -qx greeter; }
+
+# Fast path, NO sudo: everything already in place. Each check is readable
+# without root.
+# The greetd check matches the command, not the whole file: `dms-greeter
+# sync` rewrites that line in its own format, and an exact comparison would
+# then fail on every apply and ask for sudo forever.
+if grep -qE '^command = ".*dms-greeter --command hyprland' /etc/greetd/config.toml 2>/dev/null \
+   && pacman -Qq greetd-dms-greeter-bin >/dev/null 2>&1 \
+   && in_greeter_group \
+   && grep -qE '^HOOKS=.* plymouth ' /etc/mkinitcpio.conf \
+   && grep -q 'splash' /etc/default/grub; then
+  exit 0
+fi
+
+if ! sudo -n true 2>/dev/null && [ "$CAN_PROMPT" != 1 ]; then
+  echo "ERROR: boot/login theming needs sudo — run 'chezmoi apply' in a terminal" >&2
+  exit 1
+fi
+
 echo "==> Applying boot/login theming..."
 
-sudo env USER_HOME="$HOME" bash <<'ROOT'
+# The DMS greeter is AUR-only; yay must run as you, not root.
+if ! pacman -Qq greetd-dms-greeter-bin >/dev/null 2>&1; then
+  echo "==> Installing the DMS greeter (AUR)..."
+  yay -S --needed --noconfirm greetd-dms-greeter-bin
+fi
+
+sudo env USER_HOME="$HOME" GREETD_WANT="$GREETD_WANT" bash <<'ROOT'
 set -euo pipefail
 
 changed_initramfs=0
@@ -57,19 +109,11 @@ if ! cmp -s "$USER_HOME/Pictures/wallpapers/evening-landscape.jpg" \
   echo "    updated: /usr/share/backgrounds/greeter.jpg"
 fi
 
-# --- greetd: cage without -m last ------------------------------------------
-cat > "$tmp/config.toml" <<'EOF'
-# greetd config — regreet (GTK4) greeter running inside Cage Wayland kiosk.
-# Managed by chezmoi (run_onchange_after_boot-theming.sh). Fallback greeter
-# preserved at /etc/greetd/config.toml.bak.tuigreet.
-#
-# Cage flags:
-#   -s  allow VT switching (Ctrl+Alt+F1..F6 from inside the login)
-#   -d  don't draw client-side decorations (kiosk is fullscreen anyway)
-#   No -m flag: cage's default (extend) shows the greeter on every output,
-#   so it's always on the screen you're looking at. `-m last` picked a
-#   non-deterministic output on multi-monitor setups.
-
+# --- greetd: DMS greeter --------------------------------------------------
+# Keep the ReGreet config (cage kiosk) as a ready-made fallback.
+if [ ! -e /etc/greetd/config.toml.regreet ]; then
+  cat > /etc/greetd/config.toml.regreet <<'EOF'
+# ReGreet fallback: copy over config.toml and restart greetd to revert.
 [terminal]
 vt = 1
 
@@ -77,9 +121,14 @@ vt = 1
 command = "cage -s -d -- regreet"
 user = "greeter"
 EOF
-write_if_changed "$tmp/config.toml" /etc/greetd/config.toml || true
+  echo "    saved fallback: /etc/greetd/config.toml.regreet"
+fi
+if ! grep -qE '^command = ".*dms-greeter --command hyprland' /etc/greetd/config.toml 2>/dev/null; then
+  printf '%s\n' "$GREETD_WANT" > "$tmp/config.toml"
+  write_if_changed "$tmp/config.toml" /etc/greetd/config.toml || true
+fi
 
-# --- regreet: Catppuccin GTK theme -----------------------------------------
+# --- regreet (fallback greeter): Catppuccin GTK theme ---------------------
 GTK_THEME="$(ls /usr/share/themes 2>/dev/null | grep -im1 'catppuccin.*mocha' || true)"
 if [ -z "$GTK_THEME" ]; then
   GTK_THEME="Adwaita-dark"
@@ -226,6 +275,14 @@ if [ "$changed_grub" -eq 1 ]; then
   grub-mkconfig -o /boot/grub/grub.cfg
 fi
 ROOT
+
+# Theme, wallpaper and settings for the login screen. Runs as you (it reads
+# your DMS state) and escalates with sudo itself for the system parts:
+# greeter group membership, ACLs, the cache. Non-interactive, no PAM change.
+if ! in_greeter_group || [ ! -e /var/cache/dms-greeter ]; then
+  echo "==> Syncing your DMS theme to the login screen..."
+  dms-greeter sync --yes
+fi
 
 echo "==> Boot/login theming applied. Takes effect at next boot"
 echo "    (or preview the greeter now: sudo systemctl restart greetd — logs you out!)."
