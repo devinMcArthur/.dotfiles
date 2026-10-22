@@ -114,9 +114,9 @@ exec-once = systemctl --user start soteria.service
 # enabled unit sits dead until kicked.
 exec-once = systemctl --user start voxtype.service
 
-# Ends a dictation after ~2s of silence (so a spoken "submit" sends
-# itself — no second Super+X). Disable: voxtype-autostop off
-exec-once = $HOME/.local/bin/voxtype-autostop
+# Ends a dictation when you say "submit" (or after 20s of silence), so it sends
+# itself — no second Super+X. Disable: voxtype-autostop off
+exec-once = systemctl --user start voxtype-autostop.service   # unit restarts it; logs: voxtype-autostop log
 
 # herdr (agent multiplexer) server. Starting it at login restores the
 # saved session shape — workspaces, tabs, panes, cwd, layout — and

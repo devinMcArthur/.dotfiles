@@ -68,7 +68,9 @@ device = "default"
 sample_rate = 16000
 
 # Maximum recording duration in seconds (safety limit)
-max_duration_secs = 60
+# Hard cap, not the normal end: voxtype-autostop stops on "submit" or after
+# 20s of silence. 60 cut long dictations off mid-thought (2026-10-22).
+max_duration_secs = 300
 
 # [audio.feedback]
 # Enable audio feedback sounds (beeps when recording starts/stops)
@@ -214,18 +216,11 @@ on_recording_stop = false
 on_transcription = true
 
 [output.post_process]
-# Pipe transcribed text through an external command for cleanup before output.
-# On any failure (timeout, error), falls back to original transcription.
-#
-# Dictated line breaks: "new line" -> \n, "new paragraph" -> blank line.
-# Whisper brackets the spoken phrase with invented punctuation (", new
-# line," or ". New line.") — the phrase rules swallow a leading comma and
-# the phrase's own trailing punctuation in the same match. A period
-# BEFORE the phrase is kept deliberately: it belongs to the dictated
-# sentence ("Do the thing. New line next item" -> "Do the thing.\nnext
-# item"). Remaining rules sweep stray comma/space before breaks and
-# punctuation debris after them.
-command = "sed -E -e 's/,? *[Nn]ew [Pp]aragraph[.,;:]? */\\n\\n/g' -e 's/,? *[Nn]ew ?[Ll]ine[.,;:]? */\\n/g' -e 's/\\n[.,;: ]+/\\n/g' -e 's/^[.,;: ]+//' -e 's/[, ]+\\n/\\n/g' -e 's/[, ]+$//'"
+# Transcript in, cleaned text out — see ~/.local/bin/voxtype-postprocess:
+# dictated line breaks ("new line", "new paragraph"), and stripping the
+# near-miss "submit" ("cement", "summit") that voxtype-autostop stopped on.
+# On any failure (timeout, error), voxtype falls back to the raw transcript.
+command = "/home/dev/.local/bin/voxtype-postprocess"
 timeout_ms = 2000
 
 [text]

@@ -1,0 +1,16 @@
+[Unit]
+Description=voxtype-autostop: stop dictation on "submit" or a long silence
+# Was a bare Hyprland exec-once: if it died, dictation silently lost its
+# auto-stop until the next login. Here it restarts, and its decisions land
+# in the journal (`voxtype-autostop log`).
+After=voxtype.service pipewire.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/voxtype-autostop
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
