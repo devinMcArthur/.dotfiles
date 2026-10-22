@@ -39,6 +39,11 @@ OFF="$STATE/off"
 # one. speaking() already prunes dead process groups, so the only thing
 # left for this to guard is a genuinely hung player.
 WAIT_MAX=1200   # 10 minutes
+# A reply still waiting this long when its turn comes is skipped, not read:
+# by then you have moved on, and hearing it only buries what is current.
+# Skips are logged (hooklog "stale"), and F4 still reads the last message
+# of the pane you are on. Since 2026-10-22.
+STALE_SECS=120
 
 # Speech that has not started yet lives in detached waiters, not in a
 # list — so "shut up and forget the rest" cannot be done by killing a
@@ -178,10 +183,20 @@ say_text() {
   # only the hook entries left `say` and `test` deaf to it, so muting did
   # nothing to speech arriving from the box: toggle hushed the current
   # line and the drainer immediately started the next one.
+  # Testing: write what would be spoken to a file instead of the speakers
+  # (ahead of the mute check, so tests run while muted).
+  if [ -n "${CLAUDE_TTS_DRYRUN:-}" ]; then printf '%s\n' "$1" >> "$CLAUDE_TTS_DRYRUN"; return 0; fi
   [ -e "$OFF" ] && return 0
   if queue_mode; then
     mkdir -p "$STATE"
-    printf '%s\n' "$(printf '%s' "$1" | tr '\n' ' ')" >> "$STATE/say-queue"
+    # Box side. With a source (TTS_SOURCE="epoch<TAB>pane<TAB>tab label"),
+    # the line is "§2<TAB>epoch<TAB>pane<TAB>label<TAB>text", so the laptop
+    # can apply voice_for's rules; devbox-speak still reads plain lines.
+    if [ -n "${TTS_SOURCE:-}" ]; then
+      printf '§2\t%s\t%s\n' "$TTS_SOURCE" "$(printf '%s' "$1" | tr '\n\t' '  ')" >> "$STATE/say-queue"
+    else
+      printf '%s\n' "$(printf '%s' "$1" | tr '\n' ' ')" >> "$STATE/say-queue"
+    fi
     # The drainer tails from the end, so consumed lines are never removed.
     # Cap the file rather than let a long-lived box grow it forever.
     if [ "$(wc -l < "$STATE/say-queue")" -gt 500 ]; then
@@ -231,6 +246,35 @@ say_text() {
     rm -f "$STATE/pgids/$$" "$STATE/speaking"
   ' >/dev/null 2>&1 </dev/null
 }
+
+# Text to speak for a reply from a known herdr pane, or exit 1 to skip it.
+#   $1 machine ("" = this laptop)  $2 pane id  $3 tab label  $4 epoch  $5 text
+# Two rules, applied when the reply's turn actually comes:
+#   - older than STALE_SECS -> skip (logged);
+#   - not the pane on screen -> "From <tab>." first, so a reply from a tab
+#     you left is not mistaken for the one you are reading.
+# "On screen" is dictate-target's answer: the herdr window's machine (its
+# title) and that machine's focused pane — Firefox in front still counts.
+voice_for() {
+  local machine="$1" pane="$2" label="$3" epoch="$4" text="$5" now view
+  now="$(date +%s)"
+  case "$epoch" in (*[!0-9]*|"") epoch="$now" ;; esac
+  if [ $(( now - epoch )) -gt "$STALE_SECS" ]; then
+    hooklog reply stale "${machine:-local}:$pane $(( now - epoch ))s"
+    return 1
+  fi
+  if [ -n "$pane" ]; then
+    view="$("$HOME/.local/bin/dictate-target" viewing 2>/dev/null)"
+    # No herdr window on screen at all also counts as "not this pane".
+    if [ -z "$view" ] || [ "$(jq -r '"\(.machine)\t\(.pane)"' <<<"$view" 2>/dev/null)" != "$machine"$'\t'"$pane" ]; then
+      text="From ${label:-another tab}. $text"
+    fi
+  fi
+  printf '%s' "$text"
+}
+
+# A herdr tab's label on THIS machine (the hook runs where its session runs).
+tab_label() { [ -n "${1:-}" ] && herdr tab list 2>/dev/null | jq -r --arg t "$1" '.result.tabs[]? | select(.tab_id == $t) | .label' | head -1; }
 
 # Speak a short canned announcement (not transcript text): $1 event,
 # $2 phrase, $3 urgent (1 = cut in, 0 = wait for silence first). The
@@ -314,14 +358,16 @@ case "${1:-hook}" in
     # which is exactly the "speaking one message behind" bug. Hand off to
     # a detached waiter and return instantly so nothing blocks.
     hooklog "$ev" queued ""
-    setsid -f "$0" _wait "$ev" "$tp" >/dev/null 2>&1 </dev/null
+    # The session's herdr pane rides along (the hook inherits it), so the
+    # waiter can name the tab and judge staleness when the turn comes.
+    setsid -f "$0" _wait "$ev" "$tp" "${HERDR_PANE_ID:-}" "${HERDR_TAB_ID:-}" >/dev/null 2>&1 </dev/null
     ;;
   _wait)
     # Detached: wait for an entry NEWER than the last one spoken, then
     # read it. Monotonic on timestamp, so speech can never go backwards
     # into an already-voiced message. Messages queue rather than chop each
     # other off; the lock keeps two waiters from talking over each other.
-    ev="$2"; tp="$3"
+    ev="$2"; tp="$3"; pane="${4:-}"; tab="${5:-}"
     mygen="$(gen)"
     deadline=$(( $(date +%s) + 60 ))
     while [ "$(date +%s)" -lt "$deadline" ]; do
@@ -344,8 +390,16 @@ case "${1:-hook}" in
               if [ -n "${spoken//[[:space:]]/}" ]; then
                 w=0
                 while speaking && [ "$w" -lt "$WAIT_MAX" ]; do sleep 0.5; w=$((w+1)); done
-                hooklog "$ev" spoke "$uuid"
-                say_text "$spoken"
+                epoch="$(date -d "$ts" +%s 2>/dev/null || date +%s)"
+                label="$(tab_label "$tab")"
+                if queue_mode; then
+                  # The box only queues; the laptop applies the rules.
+                  hooklog "$ev" spoke "$uuid"
+                  TTS_SOURCE="$epoch"$'\t'"$pane"$'\t'"$label" say_text "$spoken"
+                elif spoken="$(voice_for "" "$pane" "$label" "$epoch" "$spoken")"; then
+                  hooklog "$ev" spoke "$uuid"
+                  say_text "$spoken"
+                fi
               fi
             fi
           ) 9>"$STATE/claim.lock"
@@ -358,10 +412,16 @@ case "${1:-hook}" in
     ;;
   _queued)
     # Detached tail of announce(): wait out any speech, then say it.
+    # Optional source ($4 machine, $5 pane, $6 tab label, $7 epoch): a box
+    # reply via say-from, judged by voice_for once its turn comes. Exit 3 =
+    # skipped as stale, so devbox-speak does not wait for playback.
     ev="$2"; say="$3"
     mygen="$(gen)"
     w=0; while speaking && [ "$w" -lt "$WAIT_MAX" ]; do sleep 0.5; w=$((w+1)); done
     stale "$mygen" && exit 0
+    if [ -n "${7:-}" ]; then
+      say="$(voice_for "$4" "$5" "$6" "$7" "$say")" || exit 3
+    fi
     hooklog "$ev" spoke "queued"
     say_text "$say"
     ;;
@@ -586,6 +646,11 @@ case "${1:-hook}" in
     # a remote session cannot chop off a local one mid-sentence.
     shift || true
     exec "$0" _queued remote "$*"
+    ;;
+  say-from)
+    # say, for a reply whose source is known: machine pane tab-label epoch
+    # text. devbox-speak uses it for the box's "§2" queue lines.
+    exec "$0" _queued remote "$6" "$2" "$3" "$4" "$5"
     ;;
   test)
     shift || true

@@ -5,6 +5,8 @@
 #   dictate-target show          # what the last capture found
 #   dictate-target deliver [-s]  # text on stdin -> the captured pane (+Enter
 #                                # with -s); exit 1 = not a herdr target
+#   dictate-target viewing       # the herdr pane on screen now (claude-tts
+#                                # uses it to name tabs you are not on)
 #
 # voxtype TYPES its result: simulated keystrokes into whichever window has
 # focus when transcription finishes. Switch tabs while it types and the rest
@@ -53,52 +55,72 @@ snapshot() { # [ssh_target]
   fi
 }
 
+# "host: workspace" window title -> JSON {machine, ssh, pane, tab} for the
+# focused pane of whichever server owns that workspace; empty if none does.
+resolve_title() { # title
+  local title="$1" host ws machine="" ssh_target="" snap=""
+  [[ $title == *": "* ]] || return 0
+  host="${title%%: *}"; ws="${title#*: }"
+  if [ "$host" = "$(hostname)" ]; then
+    snap="$(snapshot)"
+  else
+    # Enabled machines; the one owning workspace "$ws" is on screen.
+    while IFS=$'\t' read -r _id lbl ssh _sess state; do
+      [ "$state" = enabled ] || continue
+      snap="$(snapshot "$ssh")"
+      if jq -e --arg w "$ws" 'any(.[0].result.workspaces[]?; .label == $w)' <<<"$snap" >/dev/null; then
+        machine="$lbl"; ssh_target="$ssh"; break
+      fi
+      snap=""
+    done < <(herdr machine list 2>/dev/null)
+  fi
+  # Focused pane + its tab label, if workspace "$ws" really lives here.
+  [ -n "$snap" ] && jq -c --arg w "$ws" --arg m "$machine" --arg s "$ssh_target" '
+      select(any(.[0].result.workspaces[]?; .label == $w))
+      | (.[1].result.panes[]? | select(.focused == true)) as $p
+      | {machine: $m, ssh: $s, pane: $p.pane_id,
+         tab: ([.[2].result.tabs[]? | select(.tab_id == $p.tab_id) | .label][0] // "")}' \
+      <<<"$snap" 2>/dev/null | head -1
+}
+
 capture() {
   rm -f "$TARGET"
   # Testing: a pinned target replaces detection, so an end-to-end test can
   # aim at a scratch pane instead of whatever you are looking at.
   if [ -f "$TARGET.pin" ]; then cp "$TARGET.pin" "$TARGET"; log "target: pinned"; return 0; fi
-  local win class title host ws machine="" ssh_target="" snap="" pick=""
+  local win class title pick=""
   # DICTATE_WINDOW_JSON stands in for the active window (testing).
   win="${DICTATE_WINDOW_JSON:-$(hyprctl -j activewindow 2>/dev/null)}"
   class="$(jq -r '.class // ""' <<<"$win")"
   title="$(jq -r '.title // ""' <<<"$win")"
-
-  if [ "$class" = com.mitchellh.ghostty ] && [[ $title == *": "* ]]; then
-    host="${title%%: *}"; ws="${title#*: }"
-    if [ "$host" = "$(hostname)" ]; then
-      snap="$(snapshot)"
-    else
-      # Enabled machines; the one owning workspace "$ws" is on screen.
-      while IFS=$'\t' read -r _id lbl ssh _sess state; do
-        [ "$state" = enabled ] || continue
-        snap="$(snapshot "$ssh")"
-        if jq -e --arg w "$ws" 'any(.[0].result.workspaces[]?; .label == $w)' <<<"$snap" >/dev/null; then
-          machine="$lbl"; ssh_target="$ssh"; break
-        fi
-        snap=""
-      done < <(herdr machine list 2>/dev/null)
-    fi
-    # Focused pane + its tab label, if workspace "$ws" really lives here.
-    [ -n "$snap" ] && pick="$(jq -c --arg w "$ws" '
-        select(any(.[0].result.workspaces[]?; .label == $w))
-        | (.[1].result.panes[]? | select(.focused == true)) as $p
-        | {pane: $p.pane_id,
-           tab: ([.[2].result.tabs[]? | select(.tab_id == $p.tab_id) | .label][0] // "")}' \
-        <<<"$snap" 2>/dev/null | head -1)"
-  fi
+  [ "$class" = com.mitchellh.ghostty ] && pick="$(resolve_title "$title")"
 
   if [ -n "$pick" ]; then
-    jq -n --argjson p "$pick" --arg m "$machine" --arg s "$ssh_target" --arg title "$title" \
-      '{kind: "herdr", machine: $m, ssh: $s, pane: $p.pane, tab: $p.tab, title: $title}' > "$TARGET.tmp"
+    jq --arg title "$title" '{kind: "herdr"} + . + {title: $title}' <<<"$pick" > "$TARGET.tmp"
     mv "$TARGET.tmp" "$TARGET"
-    log "target: herdr ${machine:-local} $(jq -r '"\(.pane) (\(.tab))"' <<<"$pick")"
+    log "target: herdr $(jq -r '"\(if .machine == "" then "local" else .machine end) \(.pane) (\(.tab))"' <<<"$pick")"
   else
     jq -n --arg c "$class" --arg title "$title" \
       '{kind: "window", class: $c, title: $title}' > "$TARGET.tmp"
     mv "$TARGET.tmp" "$TARGET"
     log "target: focused window ($class)"
   fi
+}
+
+# The herdr pane on screen: {machine, ssh, pane, tab}, or nothing. Unlike
+# capture this does not need herdr to have keyboard focus — reading Firefox
+# with herdr beside it still counts as "on" that tab. The active window is
+# tried first, then every other Ghostty window.
+viewing() {
+  local title pick
+  while IFS= read -r title; do
+    pick="$(resolve_title "$title")"
+    [ -n "$pick" ] && { printf '%s\n' "$pick"; return 0; }
+  done < <(
+    hyprctl -j activewindow 2>/dev/null | jq -r 'select(.class == "com.mitchellh.ghostty") | .title'
+    hyprctl -j clients 2>/dev/null | jq -r '.[] | select(.class == "com.mitchellh.ghostty") | .title'
+  )
+  return 1
 }
 
 deliver() {
@@ -140,5 +162,6 @@ case "${1:-}" in
   capture) capture ;;
   deliver) shift; deliver "$@" ;;
   show)    cat "$TARGET" 2>/dev/null || echo "no target captured" ;;
+  viewing) viewing ;;
   *)       sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

@@ -76,8 +76,18 @@ resume_offset() {
 }
 
 speak() {
-  local line="$1"
+  local line="$1" text pane label epoch rc=0
   [ -n "${line//[[:space:]]/}" ] || return 0
+  # "§2<TAB>epoch<TAB>pane<TAB>tab label<TAB>text" from a box whose
+  # claude-tts knows the reply's herdr pane (2026-10-22); plain lines from
+  # an older one. The source lets claude-tts skip a reply that waited past
+  # STALE_SECS — which overrides the replay-everything stance above for
+  # anything that old — and name the box tab when it is not the one on
+  # screen.
+  text="$line"
+  if [[ $line == $'§2\t'* ]]; then
+    IFS=$'\t' read -r _ epoch pane label text <<<"$line"
+  fi
   # Muted: drop the line rather than hold it. say_text would refuse it
   # anyway, but checking here skips the wait-for-playback dance, and
   # dropping is the point — unmuting should not unleash a backlog.
@@ -85,14 +95,20 @@ speak() {
   # SIGPIPE writing its second line, and `set -o pipefail` then reports the
   # pipeline as FAILED despite the match — so the guard never fired.
   case "$("$TTS" status 2>/dev/null)" in *disabled*) return 0 ;; esac
+  # `say`, not `test`: test cuts off whatever is playing, which meant a
+  # box reply talked over a laptop session. `say` waits its turn.
+  if [ -n "${epoch:-}" ]; then
+    "$TTS" say-from box "$pane" "$label" "$epoch" "$text" || rc=$?
+  else
+    "$TTS" say "$text"
+  fi
+  # Skipped as stale: nothing will play, so do not wait for it.
+  [ "$rc" = 3 ] && return 0
   # What actually reached the speakers, so "did the box say anything?"
   # has an answer that does not depend on someone being in the room.
   mkdir -p "${LOG%/*}"
-  printf '%s  %s\n' "$(date +%H:%M:%S)" "$line" >> "$LOG"
+  printf '%s  %s\n' "$(date +%H:%M:%S)" "$text" >> "$LOG"
   tail -n 200 "$LOG" > "$LOG.tmp" 2>/dev/null && mv "$LOG.tmp" "$LOG"
-  # `say`, not `test`: test cuts off whatever is playing, which meant a
-  # box reply talked over a laptop session. `say` waits its turn.
-  "$TTS" say "$line"
   # Serialize: claude-tts interrupts itself by design, so without waiting,
   # a burst of queued lines would talk over each other and only the last
   # would be heard. Playback is detached, so wait for it to APPEAR (it
