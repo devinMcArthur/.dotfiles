@@ -205,6 +205,11 @@ pre_type_delay_ms = 0
 # pre_output_command = "hyprctl dispatch submap voxtype_suppress"
 # post_output_command = "hyprctl dispatch submap reset"
 
+# Note where this dictation should go (the herdr pane you started in), so
+# focus changes before it finishes don't matter. Detached: it can take ~2s
+# to ask the box, and recording must start immediately.
+pre_recording_command = "setsid -f /home/dev/.local/bin/dictate-target capture"
+
 [output.notification]
 # Show notification when recording starts (hotkey pressed)
 on_recording_start = false
@@ -221,7 +226,12 @@ on_transcription = true
 # near-miss "submit" ("cement", "summit") that voxtype-autostop stopped on.
 # On any failure (timeout, error), voxtype falls back to the raw transcript.
 command = "/home/dev/.local/bin/voxtype-postprocess"
-timeout_ms = 2000
+# Delivery to a box pane goes over ssh (~0.4s warm, ~2s cold); a timeout
+# makes voxtype TYPE the raw transcript into whatever has focus — the very
+# thing delivery avoids — so leave generous room.
+timeout_ms = 10000
+# Empty output means "already delivered to the herdr pane": type nothing.
+fallback_on_empty = false
 
 [text]
 # Text processing options (word replacements, spoken punctuation)
@@ -242,7 +252,11 @@ replacements = { "vox type" = "voxtype" }
 # Say "submit" at the END of a dictation: voxtype strips the word and
 # presses Enter — the spoken send button for Claude Code / chats. Mid-
 # sentence "submit" is untouched (end-of-recording only).
-smart_auto_submit = true
+# OFF since 2026-10-22: voxtype-postprocess owns "submit". voxtype's own
+# detector presses Enter in whichever window has focus when output starts,
+# which is wrong for dictation delivered straight to a herdr pane, and it
+# only knows the exact word (not "cement").
+smart_auto_submit = false
 
 [status]
 # Status display icons for Waybar/tray integrations

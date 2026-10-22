@@ -122,6 +122,7 @@ Pictures
 .local/bin/voice-control
 .local/bin/voxtype-autostop
 .local/bin/voxtype-postprocess
+.local/bin/dictate-target
 .config/systemd/user/voxtype-autostop.service
 .local/bin/net-speedtest
 .local/bin/net-snapshot

@@ -3,13 +3,16 @@
 # on stdin, cleaned text on stdout. On any failure voxtype falls back to the
 # raw transcript, so a bug here costs formatting, never the dictation.
 #
-# 1. Near-miss "submit". voxtype-autostop accepts what whisper makes of
-#    "submit" ("cement", "summit") and, when it stops on one, sets voxtype's
-#    auto-submit override and leaves a flag here. voxtype's own detector only
-#    strips an exact "submit" — and runs BEFORE this step — so a heard
-#    "cement" would otherwise be typed and then submitted. Only flagged
-#    recordings are touched: a sentence you end with "cement" yourself and
-#    stop by hand keeps its word.
+# 1. "submit" — this script owns it; voxtype's smart_auto_submit is OFF.
+#    voxtype's detector presses Enter in whatever window has focus at the
+#    end, which is wrong for dictation delivered to a herdr pane (3.), and
+#    it only knows the exact word. So:
+#    - a trailing exact "submit" is stripped and submits, as before;
+#    - voxtype-autostop accepts what whisper makes of the word ("cement",
+#      "summit") and, when it stops on one, flags it here and sets voxtype's
+#      auto_submit override: the trailing near-miss is stripped and submits.
+#      Only flagged recordings are touched — a sentence you end with
+#      "cement" yourself and stop by hand keeps its word.
 # 2. Dictated line breaks: "new line" -> \n, "new paragraph" -> blank line.
 #    Whisper brackets the spoken phrase with invented punctuation (", new
 #    line," or ". New line.") — the phrase rules swallow a leading comma and
@@ -18,27 +21,50 @@
 #    sentence ("Do the thing. New line next item" -> "Do the thing.\nnext
 #    item"). Remaining rules sweep stray comma/space before breaks and
 #    punctuation debris after them.
+# 3. Delivery. If dictation started in a herdr pane (dictate-target capture,
+#    voxtype's pre_recording_command), the text goes straight into that pane
+#    and NOTHING is printed, so voxtype types nothing (fallback_on_empty is
+#    off). Enter, when submitting, goes to that pane too, and the override
+#    is removed so voxtype presses nothing in whatever has focus now.
+#    Otherwise the text is printed for voxtype to type, and a submit is
+#    passed on through the override (voxtype reads it after this step).
 
 set -uo pipefail
 shopt -s extglob nocasematch
 
-FLAG="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/voxtype-autostop/strip-trigger"
+RUN="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+FLAG="$RUN/voxtype-autostop/strip-trigger"
+OVERRIDE="$RUN/voxtype/auto_submit_override"
 
 text="$(cat)"
+submit=0
+[ -e "$OVERRIDE" ] && submit=1     # autostop stopped on the trigger word
 
-if [ -e "$FLAG" ]; then
-  rm -f "$FLAG"
-  re='^(.*[^[:alnum:]])?(submit|cement|summit)[.!?,;]*[[:space:]]*$'
-  if [[ $text =~ $re ]]; then
+strip_end() { # regex: drop a trailing match and the comma/space before it
+  if [[ $text =~ $1 ]]; then
     text="${BASH_REMATCH[1]}"
     text="${text%%+([[:space:],;])}"
+    submit=1
   fi
+}
+if [ -e "$FLAG" ]; then
+  rm -f "$FLAG"
+  strip_end '^(.*[^[:alnum:]])?(submit|cement|summit)[.!?,;]*[[:space:]]*$'
 fi
+# voxtype's own rule: "submit" after a space (not "pre-submit") ends it.
+strip_end '^(|.*[[:space:]])submit[.!?,;]*[[:space:]]*$'
 
-printf '%s\n' "$text" | sed -E \
+clean="$(printf '%s\n' "$text" | sed -E \
   -e 's/,? *[Nn]ew [Pp]aragraph[.,;:]? */\n\n/g' \
   -e 's/,? *[Nn]ew ?[Ll]ine[.,;:]? */\n/g' \
   -e 's/\n[.,;: ]+/\n/g' \
   -e 's/^[.,;: ]+//' \
   -e 's/[, ]+\n/\n/g' \
-  -e 's/[, ]+$//'
+  -e 's/[, ]+$//')"
+
+if printf '%s' "$clean" | "$HOME/.local/bin/dictate-target" deliver $([ "$submit" = 1 ] && echo -s); then
+  rm -f "$OVERRIDE"
+  exit 0
+fi
+[ "$submit" = 1 ] && printf 'true' > "$OVERRIDE"
+printf '%s\n' "$clean"

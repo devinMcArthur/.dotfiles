@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# dictate-target — send a dictation to the herdr pane it was started in.
+#
+#   dictate-target capture       # voxtype pre_recording_command: note the target
+#   dictate-target show          # what the last capture found
+#   dictate-target deliver [-s]  # text on stdin -> the captured pane (+Enter
+#                                # with -s); exit 1 = not a herdr target
+#
+# voxtype TYPES its result: simulated keystrokes into whichever window has
+# focus when transcription finishes. Switch tabs while it types and the rest
+# lands in the new tab — or fires its shortcuts. So the target is fixed at
+# the START of the recording, and herdr targets get the text through
+# `herdr pane send-text` instead of the keyboard: focus no longer matters.
+#
+# Finding the pane. Each herdr server knows its own focused pane, but not
+# which machine the herdr window is currently showing (client-only state, no
+# API). The window title says: herdr renders `ui.window_title`, default
+# "{hostname}: {workspace}", on the server whose panes are on screen. So
+# "turing: chezmoi" is this laptop and "devbox-trial: bow-mark" is the box.
+# The machine is found by the WORKSPACE half — whichever server has a
+# workspace with that name — which also proves the window is herdr and not
+# a shell that happens to title itself "host: dir". Verified 2026-10-22 by
+# recording title + both servers' focus while switching across local and box
+# tabs: the rule picked the viewed tab every time.
+#
+# Anything else (Firefox, a non-herdr terminal) is a "window" target and is
+# typed by voxtype as before.
+#
+# Talking to the box: NOT `herdr --machine`, which took ~9s per call
+# (measured 2026-10-22; plain ssh + herdr on the box took 1.8s). Box calls
+# run herdr there over one multiplexed ssh connection kept warm for 10
+# minutes: ~0.4s per call. Capture makes one call (workspaces, panes and
+# tabs together), delivery one (text and Enter together).
+
+set -uo pipefail
+
+RUN="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+TARGET="$RUN/dictate-target.json"
+log() { logger -t dictate "$*"; }
+
+SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=5
+          -o ControlMaster=auto -o ControlPath="$RUN/cm-%C" -o ControlPersist=10m)
+
+# herdr API JSON for one machine: workspaces, panes, tabs (as a jq array).
+# Local: three direct calls. A machine: one ssh round trip.
+snapshot() { # [ssh_target]
+  if [ -z "${1:-}" ]; then
+    { herdr workspace list; herdr pane list; herdr tab list; } 2>/dev/null | jq -s .
+  else
+    ssh "${SSH_OPTS[@]}" "$1" \
+      'export PATH=$HOME/.local/bin:$PATH; herdr workspace list; herdr pane list; herdr tab list' \
+      2>/dev/null | jq -s .
+  fi
+}
+
+capture() {
+  rm -f "$TARGET"
+  # Testing: a pinned target replaces detection, so an end-to-end test can
+  # aim at a scratch pane instead of whatever you are looking at.
+  if [ -f "$TARGET.pin" ]; then cp "$TARGET.pin" "$TARGET"; log "target: pinned"; return 0; fi
+  local win class title host ws machine="" ssh_target="" snap="" pick=""
+  # DICTATE_WINDOW_JSON stands in for the active window (testing).
+  win="${DICTATE_WINDOW_JSON:-$(hyprctl -j activewindow 2>/dev/null)}"
+  class="$(jq -r '.class // ""' <<<"$win")"
+  title="$(jq -r '.title // ""' <<<"$win")"
+
+  if [ "$class" = com.mitchellh.ghostty ] && [[ $title == *": "* ]]; then
+    host="${title%%: *}"; ws="${title#*: }"
+    if [ "$host" = "$(hostname)" ]; then
+      snap="$(snapshot)"
+    else
+      # Enabled machines; the one owning workspace "$ws" is on screen.
+      while IFS=$'\t' read -r _id lbl ssh _sess state; do
+        [ "$state" = enabled ] || continue
+        snap="$(snapshot "$ssh")"
+        if jq -e --arg w "$ws" 'any(.[0].result.workspaces[]?; .label == $w)' <<<"$snap" >/dev/null; then
+          machine="$lbl"; ssh_target="$ssh"; break
+        fi
+        snap=""
+      done < <(herdr machine list 2>/dev/null)
+    fi
+    # Focused pane + its tab label, if workspace "$ws" really lives here.
+    [ -n "$snap" ] && pick="$(jq -c --arg w "$ws" '
+        select(any(.[0].result.workspaces[]?; .label == $w))
+        | (.[1].result.panes[]? | select(.focused == true)) as $p
+        | {pane: $p.pane_id,
+           tab: ([.[2].result.tabs[]? | select(.tab_id == $p.tab_id) | .label][0] // "")}' \
+        <<<"$snap" 2>/dev/null | head -1)"
+  fi
+
+  if [ -n "$pick" ]; then
+    jq -n --argjson p "$pick" --arg m "$machine" --arg s "$ssh_target" --arg title "$title" \
+      '{kind: "herdr", machine: $m, ssh: $s, pane: $p.pane, tab: $p.tab, title: $title}' > "$TARGET.tmp"
+    mv "$TARGET.tmp" "$TARGET"
+    log "target: herdr ${machine:-local} $(jq -r '"\(.pane) (\(.tab))"' <<<"$pick")"
+  else
+    jq -n --arg c "$class" --arg title "$title" \
+      '{kind: "window", class: $c, title: $title}' > "$TARGET.tmp"
+    mv "$TARGET.tmp" "$TARGET"
+    log "target: focused window ($class)"
+  fi
+}
+
+deliver() {
+  local submit=0; [ "${1:-}" = -s ] && submit=1
+  local text; text="$(cat)"
+  [ -f "$TARGET" ] || return 1
+  local t; t="$(cat "$TARGET")"; rm -f "$TARGET"
+  [ "$(jq -r .kind <<<"$t")" = herdr ] || return 1
+  local machine ssh pane tab ok=1
+  machine="$(jq -r .machine <<<"$t")"; ssh="$(jq -r .ssh <<<"$t")"
+  pane="$(jq -r .pane <<<"$t")"; tab="$(jq -r .tab <<<"$t")"
+
+  # A raw newline from send-text is Ctrl+J: a line break in Claude Code's
+  # input, not a submit (tested). Only `send-keys enter` submits.
+  if [ -z "$machine" ]; then
+    { [ -z "$text" ] || herdr pane send-text "$pane" "$text" >/dev/null 2>&1; } \
+      && { [ "$submit" = 0 ] || herdr pane send-keys "$pane" enter >/dev/null 2>&1; } || ok=0
+  else
+    # Text travels on stdin: no quoting of dictated words through ssh.
+    printf '%s' "$text" | timeout 8 ssh "${SSH_OPTS[@]}" "$ssh" \
+      "export PATH=\$HOME/.local/bin:\$PATH; t=\$(cat)
+       { [ -z \"\$t\" ] || herdr pane send-text $(printf %q "$pane") \"\$t\" >/dev/null; } &&
+       { [ $submit = 0 ] || herdr pane send-keys $(printf %q "$pane") enter >/dev/null; }" \
+      2>/dev/null || ok=0
+  fi
+  if [ "$ok" = 1 ]; then
+    log "delivered ${#text} chars to ${machine:-local} $pane ($tab)$([ "$submit" = 1 ] && echo ' + Enter')"
+    return 0
+  fi
+  # The pane is gone, or the box is unreachable. Never fall back to typing:
+  # whatever has focus now is exactly the wrong place. Keep the words.
+  printf '%s' "$text" | wl-copy
+  notify-send -a Dictation "Couldn't reach $tab" "Your dictation is on the clipboard."
+  log "delivery to ${machine:-local} $pane ($tab) failed; text copied to clipboard"
+  return 0
+}
+
+case "${1:-}" in
+  capture) capture ;;
+  deliver) shift; deliver "$@" ;;
+  show)    cat "$TARGET" 2>/dev/null || echo "no target captured" ;;
+  *)       sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
