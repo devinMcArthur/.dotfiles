@@ -139,6 +139,7 @@ Pictures
 .local/bin/dock-lid-guard
 .local/bin/idle-profile
 .local/bin/dms-settings-diff
+.config/pacman
 .config/systemd/user/dock-lid-guard.service
 .config/herdr-mirror
 {{ end }}

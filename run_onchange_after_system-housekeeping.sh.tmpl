@@ -1,0 +1,64 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+{{ if ne .chezmoi.osRelease.id "arch" }}exit 0  # pacman and this laptop's network units.{{ end }}
+# System housekeeping that should stay done.
+#
+# 1. Cap systemd-networkd-wait-online at 5s.
+#    networkd only manages the dock's wired port (50-wired.network, en*);
+#    Wi-Fi is iwd's. Undocked, networkd has no link that can ever come
+#    online, so the stock unit waited out its full 2-minute timeout on every
+#    boot and failed: network-online.target arrived at 2min, and Docker plus
+#    everything else ordered after it started right as you logged in
+#    (measured 2026-10-22: userspace 2min 3s, 2min of it this one unit).
+#    Docked, `--any` still returns as soon as the cable is up. The leading
+#    `-` keeps an undocked timeout from marking the unit failed.
+#    A drop-in rather than disable/mask: run_onchange_after_network-iwd.sh
+#    runs `systemctl enable systemd-networkd`, whose Also= would quietly
+#    re-enable the unit (disable) or fail on it (mask).
+#    Undo: rm -r /etc/systemd/system/systemd-networkd-wait-online.service.d
+#
+# 2. paccache.timer (pacman-contrib): weekly trim of /var/cache/pacman/pkg
+#    to the last 3 versions of each package. It had grown to 20 GB / 10k
+#    files with nothing pruning it.
+
+set -euo pipefail
+
+# Sampled before any pipeline: `[ -t 0 ]` inside run_root would see the
+# pipe. Headless callers (theme switching on every unlock) redirect from
+# /dev/null, so this stays 0 and sudo is refused rather than blocking.
+CAN_PROMPT=0
+[ -t 0 ] && CAN_PROMPT=1
+
+DROPIN_DIR=/etc/systemd/system/systemd-networkd-wait-online.service.d
+DROPIN="$DROPIN_DIR/10-cap-timeout.conf"
+WANT_DROPIN='[Service]
+ExecStart=
+ExecStart=-/usr/lib/systemd/systemd-networkd-wait-online --any --timeout=5'
+
+# Fast path, NO sudo — the normal case on every theme switch.
+if [ "$(cat "$DROPIN" 2>/dev/null)" = "$WANT_DROPIN" ] \
+   && pacman -Qq pacman-contrib >/dev/null 2>&1 \
+   && systemctl is-enabled --quiet paccache.timer 2>/dev/null; then
+  exit 0
+fi
+
+run_root() {
+  if sudo -n true 2>/dev/null; then sudo "$@"
+  elif [ "$CAN_PROMPT" = 1 ]; then sudo "$@"
+  else
+    echo "ERROR: system housekeeping needs sudo — run 'chezmoi apply' in a terminal" >&2
+    exit 1
+  fi
+}
+
+echo "==> Capping systemd-networkd-wait-online at 5s..."
+run_root install -d "$DROPIN_DIR"
+printf '%s\n' "$WANT_DROPIN" | run_root tee "$DROPIN" >/dev/null
+run_root systemctl daemon-reload
+
+echo "==> Enabling weekly pacman cache trim..."
+pacman -Qq pacman-contrib >/dev/null 2>&1 || run_root pacman -S --needed --noconfirm pacman-contrib
+run_root systemctl enable --now paccache.timer
+
+echo "    done. Boot no longer waits 2 min for a network networkd doesn't manage."
+{{ end -}}

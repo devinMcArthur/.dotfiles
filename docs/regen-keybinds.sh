@@ -38,8 +38,8 @@ cat <<'HEADER'
 
 HEADER
 
-echo "_Generated $(date -Iseconds)_"
-echo ""
+# No generation timestamp: it made every regen a diff even when no binding
+# changed, so the repo was always dirty. git log dates the file instead.
 
 # ---------- Hyprland ----------
 # Pre-extract variable definitions ($mainMod = SUPER etc.) so we can

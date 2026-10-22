@@ -152,10 +152,12 @@ set -g @plugin 'tmux-plugins/tmux-yank'      # system-clipboard integration
 set -g @plugin 'tmux-plugins/tmux-resurrect' # save/restore sessions across reboots
 set -g @plugin 'tmux-plugins/tmux-continuum' # auto-save every 15min, auto-restore on start
 
-# continuum: auto-restore on tmux server start + auto-boot server at login
-# (installs ~/.config/systemd/user/tmux.service on first plugin run).
-set -g @continuum-restore 'on'
-set -g @continuum-boot 'on'
+# continuum: no auto-boot, no auto-restore (off since 2026-10-22). Day-to-day
+# work lives in herdr; a tmux server booted at login just re-created the
+# same Oct 1 sessions (5, bow-mark, config, raphael, scheduler) on every boot
+# for nobody. Saves still run, so `prefix + Ctrl-r` restores by hand.
+set -g @continuum-restore 'off'
+set -g @continuum-boot 'off'
 set -g @continuum-save-interval '15'
 # resurrect: also capture pane scrollback + nvim session files.
 set -g @resurrect-capture-pane-contents 'on'

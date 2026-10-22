@@ -125,7 +125,16 @@ case "${1:-}" in
     # looking at. That is exactly how theming froze on 2026-08-28: a
     # boot-time `theme random` sat on tty1 for 13 minutes. With no tty,
     # prompts are skipped or fail loudly, and set -e makes it visible.
-    chezmoi apply < /dev/null
+    #
+    # A failure is logged, not fatal. Files are written before chezmoi runs
+    # its after-scripts, so when a run_onchange script refuses headless sudo
+    # (correctly: it needs `chezmoi apply` in a terminal) the theme files are
+    # already in place. Aborting there skipped the reload and wallpaper
+    # steps below and left exactly the colours/wallpaper mismatch this
+    # script now works to prevent.
+    if ! chezmoi apply < /dev/null; then
+      logger -t theme "$name: chezmoi apply failed; theme files applied, continuing (run 'chezmoi apply' in a terminal)"
+    fi
 
     echo "==> Reloading desktop..."
     hyprctl reload >/dev/null 2>&1 || true
@@ -171,14 +180,14 @@ case "${1:-}" in
     # hardware has none: a theme switch must not fail over a light.
     "$HOME/.local/bin/theme-led" >/dev/null 2>&1 || true
     # Bar + notifications — only when the waybar federation is actually
-    # running (during the DMS trial the shell re-themes itself reactively
+    # running (under DMS the shell re-themes itself reactively
     # off the re-rendered dank-theme.json; restarting waybar would start a
     # second bar).
     if pgrep -x waybar >/dev/null 2>&1; then
       killall -q waybar 2>/dev/null || true
       hyprctl dispatch exec waybar >/dev/null 2>&1 || true
     fi
-    # Guard on the daemon actually running: with swaync retired (DMS trial),
+    # Guard on the daemon actually running: with swaync retired (DMS),
     # swaync-client blocks FOREVER on the D-Bus name — which hung every
     # theme switch here and starved the tmux/ghostty reloads below.
     if pgrep -x swaync >/dev/null 2>&1; then

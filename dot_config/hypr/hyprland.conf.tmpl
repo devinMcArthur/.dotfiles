@@ -137,7 +137,7 @@ exec-once = $HOME/.local/bin/herdr server
 # grammar, all local). Off: voice-control off | spoken "turing sleep"
 exec-once = $HOME/.local/bin/voice-control
 
-# --- Desktop shell: DankMaterialShell TRIAL (Quickshell) --------------------
+# --- Desktop shell: DankMaterialShell (Quickshell) --------------------------
 # One process replaces the waybar+swaync+swayosd federation: bar with real
 # interactive panels (network Wi-Fi toggle, bluetooth, audio), control
 # center, notifications, OSD, spotlight launcher. Theme comes from the
@@ -496,7 +496,7 @@ bind = $mainMod, A, exec, $HOME/.local/bin/hypr-agent # AI agent scratchpad (dro
 bindm = $mainMod, mouse:272, movewindow
 bindm = $mainMod, mouse:273, resizewindow
 
-# Framework Brightness — direct brightnessctl (DMS trial: swayosd retired;
+# Framework Brightness — direct brightnessctl (DMS: swayosd retired;
 # DMS's own OSD reacts to system changes).
 bindel = ,XF86MonBrightnessDown, exec, brightnessctl s 10%-
 bindel = ,XF86MonBrightnessUp, exec, brightnessctl s +10%

@@ -7,8 +7,6 @@
 > [`tmux.conf`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_tmux.conf.tmpl),
 > [`zshrc`](https://github.com/devinMcArthur/.dotfiles/blob/master/dot_zshrc.tmpl).
 
-_Generated 2026-09-22T08:42:42-06:00_
-
 ## Hyprland — window manager
 
 | Keys | Dispatcher | Argument |
@@ -165,7 +163,11 @@ Prefix: `C-a`. Bindings shown below assume prefix unless otherwise noted.
 
 | Keys | Widget |
 |---|---|
+| `^[[A` | history-substring-search-up |
 | `^ ` | autosuggest-accept |
+| `^[[B` | history-substring-search-down |
+| `^[OA` | history-substring-search-up |
+| `^[OB` | history-substring-search-down |
 
 ## How to add a new binding
 
