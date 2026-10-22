@@ -145,6 +145,10 @@ exec-once = $HOME/.local/bin/voice-control
 # theme set / theme random re-render it and DMS live-updates).
 # REVERT: comment `dms run`, uncomment the three lines below, restore the
 # wofi Super+Space bind and swayosd volume/brightness binds (git has them).
+# Also delete dot_config/systemd/user/symlink_swaync.service: swaync is
+# MASKED because its D-Bus file auto-starts it on the first notification,
+# and at login that beat DMS to the notification name (seen 2026-10-22:
+# swaync owned every notification; DMS's centre and the island got none).
 exec-once = dms run
 # exec-once = waybar
 # exec-once = swaync
