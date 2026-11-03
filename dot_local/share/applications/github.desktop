@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=GitHub
+Comment=GitHub in its own Chrome window (snappier than Firefox)
+Exec=google-chrome-stable --app=https://github.com
+Icon=github
+Categories=Development;
+StartupWMClass=chrome-github.com__-Default
