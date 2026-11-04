@@ -14,25 +14,12 @@
 onboarding = false
 
 [theme]
-{{- $builtin := dict
-    "catppuccin-mocha" "catppuccin"
-    "gruvbox"          "gruvbox"
-    "nord"             "nord"
-    "rose-pine"        "rose-pine"
-    "tokyo-night"      "tokyo-night"
-    "matte-black"      "vesper" }}
-name = "{{ if hasKey $builtin .theme.name }}{{ index $builtin .theme.name }}{{ else }}catppuccin{{ end }}"
-
-# Base theme above gets the broad strokes; these pin the tokens that
-# matter to the exact palette this repo is rendering everywhere else.
-[theme.custom]
-sidebar_bg    = "#{{ .theme.colors.mantle }}"
-active_row_bg = "#{{ .theme.colors.surface0 }}"
-selection_bg  = "#{{ .theme.colors.surface1 }}"
-panel_bg      = "#{{ .theme.colors.base }}"
-accent        = "#{{ .theme.colors.accent }}"
-red           = "#{{ .theme.colors.red }}"
-green         = "#{{ .theme.colors.green }}"
+# "terminal": herdr draws with ghostty's ANSI palette, which `theme set`
+# re-renders and live-reloads, then SIGWINCHes herdr clients to re-read
+# it. Named built-in themes (the old per-theme map, plus [theme.custom]
+# hex pins) live in the client's config and only the in-app menu reloads
+# a client's config — so herdr never followed a switch.
+name = "terminal"
 
 [keys]
 # prefix stays ctrl+b. tmux here is ctrl+a, so the two can be nested
