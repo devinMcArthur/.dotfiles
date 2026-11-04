@@ -132,8 +132,17 @@ case "${1:-}" in
     # already in place. Aborting there skipped the reload and wallpaper
     # steps below and left exactly the colours/wallpaper mismatch this
     # script now works to prevent.
-    if ! chezmoi apply < /dev/null; then
+    #
+    # --no-tty as well: /dev/null on stdin is NOT enough. chezmoi opens
+    # /dev/tty itself for its "changed since chezmoi last wrote it?" prompt,
+    # and from Hyprland that is still tty1. On 2026-11-04 an installer's
+    # line appended to ~/.zshrc parked every switch there (the theme simply
+    # never changed, nothing logged). And notify: a log line alone went
+    # unseen while the colours stayed wrong.
+    if ! chezmoi apply --no-tty < /dev/null; then
       logger -t theme "$name: chezmoi apply failed; theme files applied, continuing (run 'chezmoi apply' in a terminal)"
+      notify-send -a Theme "Theme: chezmoi apply failed" \
+        "Run 'chezmoi apply' in a terminal: a file was edited outside chezmoi, or a script needs sudo." 2>/dev/null || true
     fi
 
     echo "==> Reloading desktop..."
