@@ -6,3 +6,11 @@ Description=Check dev box reachability and surface anything needing a human
 [Service]
 Type=oneshot
 ExecStart=%h/.local/bin/devbox-health notify
+# Leave the ssh master behind. `ssh devbox true` opens the shared
+# ControlMaster (~/.ssh/config: ControlPersist 8h) as a background child,
+# and the default KillMode=control-group killed it the moment this oneshot
+# finished. So every 5-minute probe was a brand-new login, and since
+# OpenSSH (Oct 25) every login asks 1Password to sign: an approval prompt
+# every few minutes, found 2026-11-06. With the master surviving, one
+# approval covers 8 hours of probes, speech and dictation.
+KillMode=process

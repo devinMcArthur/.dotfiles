@@ -30,8 +30,8 @@
 #
 # Talking to the box: NOT `herdr --machine`, which took ~9s per call
 # (measured 2026-10-22; plain ssh + herdr on the box took 1.8s). Box calls
-# run herdr there over one multiplexed ssh connection kept warm for 10
-# minutes: ~0.4s per call. Capture makes one call (workspaces, panes and
+# run herdr there over the shared multiplexed ssh connection (see
+# SSH_OPTS): ~0.4s per call. Capture makes one call (workspaces, panes and
 # tabs together), delivery one (text and Enter together).
 
 set -uo pipefail
@@ -40,8 +40,11 @@ RUN="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 TARGET="$RUN/dictate-target.json"
 log() { logger -t dictate "$*"; }
 
-SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=5
-          -o ControlMaster=auto -o ControlPath="$RUN/cm-%C" -o ControlPersist=10m)
+# The connection sharing itself comes from ~/.ssh/config (ControlMaster,
+# ControlPersist 8h) — one master for everything that talks to the box.
+# Until 2026-11-06 this kept its own socket with a 10-minute persist: a
+# separate login, so a separate 1Password approval, after every pause.
+SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=5)
 
 # herdr API JSON for one machine: workspaces, panes, tabs (as a jq array).
 # Local: three direct calls. A machine: one ssh round trip.
