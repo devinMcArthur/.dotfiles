@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# heavy-test-gate — Claude Code PreToolUse hook (Bash) for the dev box.
+#
+# Blocks a Playwright or vitest run that doesn't go through heavy-test and
+# tells Claude the exact command to use instead. Blocking is deliberate:
+# a hook can only rewrite a command by also auto-approving it, and test
+# commands should still pass the normal permission checks.
+
+input="$(cat)"
+cmd="$(jq -r '.tool_input.command // empty' <<<"$input")"
+[ -n "$cmd" ] || exit 0
+[[ "$cmd" == *heavy-test* ]] && exit 0
+
+# "npx vitest" anywhere, bare "vitest" only where a command starts, so
+# `grep vitest package.json` passes.
+pre='(npx[[:space:]]+|pnpm[[:space:]]+(exec[[:space:]]+)?|yarn[[:space:]]+|[^[:space:]]*node_modules/\.bin/)'
+tool='(playwright[[:space:]]+test|vitest)'
+if grep -qE "(^|[[:space:];&|(])$pre$tool([[:space:]]|$)" <<<"$cmd"; then
+  suggest="$(sed -E "s#$pre$tool#~/.local/bin/heavy-test &#" <<<"$cmd")"
+elif grep -qE "(^|[;&|(])[[:space:]]*$tool([[:space:]]|$)" <<<"$cmd"; then
+  suggest="$(sed -E "s#(^|[;&|(])([[:space:]]*)$tool#\1\2~/.local/bin/heavy-test \3#" <<<"$cmd")"
+else
+  exit 0
+fi
+cat >&2 <<EOF
+On this box, test runs go through heavy-test, which queues them so parallel
+sessions can't exhaust memory (it may wait for a slot; prefer run_in_background
+for long runs). Run this instead:
+
+$suggest
+EOF
+exit 2

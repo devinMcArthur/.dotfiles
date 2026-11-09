@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# heavy-test — run a test command once one of the box's test slots is free.
+#
+#   heavy-test npx playwright test -c playwright-ct.config.ts tests/... 2>&1 | tail -40
+#   heavy-test 'cd client && npx vitest run src/lib'
+#   heavy-test status
+#
+# Parallel Playwright/vitest runs from several Claude sessions have
+# swapped the dev box to a standstill again and again. At most
+# HEAVY_TEST_SLOTS runs go at once; the rest wait for a slot. Playwright
+# gets --workers=4 unless the command picks its own, and the run gets a
+# raised OOM score, so if memory still runs out the kernel kills the test
+# rather than a Claude session.
+# heavy-test-gate (a Claude PreToolUse hook) sends test commands here.
+
+set -uo pipefail
+
+SLOTS="${HEAVY_TEST_SLOTS:-2}"
+WAIT="${HEAVY_TEST_WAIT:-900}"
+PW_WORKERS="${HEAVY_TEST_PW_WORKERS:-4}"
+DIR="${XDG_CACHE_HOME:-$HOME/.cache}/heavy-test"
+mkdir -p "$DIR"
+
+holders() {
+  local f
+  for f in "$DIR"/slot*.info; do
+    [ -s "$f" ] || continue
+    read -r pid start cwd cmd < "$f"
+    kill -0 "$pid" 2>/dev/null && printf '  since %s  %s  %s\n' "$start" "${cwd/#$HOME/\~}" "${cmd:0:100}"
+  done
+}
+
+case "${1:-}" in
+  ""|-h|--help) sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  status) echo "test slots: $SLOTS"; holders; exit 0 ;;
+esac
+
+# One argument is a shell command line; several are a plain argv.
+if [ $# -eq 1 ]; then run=(bash -c "$1"); shown="$1"; else run=("$@"); shown="$*"; fi
+if [[ "$shown" == *"playwright test"* && "$shown" != *--workers* && ! "$shown" =~ (^|[[:space:]])-j[[:space:]=]?[0-9] ]]; then
+  if [ $# -eq 1 ]; then
+    run=(bash -c "${1/playwright test/playwright test --workers=$PW_WORKERS}")
+  else
+    for i in "${!run[@]}"; do
+      if [ "${run[$i]}" = test ] && [ "$i" -gt 0 ] && [[ "${run[$((i-1))]}" == *playwright ]]; then
+        run=("${run[@]:0:$((i+1))}" "--workers=$PW_WORKERS" "${run[@]:$((i+1))}"); break
+      fi
+    done
+  fi
+fi
+
+slot=""
+try_slots() {
+  local i
+  for ((i = 0; i < SLOTS; i++)); do
+    exec {fd}>"$DIR/slot$i"
+    if flock -n "$fd"; then slot=$i; return 0; fi
+    exec {fd}>&-
+  done
+  return 1
+}
+
+if ! try_slots; then
+  echo "heavy-test: all $SLOTS test slots are busy; waiting up to $((WAIT / 60)) min for:" >&2
+  holders >&2
+  deadline=$(( SECONDS + WAIT ))
+  until try_slots; do
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo "heavy-test: still busy after $((WAIT / 60)) min; try again later" >&2
+      exit 75
+    fi
+    sleep 5
+  done
+  echo "heavy-test: got a slot after $(( SECONDS - deadline + WAIT ))s" >&2
+fi
+
+printf '%s %s %s %s\n' "$$" "$(date +%T)" "$PWD" "$shown" > "$DIR/slot$slot.info"
+trap 'rm -f "$DIR/slot$slot.info"' EXIT
+# The child must not inherit the lock fd: a dev server a test leaves
+# behind would otherwise hold the slot forever.
+choom -n 500 -- "${run[@]}" {fd}>&-
